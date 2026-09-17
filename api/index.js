@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 
-const depositRoutes = require("../routes/deposit");
+const depositRoutes = require("../src/routes/deposit");
 
 const app = express();
 
