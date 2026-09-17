@@ -1,11 +1,17 @@
 const express = require("express");
 const cors = require("cors");
 
+const authRoutes =
+    require("../src/routes/auth");
+
 const depositRoutes =
     require("../src/routes/deposit");
 
 const walletRoutes =
     require("../src/routes/wallet");
+
+const tournamentsRoutes =
+    require("../src/routes/tournaments");
 
 
 const app = express();
@@ -16,6 +22,7 @@ const app = express();
 DEPLOYMENT TEST
 ======================================================
 */
+
 app.get(
     "/TEST-DEPOSIT-123",
     (req, res) => {
@@ -33,10 +40,10 @@ app.get(
 CORS
 ======================================================
 */
+
 app.use(
     cors({
         origin: true,
-
         credentials: true,
 
         methods: [
@@ -63,13 +70,17 @@ app.use(
 BODY PARSER
 ======================================================
 */
+
 app.use(
-    express.json()
+    express.json({
+        limit: "10mb"
+    })
 );
 
 app.use(
     express.urlencoded({
-        extended: true
+        extended: true,
+        limit: "10mb"
     })
 );
 
@@ -79,6 +90,7 @@ app.use(
 HEALTH
 ======================================================
 */
+
 app.get(
     "/",
     (req, res) => {
@@ -100,6 +112,30 @@ app.get(
                 "Gamerzadda API is healthy"
         });
     }
+);
+
+
+/*
+======================================================
+AUTH API
+======================================================
+*/
+
+app.use(
+    "/api/auth",
+    authRoutes
+);
+
+
+/*
+======================================================
+TOURNAMENT API
+======================================================
+*/
+
+app.use(
+    "/api/tournaments",
+    tournamentsRoutes
 );
 
 
