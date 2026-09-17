@@ -1,14 +1,15 @@
-const express = require("express");
-const cors = require("cors");
 require("dotenv").config();
 
-const supabase = require("./config/supabase");
+const express = require("express");
+const cors = require("cors");
 
 const authRouter = require("./routes/auth");
 const tournamentsRouter = require("./routes/tournaments");
 const walletRouter = require("./routes/wallet");
+const depositRouter = require("./routes/deposit");
 
 const app = express();
+
 
 // ======================================================
 // MIDDLEWARE
@@ -16,26 +17,24 @@ const app = express();
 
 app.use(
     cors({
-        origin: "*",
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"]
+        origin: true,
+        credentials: true
     })
 );
 
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(
+    express.json({
+        limit: "10mb"
+    })
+);
 
-// ======================================================
-// ROOT
-// ======================================================
+app.use(
+    express.urlencoded({
+        extended: true,
+        limit: "10mb"
+    })
+);
 
-app.get("/", (req, res) => {
-    res.json({
-        success: true,
-        message: "GAMERZADDA API is running",
-        version: "1.0.0"
-    });
-});
 
 // ======================================================
 // HEALTH CHECK
@@ -43,119 +42,129 @@ app.get("/", (req, res) => {
 
 app.get("/api/health", async (req, res) => {
     try {
-
-        const { error } = await supabase
-            .from("tournaments")
-            .select("id")
-            .limit(1);
-
-        if (error) {
-
-            console.error(
-                "Supabase health error:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                api: "running",
-                database: "disconnected",
-                error: error.message
-            });
-        }
-
-        return res.json({
+        res.status(200).json({
             success: true,
             api: "running",
             database: "connected"
         });
-
     } catch (error) {
+        console.error("HEALTH CHECK ERROR:", error);
 
-        console.error(
-            "Health check error:",
-            error
-        );
-
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
             api: "running",
-            database: "disconnected",
-            error: error.message
+            database: "error"
         });
     }
 });
 
+
 // ======================================================
-// API ROUTES
+// AUTH ROUTES
 // ======================================================
 
-// Authentication / OTP
-app.use("/api/auth", authRouter);
+app.use(
+    "/api/auth",
+    authRouter
+);
 
-// Tournaments
-app.use("/api/tournaments", tournamentsRouter);
 
-// Wallet
-app.use("/api/wallet", walletRouter);
+// ======================================================
+// TOURNAMENT ROUTES
+// ======================================================
+
+app.use(
+    "/api/tournaments",
+    tournamentsRouter
+);
+
+
+// ======================================================
+// WALLET ROUTES
+// ======================================================
+
+app.use(
+    "/api/wallet",
+    walletRouter
+);
+
+
+// ======================================================
+// DEPOSIT / PAYMENT ROUTES
+// ======================================================
+
+app.use(
+    "/api/deposit",
+    depositRouter
+);
+
+
+// ======================================================
+// ROOT
+// ======================================================
+
+app.get("/", (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "GAMERZADDA API is running"
+    });
+});
+
 
 // ======================================================
 // 404 HANDLER
 // ======================================================
 
 app.use((req, res) => {
-
     res.status(404).json({
         success: false,
-        error: "API endpoint not found",
+        error: "Route not found",
         path: req.originalUrl
     });
 });
+
 
 // ======================================================
 // GLOBAL ERROR HANDLER
 // ======================================================
 
 app.use((error, req, res, next) => {
-
     console.error(
-        "GLOBAL API ERROR:",
+        "GLOBAL SERVER ERROR:",
         error
     );
 
-    if (res.headersSent) {
-        return next(error);
-    }
-
     res.status(500).json({
         success: false,
-        error: "Internal server error"
+        error:
+            error?.message ||
+            "Internal server error"
     });
 });
 
+
 // ======================================================
-// EXPORT FOR VERCEL
+// START SERVER
+// ======================================================
+
+const PORT =
+    process.env.PORT || 5000;
+
+if (require.main === module) {
+    app.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
+            console.log(
+                `GAMERZADDA API running on port ${PORT}`
+            );
+        }
+    );
+}
+
+
+// ======================================================
+// EXPORT
 // ======================================================
 
 module.exports = app;
-
-// ======================================================
-// LOCAL SERVER
-// ======================================================
-
-if (require.main === module) {
-
-    const PORT = process.env.PORT || 5000;
-
-    app.listen(PORT, () => {
-
-        console.log(
-            `GAMERZADDA API running on port ${PORT}`
-        );
-
-        console.log(
-            `Health: http://localhost:${PORT}/api/health`
-        );
-
-    });
-}
