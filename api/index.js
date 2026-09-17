@@ -1,21 +1,44 @@
 const express = require("express");
 const cors = require("cors");
 
-const authRouter = require("../src/routes/auth");
-const tournamentsRouter = require("../src/routes/tournaments");
-const walletRouter = require("../src/routes/wallet");
-const depositRoutes = require("../src/routes/deposit");
+const depositRoutes =
+    require("../src/routes/deposit");
+
+const walletRoutes =
+    require("../src/routes/wallet");
+
 
 const app = express();
 
-/* =====================================================
-   MIDDLEWARE
-===================================================== */
 
+/*
+======================================================
+DEPLOYMENT TEST
+======================================================
+*/
+app.get(
+    "/TEST-DEPOSIT-123",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message:
+                "NEW DEPLOYMENT IS WORKING"
+        });
+    }
+);
+
+
+/*
+======================================================
+CORS
+======================================================
+*/
 app.use(
     cors({
         origin: true,
+
         credentials: true,
+
         methods: [
             "GET",
             "POST",
@@ -24,6 +47,7 @@ app.use(
             "DELETE",
             "OPTIONS"
         ],
+
         allowedHeaders: [
             "Content-Type",
             "Authorization",
@@ -33,129 +57,142 @@ app.use(
     })
 );
 
+
+/*
+======================================================
+BODY PARSER
+======================================================
+*/
 app.use(
-    express.json({
-        limit: "10mb"
-    })
+    express.json()
 );
 
 app.use(
     express.urlencoded({
-        extended: true,
-        limit: "10mb"
+        extended: true
     })
 );
 
-/* =====================================================
-   ROOT
-===================================================== */
 
-app.get("/", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Gamerzadda API is running"
-    });
-});
-
-/* =====================================================
-   HEALTH
-===================================================== */
-
-app.get("/api/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Gamerzadda API is healthy"
-    });
-});
-
-/* =====================================================
-   AUTH API
-===================================================== */
-
-app.use(
-    "/api/auth",
-    authRouter
+/*
+======================================================
+HEALTH
+======================================================
+*/
+app.get(
+    "/",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message:
+                "Gamerzadda API is running"
+        });
+    }
 );
 
-/* =====================================================
-   TOURNAMENT API
-===================================================== */
 
-app.use(
-    "/api/tournaments",
-    tournamentsRouter
+app.get(
+    "/api/health",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message:
+                "Gamerzadda API is healthy"
+        });
+    }
 );
 
-/* =====================================================
-   WALLET API
-===================================================== */
 
-app.use(
-    "/api/wallet",
-    walletRouter
-);
-
-/* =====================================================
-   DEPOSIT / ADD MONEY API
-===================================================== */
+/*
+======================================================
+DEPOSIT API
+======================================================
+*/
 
 app.use(
     "/api/deposit",
     depositRoutes
 );
 
-/* =====================================================
-   DEPOSIT TEST
-===================================================== */
 
-app.get("/api/deposit/test", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Deposit API is working"
-    });
-});
+/*
+======================================================
+WALLET API
+======================================================
+*/
 
-/* =====================================================
-   WALLET TEST
-===================================================== */
+app.use(
+    "/api/wallet",
+    walletRoutes
+);
 
-app.get("/api/wallet/test", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Wallet API is working"
-    });
-});
 
-/* =====================================================
-   404 HANDLER
-===================================================== */
+/*
+======================================================
+DEPOSIT TEST
+======================================================
+*/
 
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        error: "API endpoint not found",
-        path: req.originalUrl,
-        method: req.method
-    });
-});
+app.get(
+    "/api/deposit/test",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message:
+                "Deposit API is working"
+        });
+    }
+);
 
-/* =====================================================
-   GLOBAL ERROR HANDLER
-===================================================== */
 
-app.use((err, req, res, next) => {
-    console.error("API ERROR:", err);
+/*
+======================================================
+404 HANDLER
+======================================================
+*/
 
-    res.status(500).json({
-        success: false,
-        error:
-            err?.message ||
-            "Internal server error"
-    });
-});
+app.use(
+    (req, res) => {
+        return res.status(404).json({
+            success: false,
+            error:
+                "API endpoint not found",
+            path:
+                req.originalUrl,
+            method:
+                req.method
+        });
+    }
+);
 
-/* =====================================================
-   EXPORT
-===================================================== */
+
+/*
+======================================================
+ERROR HANDLER
+======================================================
+*/
+
+app.use(
+    (
+        err,
+        req,
+        res,
+        next
+    ) => {
+
+        console.error(
+            "API ERROR:",
+            err
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                err?.message ||
+                "Internal server error"
+        });
+    }
+);
+
 
 module.exports = app;
