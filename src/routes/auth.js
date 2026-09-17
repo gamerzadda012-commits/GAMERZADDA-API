@@ -29,6 +29,89 @@ function hashOtp(otp) {
 }
 
 // ======================================================
+// GENERATE UNIQUE REFERRAL CODE
+// ======================================================
+
+async function generateReferralCode(fullName) {
+    const cleanName = String(fullName || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "");
+
+    const safeName = cleanName || "USER";
+
+    const baseCode = `GZ${safeName}`;
+
+    // First try: GZ + name
+    const {
+        data: baseExisting,
+        error: baseError
+    } = await supabase
+        .from("users")
+        .select("id")
+        .eq("referral_code", baseCode)
+        .limit(1);
+
+    if (baseError) {
+        throw baseError;
+    }
+
+    // Available
+    if (
+        !baseExisting ||
+        baseExisting.length === 0
+    ) {
+        return baseCode;
+    }
+
+    // Duplicate -> random 3 characters
+    const characters =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    for (let attempt = 0; attempt < 50; attempt++) {
+        const randomBytes = crypto.randomBytes(3);
+
+        let suffix = "";
+
+        for (let i = 0; i < 3; i++) {
+            suffix +=
+                characters[
+                    randomBytes[i] % characters.length
+                ];
+        }
+
+        const newCode =
+            `${baseCode}${suffix}`;
+
+        const {
+            data: existingCode,
+            error: existingCodeError
+        } = await supabase
+            .from("users")
+            .select("id")
+            .eq(
+                "referral_code",
+                newCode
+            )
+            .limit(1);
+
+        if (existingCodeError) {
+            throw existingCodeError;
+        }
+
+        if (
+            !existingCode ||
+            existingCode.length === 0
+        ) {
+            return newCode;
+        }
+    }
+
+    throw new Error(
+        "Unable to generate a unique referral code."
+    );
+}
+
+// ======================================================
 // POST /api/auth/otp
 // ======================================================
 
@@ -55,7 +138,8 @@ router.post("/otp", async (req, res) => {
             return res.status(400).json({
                 success: false,
                 code: "PHONE_REQUIRED",
-                message: "Phone number is required."
+                message:
+                    "Phone number is required."
             });
         }
 
@@ -66,7 +150,8 @@ router.post("/otp", async (req, res) => {
             return res.status(400).json({
                 success: false,
                 code: "INVALID_ACTION",
-                message: "Invalid OTP action."
+                message:
+                    "Invalid OTP action."
             });
         }
 
@@ -77,11 +162,13 @@ router.post("/otp", async (req, res) => {
             return res.status(400).json({
                 success: false,
                 code: "INVALID_FLOW",
-                message: "Invalid authentication flow."
+                message:
+                    "Invalid authentication flow."
             });
         }
 
-        const cleanPhone = normalizePhone(phone);
+        const cleanPhone =
+            normalizePhone(phone);
 
         if (cleanPhone.length !== 10) {
             return res.status(400).json({
@@ -109,8 +196,13 @@ router.post("/otp", async (req, res) => {
                     error: userError
                 } = await supabase
                     .from("users")
-                    .select("id, phone, status")
-                    .eq("phone", cleanPhone)
+                    .select(
+                        "id, phone, status"
+                    )
+                    .eq(
+                        "phone",
+                        cleanPhone
+                    )
                     .maybeSingle();
 
                 if (userError) {
@@ -140,8 +232,9 @@ router.post("/otp", async (req, res) => {
 
                 if (
                     user.status &&
-                    String(user.status).toLowerCase() !==
-                        "active"
+                    String(user.status)
+                        .toLowerCase() !==
+                    "active"
                 ) {
 
                     return res.status(403).json({
@@ -165,7 +258,10 @@ router.post("/otp", async (req, res) => {
                 } = await supabase
                     .from("users")
                     .select("id")
-                    .eq("phone", cleanPhone)
+                    .eq(
+                        "phone",
+                        cleanPhone
+                    )
                     .maybeSingle();
 
                 if (existingError) {
@@ -211,8 +307,11 @@ router.post("/otp", async (req, res) => {
             // GENERATE OTP
             // ----------------------------------------------
 
-            const generatedOtp = generateOtp();
-            const otpHash = hashOtp(generatedOtp);
+            const generatedOtp =
+                generateOtp();
+
+            const otpHash =
+                hashOtp(generatedOtp);
 
             const expiresAt =
                 new Date(
@@ -231,9 +330,18 @@ router.post("/otp", async (req, res) => {
                 .update({
                     verified: true
                 })
-                .eq("phone", cleanPhone)
-                .eq("flow", flow)
-                .eq("verified", false);
+                .eq(
+                    "phone",
+                    cleanPhone
+                )
+                .eq(
+                    "flow",
+                    flow
+                )
+                .eq(
+                    "verified",
+                    false
+                );
 
             if (invalidateError) {
 
@@ -287,87 +395,152 @@ router.post("/otp", async (req, res) => {
             }
 
             // ----------------------------------------------
-            // Send OTP through HSP SMS provider
-    const smsBaseUrl =
-        process.env.SMS_BASE_URL ||
-        "http://sms.hspsms.com/sendSMS";
+            // SMS PROVIDER
+            // ----------------------------------------------
 
-    const smsUsername = process.env.SMS_USERNAME;
-    const smsApiKey = process.env.SMS_API_KEY;
-    const smsSenderName = process.env.SMS_SENDER_NAME || "GUERAR";
-    const smsType = process.env.SMS_TYPE || "TRANS";
-    const smsTemplate =
-        process.env.SMS_OTP_MESSAGE ||
-        "{otp} is the OTP for Gamerzadda. Please do not share this OTP with anyone. This SMS has been sent from GuestRAR.";
+            const smsBaseUrl =
+                process.env.SMS_BASE_URL ||
+                "http://sms.hspsms.com/sendSMS";
 
-    if (!smsUsername || !smsApiKey) {
-      return res.status(500).json({
-        success: false,
-        code: "SMS_CONFIG_ERROR",
-        message: "OTP service is not configured."
-      });
-    }
+            const smsUsername =
+                process.env.SMS_USERNAME;
 
-    const smsMessage = smsTemplate.replace("{otp}", generatedOtp);
+            const smsApiKey =
+                process.env.SMS_API_KEY;
 
-    const smsUrl =
-        `${smsBaseUrl}?` +
-        new URLSearchParams({
-          username: smsUsername,
-          message: smsMessage,
-          sendername: smsSenderName,
-          smstype: smsType,
-          numbers: cleanPhone,
-          apikey: smsApiKey
-        }).toString();
+            const smsSenderName =
+                process.env.SMS_SENDER_NAME ||
+                "GUERAR";
 
-    try {
-      const smsResponse = await fetch(smsUrl, {
-        method: "GET"
-      });
+            const smsType =
+                process.env.SMS_TYPE ||
+                "TRANS";
 
-      const smsResponseText = await smsResponse.text();
+            const smsTemplate =
+                process.env.SMS_OTP_MESSAGE ||
+                "{otp} is the OTP for Gamerzadda. Please do not share this OTP with anyone. This SMS has been sent from GuestRAR.";
 
-      console.log(
-        "SMS PROVIDER RESPONSE:",
-        smsResponse.status,
-        smsResponseText
-      );
+            if (
+                !smsUsername ||
+                !smsApiKey
+            ) {
 
-      if (!smsResponse.ok) {
-        await supabase
-          .from("otp_codes")
-          .update({ verified: true })
-          .eq("phone", cleanPhone)
-          .eq("flow", flow)
-          .eq("otp_hash", otpHash);
+                return res.status(500).json({
+                    success: false,
+                    code: "SMS_CONFIG_ERROR",
+                    message:
+                        "OTP service is not configured."
+                });
+            }
 
-        return res.status(502).json({
-          success: false,
-          code: "SMS_SEND_FAILED",
-          message: "Unable to send OTP."
-        });
-      }
-    } catch (smsError) {
-      console.error("SMS PROVIDER ERROR:", smsError);
+            const smsMessage =
+                smsTemplate.replace(
+                    "{otp}",
+                    generatedOtp
+                );
 
-      await supabase
-        .from("otp_codes")
-        .update({ verified: true })
-        .eq("phone", cleanPhone)
-        .eq("flow", flow)
-        .eq("otp_hash", otpHash);
+            const smsUrl =
+                `${smsBaseUrl}?` +
+                new URLSearchParams({
+                    username:
+                        smsUsername,
+                    message:
+                        smsMessage,
+                    sendername:
+                        smsSenderName,
+                    smstype:
+                        smsType,
+                    numbers:
+                        cleanPhone,
+                    apikey:
+                        smsApiKey
+                }).toString();
 
-      return res.status(502).json({
-        success: false,
-        code: "SMS_SEND_FAILED",
-        message: "Unable to send OTP."
-      });
-    }
+            try {
 
-    console.log(`OTP sent successfully to ${cleanPhone}`);
+                const smsResponse =
+                    await fetch(
+                        smsUrl,
+                        {
+                            method: "GET"
+                        }
+                    );
 
-    return res.json({
+                const smsResponseText =
+                    await smsResponse.text();
+
+                console.log(
+                    "SMS PROVIDER RESPONSE:",
+                    smsResponse.status,
+                    smsResponseText
+                );
+
+                if (!smsResponse.ok) {
+
+                    await supabase
+                        .from("otp_codes")
+                        .update({
+                            verified: true
+                        })
+                        .eq(
+                            "phone",
+                            cleanPhone
+                        )
+                        .eq(
+                            "flow",
+                            flow
+                        )
+                        .eq(
+                            "otp_hash",
+                            otpHash
+                        );
+
+                    return res.status(502).json({
+                        success: false,
+                        code: "SMS_SEND_FAILED",
+                        message:
+                            "Unable to send OTP."
+                    });
+                }
+
+            } catch (smsError) {
+
+                console.error(
+                    "SMS PROVIDER ERROR:",
+                    smsError
+                );
+
+                await supabase
+                    .from("otp_codes")
+                    .update({
+                        verified: true
+                    })
+                    .eq(
+                        "phone",
+                        cleanPhone
+                    )
+                    .eq(
+                        "flow",
+                        flow
+                    )
+                    .eq(
+                        "otp_hash",
+                        otpHash
+                    );
+
+                return res.status(502).json({
+                    success: false,
+                    code: "SMS_SEND_FAILED",
+                    message:
+                        "Unable to send OTP."
+                });
+            }
+
+            console.log(
+                `OTP sent successfully to ${cleanPhone}`
+            );
+
+            return res.json({
                 success: true,
                 code: "OTP_SENT",
                 message:
@@ -419,12 +592,24 @@ router.post("/otp", async (req, res) => {
                 .select(
                     "id, phone, otp_hash, flow, expires_at, attempts, verified"
                 )
-                .eq("phone", cleanPhone)
-                .eq("flow", flow)
-                .eq("verified", false)
-                .order("created_at", {
-                    ascending: false
-                })
+                .eq(
+                    "phone",
+                    cleanPhone
+                )
+                .eq(
+                    "flow",
+                    flow
+                )
+                .eq(
+                    "verified",
+                    false
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: false
+                    }
+                )
                 .limit(1)
                 .maybeSingle();
 
@@ -458,8 +643,9 @@ router.post("/otp", async (req, res) => {
             // ----------------------------------------------
 
             if (
-                new Date(otpRecord.expires_at)
-                    .getTime() <
+                new Date(
+                    otpRecord.expires_at
+                ).getTime() <
                 Date.now()
             ) {
 
@@ -468,7 +654,10 @@ router.post("/otp", async (req, res) => {
                     .update({
                         verified: true
                     })
-                    .eq("id", otpRecord.id);
+                    .eq(
+                        "id",
+                        otpRecord.id
+                    );
 
                 return res.status(400).json({
                     success: false,
@@ -488,7 +677,8 @@ router.post("/otp", async (req, res) => {
                 );
 
             if (
-                attempts >= MAX_OTP_ATTEMPTS
+                attempts >=
+                MAX_OTP_ATTEMPTS
             ) {
 
                 await supabase
@@ -496,7 +686,10 @@ router.post("/otp", async (req, res) => {
                     .update({
                         verified: true
                     })
-                    .eq("id", otpRecord.id);
+                    .eq(
+                        "id",
+                        otpRecord.id
+                    );
 
                 return res.status(429).json({
                     success: false,
@@ -521,9 +714,13 @@ router.post("/otp", async (req, res) => {
                 await supabase
                     .from("otp_codes")
                     .update({
-                        attempts: attempts + 1
+                        attempts:
+                            attempts + 1
                     })
-                    .eq("id", otpRecord.id);
+                    .eq(
+                        "id",
+                        otpRecord.id
+                    );
 
                 return res.status(400).json({
                     success: false,
@@ -544,7 +741,10 @@ router.post("/otp", async (req, res) => {
                 .update({
                     verified: true
                 })
-                .eq("id", otpRecord.id);
+                .eq(
+                    "id",
+                    otpRecord.id
+                );
 
             if (verifyUpdateError) {
 
@@ -575,7 +775,10 @@ router.post("/otp", async (req, res) => {
                     .select(
                         "id, phone, status"
                     )
-                    .eq("phone", cleanPhone)
+                    .eq(
+                        "phone",
+                        cleanPhone
+                    )
                     .maybeSingle();
 
                 if (userError) {
@@ -605,8 +808,9 @@ router.post("/otp", async (req, res) => {
 
                 if (
                     user.status &&
-                    String(user.status).toLowerCase() !==
-                        "active"
+                    String(user.status)
+                        .toLowerCase() !==
+                    "active"
                 ) {
 
                     return res.status(403).json({
@@ -622,7 +826,8 @@ router.post("/otp", async (req, res) => {
                     code: "LOGIN_SUCCESS",
                     message:
                         "Login successful.",
-                    userId: user.id,
+                    userId:
+                        user.id,
                     redirect: "/"
                 });
             }
@@ -656,7 +861,10 @@ router.post("/otp", async (req, res) => {
                 } = await supabase
                     .from("users")
                     .select("id")
-                    .eq("phone", cleanPhone)
+                    .eq(
+                        "phone",
+                        cleanPhone
+                    )
                     .maybeSingle();
 
                 if (existingError) {
@@ -685,14 +893,114 @@ router.post("/otp", async (req, res) => {
                 }
 
                 // ---------------------------------------------
+                // GENERATE OWN REFERRAL CODE
+                // ---------------------------------------------
+
+                const ownReferralCode =
+                    await generateReferralCode(
+                        fullName
+                    );
+
+                // ---------------------------------------------
+                // FIND REFERRER
+                // ---------------------------------------------
+
+                let referredBy = null;
+
+                const enteredReferralCode =
+                    String(
+                        referralCode || ""
+                    )
+                        .trim()
+                        .toUpperCase();
+
+                if (enteredReferralCode) {
+
+                    const {
+                        data: referrer,
+                        error: referrerError
+                    } = await supabase
+                        .from("users")
+                        .select(
+                            "id, referral_code, status"
+                        )
+                        .eq(
+                            "referral_code",
+                            enteredReferralCode
+                        )
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (referrerError) {
+
+                        console.error(
+                            "REFERRAL CHECK ERROR:",
+                            referrerError
+                        );
+
+                        return res.status(500).json({
+                            success: false,
+                            code: "REFERRAL_CHECK_FAILED",
+                            message:
+                                "Unable to verify referral code."
+                        });
+                    }
+
+                    if (!referrer) {
+
+                        return res.status(400).json({
+                            success: false,
+                            code: "INVALID_REFERRAL_CODE",
+                            message:
+                                "Invalid referral code."
+                        });
+                    }
+
+                    if (
+                        referrer.status &&
+                        String(
+                            referrer.status
+                        ).toLowerCase() !==
+                        "active"
+                    ) {
+
+                        return res.status(400).json({
+                            success: false,
+                            code: "INVALID_REFERRAL_CODE",
+                            message:
+                                "Invalid referral code."
+                        });
+                    }
+
+                    referredBy =
+                        String(
+                            referrer.id
+                        );
+                }
+
+                // ---------------------------------------------
                 // CREATE USER
                 // ---------------------------------------------
 
                 const insertData = {
-                    phone: cleanPhone,
+                    phone:
+                        cleanPhone,
+
                     full_name:
-                        String(fullName).trim(),
-                    status: "active"
+                        String(
+                            fullName
+                        ).trim(),
+
+                    status:
+                        "active",
+
+                    // NEW USER'S OWN CODE
+                    referral_code:
+                        ownReferralCode,
+
+                    // REFERRER USER ID
+                    referred_by:
+                        referredBy
                 };
 
                 if (
@@ -700,27 +1008,25 @@ router.post("/otp", async (req, res) => {
                     String(email).trim()
                 ) {
                     insertData.email =
-                        String(email).trim();
-                }
-
-                if (
-                    referralCode &&
-                    String(referralCode).trim()
-                ) {
-                    insertData.referral_code =
                         String(
-                            referralCode
+                            email
                         ).trim();
                 }
+
+                // ---------------------------------------------
+                // INSERT USER
+                // ---------------------------------------------
 
                 const {
                     data: newUser,
                     error: createError
                 } = await supabase
                     .from("users")
-                    .insert(insertData)
+                    .insert(
+                        insertData
+                    )
                     .select(
-                        "id, phone, status"
+                        "id, phone, status, referral_code, referred_by"
                     )
                     .single();
 
@@ -743,11 +1049,18 @@ router.post("/otp", async (req, res) => {
 
                 return res.json({
                     success: true,
-                    code: "SIGNUP_SUCCESS",
+                    code:
+                        "SIGNUP_SUCCESS",
                     message:
                         "Account created successfully.",
-                    userId: newUser.id,
-                    redirect: "/"
+                    userId:
+                        newUser.id,
+                    referralCode:
+                        newUser.referral_code,
+                    referredBy:
+                        newUser.referred_by,
+                    redirect:
+                        "/"
                 });
             }
         }
@@ -761,7 +1074,8 @@ router.post("/otp", async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            code: "SERVER_ERROR",
+            code:
+                "SERVER_ERROR",
             message:
                 error.message ||
                 "Internal server error."
