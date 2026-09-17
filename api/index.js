@@ -1,16 +1,13 @@
 const express = require("express");
 const cors = require("cors");
 
+const authRouter = require("../src/routes/auth");
+const tournamentsRouter = require("../src/routes/tournaments");
+const walletRouter = require("../src/routes/wallet");
 const depositRoutes = require("../src/routes/deposit");
 
 const app = express();
 
-app.get("/TEST-DEPOSIT-123", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "NEW DEPLOYMENT IS WORKING"
-    });
-});
 /* =====================================================
    MIDDLEWARE
 ===================================================== */
@@ -19,7 +16,14 @@ app.use(
     cors({
         origin: true,
         credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
+        ],
         allowedHeaders: [
             "Content-Type",
             "Authorization",
@@ -29,11 +33,21 @@ app.use(
     })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(
+    express.json({
+        limit: "10mb"
+    })
+);
+
+app.use(
+    express.urlencoded({
+        extended: true,
+        limit: "10mb"
+    })
+);
 
 /* =====================================================
-   HEALTH
+   ROOT
 ===================================================== */
 
 app.get("/", (req, res) => {
@@ -43,6 +57,10 @@ app.get("/", (req, res) => {
     });
 });
 
+/* =====================================================
+   HEALTH
+===================================================== */
+
 app.get("/api/health", (req, res) => {
     res.status(200).json({
         success: true,
@@ -51,10 +69,40 @@ app.get("/api/health", (req, res) => {
 });
 
 /* =====================================================
-   DEPOSIT API
+   AUTH API
 ===================================================== */
 
-app.use("/api/deposit", depositRoutes);
+app.use(
+    "/api/auth",
+    authRouter
+);
+
+/* =====================================================
+   TOURNAMENT API
+===================================================== */
+
+app.use(
+    "/api/tournaments",
+    tournamentsRouter
+);
+
+/* =====================================================
+   WALLET API
+===================================================== */
+
+app.use(
+    "/api/wallet",
+    walletRouter
+);
+
+/* =====================================================
+   DEPOSIT / ADD MONEY API
+===================================================== */
+
+app.use(
+    "/api/deposit",
+    depositRoutes
+);
 
 /* =====================================================
    DEPOSIT TEST
@@ -68,7 +116,18 @@ app.get("/api/deposit/test", (req, res) => {
 });
 
 /* =====================================================
-   404
+   WALLET TEST
+===================================================== */
+
+app.get("/api/wallet/test", (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "Wallet API is working"
+    });
+});
+
+/* =====================================================
+   404 HANDLER
 ===================================================== */
 
 app.use((req, res) => {
@@ -81,7 +140,7 @@ app.use((req, res) => {
 });
 
 /* =====================================================
-   ERROR HANDLER
+   GLOBAL ERROR HANDLER
 ===================================================== */
 
 app.use((err, req, res, next) => {
@@ -89,8 +148,14 @@ app.use((err, req, res, next) => {
 
     res.status(500).json({
         success: false,
-        error: err?.message || "Internal server error"
+        error:
+            err?.message ||
+            "Internal server error"
     });
 });
+
+/* =====================================================
+   EXPORT
+===================================================== */
 
 module.exports = app;
