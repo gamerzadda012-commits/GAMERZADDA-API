@@ -5,6 +5,12 @@ const depositRoutes = require("../routes/deposit");
 
 const app = express();
 
+app.get("/TEST-DEPOSIT-123", (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "NEW DEPLOYMENT IS WORKING"
+    });
+});
 /* =====================================================
    MIDDLEWARE
 ===================================================== */
