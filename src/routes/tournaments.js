@@ -718,7 +718,6 @@ router.post(
                 await supabase
                     .from("wallet_balances")
                     .select(`
-                        id,
                         user_id,
                         deposit_balance,
                         bonus_balance,
