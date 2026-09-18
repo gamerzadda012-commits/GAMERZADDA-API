@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 
+// Routes
 const authRoutes = require("../src/routes/auth");
 const depositRoutes = require("../src/routes/deposit");
 const walletRoutes = require("../src/routes/wallet");
@@ -19,7 +20,14 @@ app.use(
     cors({
         origin: true,
         credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
+        ],
         allowedHeaders: [
             "Content-Type",
             "Authorization",
@@ -30,16 +38,27 @@ app.use(
 
 /*
 ======================================================
-BODY PARSERS
+BODY PARSER
 ======================================================
 */
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+// Avatar upload Base64 ke liye 10 MB request limit
+app.use(
+    express.json({
+        limit: "10mb"
+    })
+);
+
+app.use(
+    express.urlencoded({
+        extended: true,
+        limit: "10mb"
+    })
+);
 
 /*
 ======================================================
-HEALTH CHECK
+ROOT
 ======================================================
 */
 
@@ -51,6 +70,12 @@ app.get("/", (req, res) => {
     });
 });
 
+/*
+======================================================
+API ROOT
+======================================================
+*/
+
 app.get("/api", (req, res) => {
     return res.status(200).json({
         success: true,
@@ -59,10 +84,17 @@ app.get("/api", (req, res) => {
     });
 });
 
+/*
+======================================================
+HEALTH CHECK
+======================================================
+*/
+
 app.get("/health", (req, res) => {
     return res.status(200).json({
         success: true,
-        status: "healthy"
+        message: "GAMERZADDA API healthy",
+        status: "online"
     });
 });
 
@@ -73,19 +105,41 @@ API ROUTES
 */
 
 // Authentication
-app.use("/api/auth", authRoutes);
+// POST /api/auth/otp
+app.use(
+    "/api/auth",
+    authRoutes
+);
 
 // Tournaments
-app.use("/api/tournaments", tournamentsRoutes);
+// /api/tournaments/*
+app.use(
+    "/api/tournaments",
+    tournamentsRoutes
+);
 
-// Deposits
-app.use("/api/deposit", depositRoutes);
+// Deposit
+// /api/deposit/*
+app.use(
+    "/api/deposit",
+    depositRoutes
+);
 
 // Wallet
-app.use("/api/wallet", walletRoutes);
+// /api/wallet/*
+app.use(
+    "/api/wallet",
+    walletRoutes
+);
 
 // Profile
-app.use("/api/profile", profileRoutes);
+// GET  /api/profile/:userId
+// PATCH /api/profile/:userId
+// POST /api/profile/:userId/avatar
+app.use(
+    "/api/profile",
+    profileRoutes
+);
 
 /*
 ======================================================
@@ -94,7 +148,11 @@ app.use("/api/profile", profileRoutes);
 */
 
 app.use((req, res) => {
-    console.log("404 API ROUTE:", req.method, req.originalUrl);
+    console.log(
+        "404 API ROUTE:",
+        req.method,
+        req.originalUrl
+    );
 
     return res.status(404).json({
         success: false,
@@ -106,16 +164,23 @@ app.use((req, res) => {
 
 /*
 ======================================================
-ERROR HANDLER
+GLOBAL ERROR HANDLER
 ======================================================
 */
 
 app.use((err, req, res, next) => {
-    console.error("API ERROR:", err);
+    console.error(
+        "GLOBAL API ERROR:",
+        err
+    );
 
-    return res.status(err.status || 500).json({
+    return res.status(
+        err.status || 500
+    ).json({
         success: false,
-        message: err.message || "Internal server error"
+        message:
+            err.message ||
+            "Internal server error"
     });
 });
 
