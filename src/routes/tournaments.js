@@ -36,13 +36,11 @@ function cleanNumber(value, fallback = 0) {
 
 // ============================================================
 // GET ALL TOURNAMENTS
-// GET /api/tournaments?game=FREE FIRE
+// GET /api/tournaments
 // ============================================================
 
 router.get("/", async (req, res) => {
-
     try {
-
         const game =
             String(
                 req.query.game || ""
@@ -74,10 +72,11 @@ router.get("/", async (req, res) => {
                 );
 
         if (game) {
-            query = query.eq(
-                "game",
-                game
-            );
+            query =
+                query.eq(
+                    "game",
+                    game
+                );
         }
 
         const {
@@ -103,30 +102,31 @@ router.get("/", async (req, res) => {
 
         const result = [];
 
-        for (
-            const tournament of list
-        ) {
+        for (const tournament of list) {
 
             const {
                 count,
                 error: countError
-            } = await supabase
-                .from("tournament_entries")
-                .select(
-                    "id",
-                    {
-                        count: "exact",
-                        head: true
-                    }
-                )
-                .eq(
-                    "tournament_id",
-                    tournament.id
-                )
-                .eq(
-                    "cancelled",
-                    false
-                );
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .select(
+                        "id",
+                        {
+                            count: "exact",
+                            head: true
+                        }
+                    )
+                    .eq(
+                        "tournament_id",
+                        tournament.id
+                    )
+                    .eq(
+                        "cancelled",
+                        false
+                    );
 
             if (countError) {
 
@@ -166,7 +166,7 @@ router.get("/", async (req, res) => {
 
 // ============================================================
 // GET PARTICIPANTS
-// GET /api/tournaments/participants?tournamentId=...
+// GET /api/tournaments/participants?tournamentId=UUID
 // ============================================================
 
 router.get(
@@ -186,38 +186,42 @@ router.get(
                 return res.status(400).json({
                     success: false,
                     error:
-                        "Tournament ID is required"
+                        "Tournament ID is required."
                 });
             }
 
             const {
                 data,
                 error
-            } = await supabase
-                .from("tournament_entries")
-                .select(`
-                    id,
-                    user_id,
-                    free_fire_uid,
-                    game_name,
-                    level,
-                    cancelled,
-                    created_at
-                `)
-                .eq(
-                    "tournament_id",
-                    tournamentId
-                )
-                .eq(
-                    "cancelled",
-                    false
-                )
-                .order(
-                    "created_at",
-                    {
-                        ascending: true
-                    }
-                );
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .select(`
+                        id,
+                        tournament_id,
+                        user_id,
+                        free_fire_uid,
+                        game_name,
+                        level,
+                        cancelled,
+                        created_at
+                    `)
+                    .eq(
+                        "tournament_id",
+                        tournamentId
+                    )
+                    .eq(
+                        "cancelled",
+                        false
+                    )
+                    .order(
+                        "created_at",
+                        {
+                            ascending: true
+                        }
+                    );
 
             if (error) {
 
@@ -257,7 +261,7 @@ router.get(
 
 // ============================================================
 // GET MY ENTRY
-// GET /api/tournaments/my-entry?tournamentId=...
+// GET /api/tournaments/my-entry?tournamentId=UUID
 // ============================================================
 
 router.get(
@@ -279,6 +283,7 @@ router.get(
 
                 return res.status(401).json({
                     success: false,
+                    code: "AUTH_REQUIRED",
                     error:
                         "User session not found."
                 });
@@ -296,31 +301,34 @@ router.get(
             const {
                 data,
                 error
-            } = await supabase
-                .from("tournament_entries")
-                .select(`
-                    id,
-                    tournament_id,
-                    user_id,
-                    free_fire_uid,
-                    game_name,
-                    level,
-                    cancelled,
-                    created_at
-                `)
-                .eq(
-                    "tournament_id",
-                    tournamentId
-                )
-                .eq(
-                    "user_id",
-                    userId
-                )
-                .eq(
-                    "cancelled",
-                    false
-                )
-                .maybeSingle();
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .select(`
+                        id,
+                        tournament_id,
+                        user_id,
+                        free_fire_uid,
+                        game_name,
+                        level,
+                        cancelled,
+                        created_at
+                    `)
+                    .eq(
+                        "tournament_id",
+                        tournamentId
+                    )
+                    .eq(
+                        "user_id",
+                        userId
+                    )
+                    .eq(
+                        "cancelled",
+                        false
+                    )
+                    .maybeSingle();
 
             if (error) {
 
@@ -337,8 +345,10 @@ router.get(
 
             return res.status(200).json({
                 success: true,
-                entry: data || null,
-                joined: !!data
+                entry:
+                    data || null,
+                joined:
+                    !!data
             });
 
         } catch (error) {
@@ -360,6 +370,10 @@ router.get(
 
 // ============================================================
 // JOIN TOURNAMENT
+//
+// IMPORTANT:
+// THIS ROUTE MUST COME BEFORE /:id
+//
 // POST /api/tournaments/join
 // ============================================================
 
@@ -367,9 +381,15 @@ router.post(
     "/join",
     async (req, res) => {
 
+        let originalDeposit = 0;
+        let originalBonus = 0;
+        let originalWinning = 0;
+        let walletUpdated = false;
+        let userId = "";
+
         try {
 
-            const userId =
+            userId =
                 getUserId(req);
 
             const {
@@ -397,9 +417,9 @@ router.post(
             const cleanLevel =
                 Number(level);
 
-            // ------------------------------------------------
+            // =================================================
             // AUTH
-            // ------------------------------------------------
+            // =================================================
 
             if (!userId) {
 
@@ -411,14 +431,15 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
+            // =================================================
             // VALIDATION
-            // ------------------------------------------------
+            // =================================================
 
             if (!cleanTournamentId) {
 
                 return res.status(400).json({
                     success: false,
+                    code: "INVALID_TOURNAMENT",
                     error:
                         "Tournament ID is required."
                 });
@@ -428,6 +449,7 @@ router.post(
 
                 return res.status(400).json({
                     success: false,
+                    code: "INVALID_GAME_NAME",
                     error:
                         "In-Game Name is required."
                 });
@@ -437,47 +459,56 @@ router.post(
 
                 return res.status(400).json({
                     success: false,
+                    code: "INVALID_UID",
                     error:
                         "Free Fire UID is required."
                 });
             }
 
             if (
-                !Number.isInteger(cleanLevel) ||
+                !Number.isInteger(
+                    cleanLevel
+                ) ||
                 cleanLevel < 1 ||
                 cleanLevel > 100
             ) {
 
                 return res.status(400).json({
                     success: false,
+                    code: "INVALID_LEVEL",
                     error:
                         "Level must be between 1 and 100."
                 });
             }
 
-            // ------------------------------------------------
-            // GET TOURNAMENT
-            // ------------------------------------------------
+            // =================================================
+            // TOURNAMENT
+            // =================================================
 
             const {
                 data: tournament,
                 error: tournamentError
-            } = await supabase
-                .from("tournaments")
-                .select(`
-                    id,
-                    title,
-                    mode,
-                    status,
-                    entry_fee,
-                    max_players,
-                    bonus_usable_percent
-                `)
-                .eq(
-                    "id",
-                    cleanTournamentId
-                )
-                .maybeSingle();
+            } =
+                await supabase
+                    .from(
+                        "tournaments"
+                    )
+                    .select(`
+                        id,
+                        title,
+                        game,
+                        mode,
+                        entry_fee,
+                        prize_pool,
+                        max_players,
+                        status,
+                        bonus_usable_percent
+                    `)
+                    .eq(
+                        "id",
+                        cleanTournamentId
+                    )
+                    .maybeSingle();
 
             if (tournamentError) {
 
@@ -504,23 +535,30 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
-            // STATUS CHECK
-            // ------------------------------------------------
+            // =================================================
+            // STATUS
+            // =================================================
 
             const status =
                 String(
                     tournament.status || ""
-                ).toLowerCase();
+                )
+                    .trim()
+                    .toLowerCase();
+
+            const allowedStatuses = [
+                "",
+                "upcoming",
+                "open",
+                "active",
+                "live",
+                "scheduled"
+            ];
 
             if (
-                status &&
-                ![
-                    "upcoming",
-                    "open",
-                    "active",
-                    "live"
-                ].includes(status)
+                !allowedStatuses.includes(
+                    status
+                )
             ) {
 
                 return res.status(400).json({
@@ -532,9 +570,9 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
+            // =================================================
             // ENTRY FEE
-            // ------------------------------------------------
+            // =================================================
 
             const entryFee =
                 cleanNumber(
@@ -542,34 +580,49 @@ router.post(
                     0
                 );
 
-            // ------------------------------------------------
-            // MAX PLAYERS
-            // ------------------------------------------------
+            if (entryFee < 0) {
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        "Invalid tournament entry fee."
+                });
+            }
+
+            // =================================================
+            // PLAYER LIMIT
+            // =================================================
 
             if (
-                tournament.max_players
+                tournament.max_players &&
+                Number(
+                    tournament.max_players
+                ) > 0
             ) {
 
                 const {
                     count,
                     error: countError
-                } = await supabase
-                    .from("tournament_entries")
-                    .select(
-                        "id",
-                        {
-                            count: "exact",
-                            head: true
-                        }
-                    )
-                    .eq(
-                        "tournament_id",
-                        cleanTournamentId
-                    )
-                    .eq(
-                        "cancelled",
-                        false
-                    );
+                } =
+                    await supabase
+                        .from(
+                            "tournament_entries"
+                        )
+                        .select(
+                            "id",
+                            {
+                                count: "exact",
+                                head: true
+                            }
+                        )
+                        .eq(
+                            "tournament_id",
+                            cleanTournamentId
+                        )
+                        .eq(
+                            "cancelled",
+                            false
+                        );
 
                 if (countError) {
 
@@ -602,29 +655,32 @@ router.post(
                 }
             }
 
-            // ------------------------------------------------
-            // DUPLICATE JOIN CHECK
-            // ------------------------------------------------
+            // =================================================
+            // DUPLICATE CHECK
+            // =================================================
 
             const {
                 data: existingEntry,
                 error: existingError
-            } = await supabase
-                .from("tournament_entries")
-                .select("id")
-                .eq(
-                    "tournament_id",
-                    cleanTournamentId
-                )
-                .eq(
-                    "user_id",
-                    userId
-                )
-                .eq(
-                    "cancelled",
-                    false
-                )
-                .maybeSingle();
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .select("id")
+                    .eq(
+                        "tournament_id",
+                        cleanTournamentId
+                    )
+                    .eq(
+                        "user_id",
+                        userId
+                    )
+                    .eq(
+                        "cancelled",
+                        false
+                    )
+                    .maybeSingle();
 
             if (existingError) {
 
@@ -651,27 +707,28 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
-            // GET WALLET
-            // ------------------------------------------------
+            // =================================================
+            // WALLET
+            // =================================================
 
             const {
                 data: wallet,
                 error: walletError
-            } = await supabase
-                .from("wallets")
-                .select(`
-                    id,
-                    user_id,
-                    deposit_balance,
-                    bonus_balance,
-                    winning_balance
-                `)
-                .eq(
-                    "user_id",
-                    userId
-                )
-                .maybeSingle();
+            } =
+                await supabase
+                    .from("wallets")
+                    .select(`
+                        id,
+                        user_id,
+                        deposit_balance,
+                        bonus_balance,
+                        winning_balance
+                    `)
+                    .eq(
+                        "user_id",
+                        userId
+                    )
+                    .maybeSingle();
 
             if (walletError) {
 
@@ -698,9 +755,9 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
-            // WALLET VALUES
-            // ------------------------------------------------
+            // =================================================
+            // BALANCES
+            // =================================================
 
             let deposit =
                 cleanNumber(
@@ -717,13 +774,23 @@ router.post(
                     wallet.winning_balance
                 );
 
+            originalDeposit =
+                deposit;
+
+            originalBonus =
+                bonus;
+
+            originalWinning =
+                winning;
+
             const total =
                 deposit +
                 bonus +
                 winning;
 
             if (
-                total < entryFee
+                total <
+                entryFee
             ) {
 
                 return res.status(402).json({
@@ -735,9 +802,9 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
-            // BONUS LIMIT
-            // ------------------------------------------------
+            // =================================================
+            // BONUS USABLE %
+            // =================================================
 
             let bonusPercent =
                 cleanNumber(
@@ -756,18 +823,25 @@ router.post(
 
             const maxBonusUsable =
                 entryFee *
-                (bonusPercent / 100);
+                (
+                    bonusPercent /
+                    100
+                );
 
-            // ------------------------------------------------
-            // DEDUCTION
+            // =================================================
+            // DEDUCTION ORDER
             //
-            // BONUS → DEPOSIT → WINNING
-            // ------------------------------------------------
+            // BONUS
+            // ↓
+            // DEPOSIT
+            // ↓
+            // WINNING
+            // =================================================
 
             let remaining =
                 entryFee;
 
-            let bonusDeduction =
+            const bonusDeduction =
                 Math.min(
                     bonus,
                     maxBonusUsable,
@@ -777,7 +851,7 @@ router.post(
             remaining -=
                 bonusDeduction;
 
-            let depositDeduction =
+            const depositDeduction =
                 Math.min(
                     deposit,
                     remaining
@@ -786,7 +860,7 @@ router.post(
             remaining -=
                 depositDeduction;
 
-            let winningDeduction =
+            const winningDeduction =
                 Math.min(
                     winning,
                     remaining
@@ -796,7 +870,8 @@ router.post(
                 winningDeduction;
 
             if (
-                remaining > 0.0001
+                remaining >
+                0.0001
             ) {
 
                 return res.status(402).json({
@@ -807,6 +882,10 @@ router.post(
                         "Insufficient usable wallet balance."
                 });
             }
+
+            // =================================================
+            // NEW BALANCES
+            // =================================================
 
             const newDeposit =
                 Number(
@@ -832,31 +911,34 @@ router.post(
                     ).toFixed(2)
                 );
 
-            // ------------------------------------------------
+            // =================================================
             // UPDATE WALLET
-            // ------------------------------------------------
+            // =================================================
 
             const {
-                error: updateWalletError
-            } = await supabase
-                .from("wallets")
-                .update({
-                    deposit_balance:
-                        newDeposit,
+                error:
+                    updateWalletError
+            } =
+                await supabase
+                    .from("wallets")
+                    .update({
+                        deposit_balance:
+                            newDeposit,
 
-                    bonus_balance:
-                        newBonus,
+                        bonus_balance:
+                            newBonus,
 
-                    winning_balance:
-                        newWinning,
+                        winning_balance:
+                            newWinning,
 
-                    updated_at:
-                        new Date().toISOString()
-                })
-                .eq(
-                    "user_id",
-                    userId
-                );
+                        updated_at:
+                            new Date()
+                                .toISOString()
+                    })
+                    .eq(
+                        "user_id",
+                        userId
+                    );
 
             if (updateWalletError) {
 
@@ -867,54 +949,61 @@ router.post(
 
                 return res.status(500).json({
                     success: false,
+                    code:
+                        "WALLET_UPDATE_FAILED",
                     error:
                         updateWalletError.message
                 });
             }
 
-            // ------------------------------------------------
-            // CREATE TOURNAMENT ENTRY
-            // ------------------------------------------------
+            walletUpdated = true;
+
+            // =================================================
+            // CREATE ENTRY
+            // =================================================
 
             const {
                 data: entry,
                 error: entryError
-            } = await supabase
-                .from("tournament_entries")
-                .insert({
-                    tournament_id:
-                        cleanTournamentId,
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .insert({
+                        tournament_id:
+                            cleanTournamentId,
 
-                    user_id:
-                        userId,
+                        user_id:
+                            userId,
 
-                    free_fire_uid:
-                        cleanUid,
+                        free_fire_uid:
+                            cleanUid,
 
-                    game_name:
-                        cleanGameName,
+                        game_name:
+                            cleanGameName,
 
-                    level:
-                        cleanLevel,
+                        level:
+                            cleanLevel,
 
-                    cancelled:
-                        false
-                })
-                .select(`
-                    id,
-                    tournament_id,
-                    user_id,
-                    free_fire_uid,
-                    game_name,
-                    level,
-                    cancelled,
-                    created_at
-                `)
-                .single();
+                        cancelled:
+                            false
+                    })
+                    .select(`
+                        id,
+                        tournament_id,
+                        user_id,
+                        free_fire_uid,
+                        game_name,
+                        level,
+                        cancelled,
+                        created_at
+                    `)
+                    .single();
 
-            // ------------------------------------------------
-            // ROLLBACK WALLET IF ENTRY FAILED
-            // ------------------------------------------------
+            // =================================================
+            // ENTRY FAILED → WALLET ROLLBACK
+            // =================================================
 
             if (entryError) {
 
@@ -923,25 +1012,41 @@ router.post(
                     entryError
                 );
 
-                await supabase
-                    .from("wallets")
-                    .update({
-                        deposit_balance:
-                            deposit,
+                if (walletUpdated) {
 
-                        bonus_balance:
-                            bonus,
+                    const {
+                        error:
+                            rollbackError
+                    } =
+                        await supabase
+                            .from("wallets")
+                            .update({
+                                deposit_balance:
+                                    originalDeposit,
 
-                        winning_balance:
-                            winning,
+                                bonus_balance:
+                                    originalBonus,
 
-                        updated_at:
-                            new Date().toISOString()
-                    })
-                    .eq(
-                        "user_id",
-                        userId
-                    );
+                                winning_balance:
+                                    originalWinning,
+
+                                updated_at:
+                                    new Date()
+                                        .toISOString()
+                            })
+                            .eq(
+                                "user_id",
+                                userId
+                            );
+
+                    if (rollbackError) {
+
+                        console.error(
+                            "WALLET ROLLBACK ERROR:",
+                            rollbackError
+                        );
+                    }
+                }
 
                 return res.status(500).json({
                     success: false,
@@ -953,9 +1058,9 @@ router.post(
                 });
             }
 
-            // ------------------------------------------------
+            // =================================================
             // SUCCESS
-            // ------------------------------------------------
+            // =================================================
 
             const remainingBalance =
                 Number(
@@ -983,6 +1088,7 @@ router.post(
                     cleanTournamentId,
 
                 wallet: {
+
                     depositBalance:
                         newDeposit,
 
@@ -997,22 +1103,26 @@ router.post(
                 },
 
                 deduction: {
+
                     entryFee:
                         entryFee,
 
                     bonus:
                         Number(
-                            bonusDeduction.toFixed(2)
+                            bonusDeduction
+                                .toFixed(2)
                         ),
 
                     deposit:
                         Number(
-                            depositDeduction.toFixed(2)
+                            depositDeduction
+                                .toFixed(2)
                         ),
 
                     winning:
                         Number(
-                            winningDeduction.toFixed(2)
+                            winningDeduction
+                                .toFixed(2)
                         )
                 }
             });
@@ -1024,13 +1134,56 @@ router.post(
                 error
             );
 
+            // =================================================
+            // SAFETY ROLLBACK
+            // =================================================
+
+            if (
+                walletUpdated &&
+                userId
+            ) {
+
+                try {
+
+                    await supabase
+                        .from("wallets")
+                        .update({
+                            deposit_balance:
+                                originalDeposit,
+
+                            bonus_balance:
+                                originalBonus,
+
+                            winning_balance:
+                                originalWinning,
+
+                            updated_at:
+                                new Date()
+                                    .toISOString()
+                        })
+                        .eq(
+                            "user_id",
+                            userId
+                        );
+
+                } catch (
+                    rollbackException
+                ) {
+
+                    console.error(
+                        "EXCEPTION ROLLBACK ERROR:",
+                        rollbackException
+                    );
+                }
+            }
+
             return res.status(500).json({
                 success: false,
                 code:
                     "SERVER_ERROR",
                 error:
                     error?.message ||
-                    "Internal server error."
+                    "Internal server error"
             });
         }
     }
@@ -1038,7 +1191,13 @@ router.post(
 
 // ============================================================
 // GET SINGLE TOURNAMENT
-// IMPORTANT: KEEP THIS AFTER /participants AND /my-entry
+//
+// VERY IMPORTANT:
+// THIS MUST REMAIN AFTER /join
+// THIS MUST REMAIN AFTER /participants
+// THIS MUST REMAIN AFTER /my-entry
+//
+// GET /api/tournaments/:id
 // ============================================================
 
 router.get(
@@ -1064,28 +1223,31 @@ router.get(
             const {
                 data: tournament,
                 error
-            } = await supabase
-                .from("tournaments")
-                .select(`
-                    id,
-                    title,
-                    game,
-                    mode,
-                    entry_fee,
-                    prize_pool,
-                    kill_reward,
-                    max_players,
-                    start_time,
-                    map,
-                    status,
-                    rules,
-                    bonus_usable_percent
-                `)
-                .eq(
-                    "id",
-                    id
-                )
-                .maybeSingle();
+            } =
+                await supabase
+                    .from(
+                        "tournaments"
+                    )
+                    .select(`
+                        id,
+                        title,
+                        game,
+                        mode,
+                        entry_fee,
+                        prize_pool,
+                        kill_reward,
+                        max_players,
+                        start_time,
+                        map,
+                        status,
+                        rules,
+                        bonus_usable_percent
+                    `)
+                    .eq(
+                        "id",
+                        id
+                    )
+                    .maybeSingle();
 
             if (error) {
 
@@ -1105,6 +1267,8 @@ router.get(
 
                 return res.status(404).json({
                     success: false,
+                    code:
+                        "TOURNAMENT_NOT_FOUND",
                     error:
                         "Tournament not found."
                 });
@@ -1113,23 +1277,26 @@ router.get(
             const {
                 count,
                 error: countError
-            } = await supabase
-                .from("tournament_entries")
-                .select(
-                    "id",
-                    {
-                        count: "exact",
-                        head: true
-                    }
-                )
-                .eq(
-                    "tournament_id",
-                    id
-                )
-                .eq(
-                    "cancelled",
-                    false
-                );
+            } =
+                await supabase
+                    .from(
+                        "tournament_entries"
+                    )
+                    .select(
+                        "id",
+                        {
+                            count: "exact",
+                            head: true
+                        }
+                    )
+                    .eq(
+                        "tournament_id",
+                        id
+                    )
+                    .eq(
+                        "cancelled",
+                        false
+                    );
 
             if (countError) {
 
