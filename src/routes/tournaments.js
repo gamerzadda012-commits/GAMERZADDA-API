@@ -716,7 +716,7 @@ router.post(
                 error: walletError
             } =
                 await supabase
-                    .from("wallets")
+                    .from("wallet_balances")
                     .select(`
                         id,
                         user_id,
@@ -920,7 +920,7 @@ router.post(
                     updateWalletError
             } =
                 await supabase
-                    .from("wallets")
+                    .from("wallet_balances")
                     .update({
                         deposit_balance:
                             newDeposit,
@@ -1019,7 +1019,7 @@ router.post(
                             rollbackError
                     } =
                         await supabase
-                            .from("wallets")
+                            .from("wallet_balances")
                             .update({
                                 deposit_balance:
                                     originalDeposit,
@@ -1146,7 +1146,7 @@ router.post(
                 try {
 
                     await supabase
-                        .from("wallets")
+                        .from("wallet_balances")
                         .update({
                             deposit_balance:
                                 originalDeposit,
