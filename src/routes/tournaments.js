@@ -190,14 +190,61 @@ router.get(
                 });
             }
 
+            // ====================================================
+            // GET TOURNAMENT LIMIT
+            // ====================================================
+
             const {
-                data,
-                error
+                data: tournament,
+                error: tournamentError
             } =
                 await supabase
-                    .from(
-                        "tournament_entries"
+                    .from("tournaments")
+                    .select(`
+                        id,
+                        max_players
+                    `)
+                    .eq(
+                        "id",
+                        tournamentId
                     )
+                    .maybeSingle();
+
+            if (tournamentError) {
+
+                console.error(
+                    "PARTICIPANTS TOURNAMENT ERROR:",
+                    tournamentError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        tournamentError.message
+                });
+            }
+
+            if (!tournament) {
+
+                return res.status(404).json({
+                    success: false,
+                    code:
+                        "TOURNAMENT_NOT_FOUND",
+                    error:
+                        "Tournament not found."
+                });
+            }
+
+            // ====================================================
+            // GET REAL JOINED ENTRIES
+            // ====================================================
+
+            const {
+                data: entries,
+                error: entriesError
+            } =
+                await supabase
+                    .from("tournament_entries")
                     .select(`
                         id,
                         tournament_id,
@@ -223,23 +270,165 @@ router.get(
                         }
                     );
 
-            if (error) {
+            if (entriesError) {
 
                 console.error(
-                    "PARTICIPANTS ERROR:",
-                    error
+                    "PARTICIPANTS ENTRIES ERROR:",
+                    entriesError
                 );
 
                 return res.status(500).json({
                     success: false,
-                    error: error.message
+                    error:
+                        entriesError.message
                 });
             }
 
+            const safeEntries =
+                entries || [];
+
+            // ====================================================
+            // GET REAL USER NAMES
+            // ====================================================
+
+            const userIds = [
+                ...new Set(
+                    safeEntries
+                        .map(
+                            entry =>
+                                entry.user_id
+                        )
+                        .filter(Boolean)
+                )
+            ];
+
+            let users = [];
+
+            if (userIds.length > 0) {
+
+                const {
+                    data,
+                    error: usersError
+                } =
+                    await supabase
+                        .from("users")
+                        .select(`
+                            id,
+                            full_name
+                        `)
+                        .in(
+                            "id",
+                            userIds
+                        );
+
+                if (usersError) {
+
+                    console.error(
+                        "PARTICIPANTS USERS ERROR:",
+                        usersError
+                    );
+
+                    return res.status(500).json({
+                        success: false,
+                        error:
+                            usersError.message
+                    });
+                }
+
+                users = data || [];
+            }
+
+            // ====================================================
+            // USER LOOKUP
+            // ====================================================
+
+            const userMap =
+                new Map();
+
+            for (const user of users) {
+
+                userMap.set(
+                    String(user.id),
+                    user
+                );
+            }
+
+            // ====================================================
+            // BUILD FINAL PARTICIPANTS
+            // ====================================================
+
+            const participants =
+                safeEntries.map(
+                    (entry, index) => {
+
+                        const user =
+                            userMap.get(
+                                String(
+                                    entry.user_id
+                                )
+                            );
+
+                        return {
+
+                            participant_number:
+                                index + 1,
+
+                            entry_id:
+                                entry.id,
+
+                            user_id:
+                                entry.user_id,
+
+                            real_name:
+                                String(
+                                    user?.full_name ||
+                                    ""
+                                ).trim(),
+
+                            player_name:
+                                String(
+                                    entry.game_name ||
+                                    ""
+                                ).trim(),
+
+                            uid:
+                                String(
+                                    entry.free_fire_uid ||
+                                    ""
+                                ).trim(),
+
+                            level:
+                                Number(
+                                    entry.level || 0
+                                ),
+
+                            bio: "",
+
+                            profile_pic: "",
+
+                            created_at:
+                                entry.created_at
+                        };
+                    }
+                );
+
+            // ====================================================
+            // RESPONSE
+            // ====================================================
+
             return res.status(200).json({
+
                 success: true,
-                participants:
-                    data || []
+
+                players_joined:
+                    participants.length,
+
+                max_players:
+                    Number(
+                        tournament.max_players || 0
+                    ),
+
+                participants
             });
 
         } catch (error) {
