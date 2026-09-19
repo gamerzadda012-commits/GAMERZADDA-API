@@ -202,6 +202,35 @@ router.get("/", async (req, res) => {
 
 
 
+        // Load rank-wise prizes without blocking tournament loading.
+        let prizeMap = {};
+        try {
+            const tournamentIds = list.map((tournament) => tournament.id).filter(Boolean);
+            if (tournamentIds.length > 0) {
+                const { data: prizeRows, error: prizeError } = await supabase
+                    .from("tournament_prizes")
+                    .select("tournament_id,rank,label,amount")
+                    .in("tournament_id", tournamentIds)
+                    .order("rank", { ascending: true });
+                if (prizeError) {
+                    console.error("TOURNAMENT PRIZES LIST ERROR:", prizeError);
+                } else {
+                    for (const prize of prizeRows || []) {
+                        const key = String(prize.tournament_id);
+                        if (!prizeMap[key]) prizeMap[key] = [];
+                        prizeMap[key].push({
+                            rank: Number(prize.rank) || 0,
+                            label: String(prize.label || "").trim(),
+                            amount: cleanNumber(prize.amount, 0)
+                        });
+                    }
+                }
+            }
+        } catch (prizeException) {
+            console.error("TOURNAMENT PRIZES LIST EXCEPTION:", prizeException);
+            prizeMap = {};
+        }
+
         const result = [];
 
 
@@ -274,31 +303,17 @@ router.get("/", async (req, res) => {
 
 
 
-            // ====================================================
-        // GET RANK-WISE PRIZES
-        // ====================================================
+            result.push({
 
-        const {
-            data: prizes,
-            error: prizesError
-        } = await supabase
-            .from("tournament_prizes")
-            .select("rank,label,amount")
-            .eq("tournament_id", tournament.id)
-            .order("rank", { ascending: true });
+                ...tournament,
 
-        if (prizesError) {
-            console.error(
-                "TOURNAMENT PRIZES ERROR:",
-                prizesError
-            );
-        }
+                joined_count:
 
-        result.push({
-            ...tournament,
-            joined_count: count || 0,
-            prizes: prizes || []
-        });
+                    count || 0
+
+            ,
+                prizes: prizeMap[String(tournament.id)] || []
+            });
 
         }
 
@@ -2978,7 +2993,29 @@ router.get(
 
 
 
-            const {
+            // Load rank-wise prizes; failures here must not break tournament details.
+        let prizes = [];
+        try {
+            const { data: prizeRows, error: prizeError } = await supabase
+                .from("tournament_prizes")
+                .select("rank,label,amount")
+                .eq("tournament_id", id)
+                .order("rank", { ascending: true });
+            if (prizeError) {
+                console.error("SINGLE TOURNAMENT PRIZES ERROR:", prizeError);
+            } else {
+                prizes = (prizeRows || []).map((prize) => ({
+                    rank: Number(prize.rank) || 0,
+                    label: String(prize.label || "").trim(),
+                    amount: cleanNumber(prize.amount, 0)
+                }));
+            }
+        } catch (prizeException) {
+            console.error("SINGLE TOURNAMENT PRIZES EXCEPTION:", prizeException);
+            prizes = [];
+        }
+
+        const {
 
                 count,
 
@@ -3028,31 +3065,19 @@ router.get(
 
             if (countError) {
 
+
+
                 console.error(
+
                     "SINGLE TOURNAMENT COUNT ERROR:",
+
                     countError
+
                 );
+
             }
 
-            // ====================================================
-            // GET RANK-WISE PRIZES
-            // ====================================================
 
-            const {
-                data: prizes,
-                error: prizesError
-            } = await supabase
-                .from("tournament_prizes")
-                .select("rank,label,amount")
-                .eq("tournament_id", id)
-                .order("rank", { ascending: true });
-
-            if (prizesError) {
-                console.error(
-                    "SINGLE TOURNAMENT PRIZES ERROR:",
-                    prizesError
-                );
-            }
 
             return res.status(200).json({
 
@@ -3069,11 +3094,12 @@ router.get(
 
 
                     joined_count:
-                        count || 0,
 
-                    prizes:
-                        prizes || []
+                        count || 0,
+                    prizes
+
                 }
+
             });
 
 
