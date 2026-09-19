@@ -314,7 +314,10 @@ router.get(
                         .from("users")
                         .select(`
                             id,
-                            full_name
+                            full_name,
+                            level,
+                            bio,
+                            avatar_url
                         `)
                         .in(
                             "id",
@@ -354,8 +357,46 @@ router.get(
             }
 
             // ====================================================
-            // BUILD FINAL PARTICIPANTS
+            // PROFILE FALLBACK + FINAL PARTICIPANTS
             // ====================================================
+            // The users table is the source of truth for profile level,
+            // bio and avatar. If the batch lookup returns an incomplete
+            // row, fetch that exact user once more.
+
+            const missingProfileIds = [
+                ...new Set(
+                    safeEntries
+                        .map(entry => String(entry.user_id || "").trim())
+                        .filter(Boolean)
+                        .filter(id => {
+                            const user = userMap.get(id);
+                            return !user ||
+                                user.level == null ||
+                                user.bio == null ||
+                                user.avatar_url == null;
+                        })
+                )
+            ];
+
+            for (const profileUserId of missingProfileIds) {
+                try {
+                    const { data: profile, error: profileError } =
+                        await supabase
+                            .from("users")
+                            .select("id,full_name,level,bio,avatar_url")
+                            .eq("id", profileUserId)
+                            .maybeSingle();
+
+                    if (!profileError && profile) {
+                        userMap.set(String(profile.id), profile);
+                    }
+                } catch (profileException) {
+                    console.error(
+                        "PARTICIPANT PROFILE FALLBACK ERROR:",
+                        profileException
+                    );
+                }
+            }
 
             const participants =
                 safeEntries.map(
@@ -363,51 +404,28 @@ router.get(
 
                         const user =
                             userMap.get(
-                                String(
-                                    entry.user_id
-                                )
-                            );
+                                String(entry.user_id)
+                            ) || {};
+
+                        const profileLevel =
+                            Number(user.level);
+
+                        const entryLevel =
+                            Number(entry.level);
 
                         return {
-
-                            participant_number:
-                                index + 1,
-
-                            entry_id:
-                                entry.id,
-
-                            user_id:
-                                entry.user_id,
-
-                            real_name:
-                                String(
-                                    user?.full_name ||
-                                    ""
-                                ).trim(),
-
-                            player_name:
-                                String(
-                                    entry.game_name ||
-                                    ""
-                                ).trim(),
-
-                            uid:
-                                String(
-                                    entry.free_fire_uid ||
-                                    ""
-                                ).trim(),
-
-                            level:
-                                Number(
-                                    entry.level || 0
-                                ),
-
-                            bio: "",
-
-                            profile_pic: "",
-
-                            created_at:
-                                entry.created_at
+                            participant_number: index + 1,
+                            entry_id: entry.id,
+                            user_id: entry.user_id,
+                            real_name: String(user.full_name || "").trim(),
+                            player_name: String(entry.game_name || "").trim(),
+                            uid: String(entry.free_fire_uid || "").trim(),
+                            level: Number.isFinite(profileLevel)
+                                ? profileLevel
+                                : (Number.isFinite(entryLevel) ? entryLevel : 0),
+                            bio: String(user.bio || "").trim(),
+                            profile_pic: String(user.avatar_url || "").trim(),
+                            created_at: entry.created_at
                         };
                     }
                 );
