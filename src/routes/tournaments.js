@@ -2,7 +2,15 @@ const express = require("express");
 
 
 
+
+
+
+
 const router = express.Router();
+
+
+
+
 
 
 
@@ -10,3139 +18,6473 @@ const supabase = require("../config/supabase");
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // HELPERS
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 function getUserId(req) {
 
-    const headerUserId =
-
-        req.headers["x-user-id"];
 
 
-
-    const bodyUserId =
-
-        req.body?.userId;
+    const headerUserId =
 
 
 
-    const queryUserId =
-
-        req.query?.userId;
+        req.headers["x-user-id"];
 
 
 
-    return String(
 
-        headerUserId ||
 
-        bodyUserId ||
 
-        queryUserId ||
 
-        ""
+    const bodyUserId =
 
-    ).trim();
+
+
+        req.body?.userId;
+
+
+
+
+
+
+
+    const queryUserId =
+
+
+
+        req.query?.userId;
+
+
+
+
+
+
+
+    return String(
+
+
+
+        headerUserId ||
+
+
+
+        bodyUserId ||
+
+
+
+        queryUserId ||
+
+
+
+        ""
+
+
+
+    ).trim();
+
+
 
 }
+
+
+
+
 
 
 
 function cleanNumber(value, fallback = 0) {
 
-    const number = Number(value);
+
+
+    const number = Number(value);
 
 
 
-    return Number.isFinite(number)
 
-        ? number
 
-        : fallback;
+
+
+    return Number.isFinite(number)
+
+
+
+        ? number
+
+
+
+        : fallback;
+
+
 
 }
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // GET ALL TOURNAMENTS
 
+
+
 // GET /api/tournaments
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 router.get("/", async (req, res) => {
 
-    try {
 
-        const game =
 
-            String(
+    try {
 
-                req.query.game || ""
 
-            ).trim();
 
+        const game =
 
 
-        let query =
 
-            supabase
+            String(
 
-                .from("tournaments")
 
-                .select(`
 
-                    id,
+                req.query.game || ""
 
-                    title,
 
-                    game,
 
-                    mode,
+            ).trim();
 
-                    entry_fee,
 
-                    prize_pool,
 
-                    kill_reward,
 
-                    max_players,
 
-                    start_time,
 
-                    map,
 
-                    status,
+        let query =
 
-                    rules,
 
-                    bonus_usable_percent
 
-                `)
+            supabase
 
-                .order(
 
-                    "start_time",
 
-                    {
+                .from("tournaments")
 
-                        ascending: true
 
-                    }
 
-                );
+                .select(`
 
 
 
-        if (game) {
+                    id,
 
-            query =
 
-                query.eq(
 
-                    "game",
+                    title,
 
-                    game
 
-                );
 
-        }
+                    game,
 
 
 
-        const {
+                    mode,
 
-            data: tournaments,
 
-            error
 
-        } = await query;
+                    entry_fee,
 
 
 
-        if (error) {
+                    prize_pool,
 
 
 
-            console.error(
+                    kill_reward,
 
-                "GET TOURNAMENTS ERROR:",
 
-                error
 
-            );
+                    max_players,
 
 
 
-            return res.status(500).json({
+                    start_time,
 
-                success: false,
 
-                error: error.message
 
-            });
+                    map,
 
-        }
 
 
+                    status,
 
-        const list =
 
-            tournaments || [];
 
+                    rules,
 
 
-        // Load rank-wise prizes without blocking tournament loading.
-        let prizeMap = {};
-        try {
-            const tournamentIds = list.map((tournament) => tournament.id).filter(Boolean);
-            if (tournamentIds.length > 0) {
-                const { data: prizeRows, error: prizeError } = await supabase
-                    .from("tournament_prizes")
-                    .select("tournament_id,rank,label,amount")
-                    .in("tournament_id", tournamentIds)
-                    .order("rank", { ascending: true });
-                if (prizeError) {
-                    console.error("TOURNAMENT PRIZES LIST ERROR:", prizeError);
-                } else {
-                    for (const prize of prizeRows || []) {
-                        const key = String(prize.tournament_id);
-                        if (!prizeMap[key]) prizeMap[key] = [];
-                        prizeMap[key].push({
-                            rank: Number(prize.rank) || 0,
-                            label: String(prize.label || "").trim(),
-                            amount: cleanNumber(prize.amount, 0)
-                        });
-                    }
-                }
-            }
-        } catch (prizeException) {
-            console.error("TOURNAMENT PRIZES LIST EXCEPTION:", prizeException);
-            prizeMap = {};
-        }
 
-        const result = [];
+                    bonus_usable_percent
 
 
 
-        for (const tournament of list) {
+                `)
 
 
 
-            const {
+                .order(
 
-                count,
 
-                error: countError
 
-            } =
+                    "start_time",
 
-                await supabase
 
-                    .from(
 
-                        "tournament_entries"
+                    {
 
-                    )
 
-                    .select(
 
-                        "id",
+                        ascending: true
 
-                        {
 
-                            count: "exact",
 
-                            head: true
+                    }
 
-                        }
 
-                    )
 
-                    .eq(
+                );
 
-                        "tournament_id",
 
-                        tournament.id
 
-                    )
 
-                    .eq(
 
-                        "cancelled",
 
-                        false
 
-                    );
+        if (game) {
 
 
 
-            if (countError) {
+            query =
 
 
 
-                console.error(
+                query.eq(
 
-                    "COUNT ERROR:",
 
-                    countError
 
-                );
+                    "game",
 
-            }
 
 
+                    game
 
-            result.push({
 
-                ...tournament,
 
-                joined_count:
+                );
 
-                    count || 0
 
-            ,
-                prizes: prizeMap[String(tournament.id)] || []
-            });
 
-        }
+        }
 
 
 
-        return res.status(200).json({
 
-            success: true,
 
-            tournaments: result
 
-        });
 
+        const {
 
 
-    } catch (error) {
 
+            data: tournaments,
 
 
-        console.error(
 
-            "GET TOURNAMENTS EXCEPTION:",
+            error
 
-            error
 
-        );
 
+        } = await query;
 
 
-        return res.status(500).json({
 
-            success: false,
 
-            error:
 
-                error?.message ||
 
-                "Internal server error"
 
-        });
+        if (error) {
 
-    }
+
+
+
+
+
+
+            console.error(
+
+
+
+                "GET TOURNAMENTS ERROR:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                error: error.message
+
+
+
+            });
+
+
+
+        }
+
+
+
+
+
+
+
+        const list =
+
+
+
+            tournaments || [];
+
+
+
+
+
+
+
+        // Load rank-wise prizes without blocking tournament loading.
+
+        let prizeMap = {};
+
+        try {
+
+            const tournamentIds = list.map((tournament) => tournament.id).filter(Boolean);
+
+            if (tournamentIds.length > 0) {
+
+                const { data: prizeRows, error: prizeError } = await supabase
+
+                    .from("tournament_prizes")
+
+                    .select("tournament_id,rank,label,amount")
+
+                    .in("tournament_id", tournamentIds)
+
+                    .order("rank", { ascending: true });
+
+                if (prizeError) {
+
+                    console.error("TOURNAMENT PRIZES LIST ERROR:", prizeError);
+
+                } else {
+
+                    for (const prize of prizeRows || []) {
+
+                        const key = String(prize.tournament_id);
+
+                        if (!prizeMap[key]) prizeMap[key] = [];
+
+                        prizeMap[key].push({
+
+                            rank: Number(prize.rank) || 0,
+
+                            label: String(prize.label || "").trim(),
+
+                            amount: cleanNumber(prize.amount, 0)
+
+                        });
+
+                    }
+
+                }
+
+            }
+
+        } catch (prizeException) {
+
+            console.error("TOURNAMENT PRIZES LIST EXCEPTION:", prizeException);
+
+            prizeMap = {};
+
+        }
+
+
+
+        const result = [];
+
+
+
+
+
+
+
+        for (const tournament of list) {
+
+
+
+
+
+
+
+            const {
+
+
+
+                count,
+
+
+
+                error: countError
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from(
+
+
+
+                        "tournament_entries"
+
+
+
+                    )
+
+
+
+                    .select(
+
+
+
+                        "id",
+
+
+
+                        {
+
+
+
+                            count: "exact",
+
+
+
+                            head: true
+
+
+
+                        }
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "tournament_id",
+
+
+
+                        tournament.id
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "cancelled",
+
+
+
+                        false
+
+
+
+                    );
+
+
+
+
+
+
+
+            if (countError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "COUNT ERROR:",
+
+
+
+                    countError
+
+
+
+                );
+
+
+
+            }
+
+
+
+
+
+
+
+            result.push({
+
+
+
+                ...tournament,
+
+
+
+                joined_count:
+
+
+
+                    count || 0
+
+
+
+            ,
+
+                prizes: prizeMap[String(tournament.id)] || []
+
+            });
+
+
+
+        }
+
+
+
+
+
+
+
+        return res.status(200).json({
+
+
+
+            success: true,
+
+
+
+            tournaments: result
+
+
+
+        });
+
+
+
+
+
+
+
+    } catch (error) {
+
+
+
+
+
+
+
+        console.error(
+
+
+
+            "GET TOURNAMENTS EXCEPTION:",
+
+
+
+            error
+
+
+
+        );
+
+
+
+
+
+
+
+        return res.status(500).json({
+
+
+
+            success: false,
+
+
+
+            error:
+
+
+
+                error?.message ||
+
+
+
+                "Internal server error"
+
+
+
+        });
+
+
+
+    }
+
+
 
 });
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // GET PARTICIPANTS
 
+
+
 // GET /api/tournaments/participants?tournamentId=UUID
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 router.get(
 
-    "/participants",
 
-    async (req, res) => {
 
+    "/participants",
 
 
-        try {
 
+    async (req, res) => {
 
 
-            const tournamentId =
 
-                String(
 
-                    req.query.tournamentId ||
 
-                    ""
 
-                ).trim();
 
+        try {
 
 
-            if (!tournamentId) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    error:
+            const tournamentId =
 
-                        "Tournament ID is required."
 
-                });
 
-            }
+                String(
 
 
 
-            // ====================================================
+                    req.query.tournamentId ||
 
-            // GET TOURNAMENT LIMIT
 
-            // ====================================================
 
+                    ""
 
 
-            const {
 
-                data: tournament,
+                ).trim();
 
-                error: tournamentError
 
-            } =
 
-                await supabase
 
-                    .from("tournaments")
 
-                    .select(`
 
-                        id,
 
-                        max_players
+            if (!tournamentId) {
 
-                    `)
 
-                    .eq(
 
-                        "id",
 
-                        tournamentId
 
-                    )
 
-                    .maybeSingle();
 
+                return res.status(400).json({
 
 
-            if (tournamentError) {
 
+                    success: false,
 
 
-                console.error(
 
-                    "PARTICIPANTS TOURNAMENT ERROR:",
+                    error:
 
-                    tournamentError
 
-                );
 
+                        "Tournament ID is required."
 
 
-                return res.status(500).json({
 
-                    success: false,
+                });
 
-                    error:
 
-                        tournamentError.message
 
-                });
+            }
 
-            }
 
 
 
-            if (!tournament) {
 
 
 
-                return res.status(404).json({
+            // ====================================================
 
-                    success: false,
 
-                    code:
 
-                        "TOURNAMENT_NOT_FOUND",
+            // GET TOURNAMENT LIMIT
 
-                    error:
 
-                        "Tournament not found."
 
-                });
+            // ====================================================
 
-            }
 
 
 
-            // ====================================================
 
-            // GET REAL JOINED ENTRIES
 
-            // ====================================================
 
+            const {
 
 
-            const {
 
-                data: entries,
+                data: tournament,
 
-                error: entriesError
 
-            } =
 
-                await supabase
+                error: tournamentError
 
-                    .from("tournament_entries")
 
-                    .select(`
 
-                        id,
+            } =
 
-                        tournament_id,
 
-                        user_id,
 
-                        free_fire_uid,
+                await supabase
 
-                        game_name,
 
-                        level,
 
-                        cancelled,
+                    .from("tournaments")
 
-                        created_at
 
-                    `)
 
-                    .eq(
+                    .select(`
 
-                        "tournament_id",
 
-                        tournamentId
 
-                    )
+                        id,
 
-                    .eq(
 
-                        "cancelled",
 
-                        false
+                        max_players
 
-                    )
 
-                    .order(
 
-                        "created_at",
+                    `)
 
-                        {
 
-                            ascending: true
 
-                        }
+                    .eq(
 
-                    );
 
 
+                        "id",
 
-            if (entriesError) {
 
 
+                        tournamentId
 
-                console.error(
 
-                    "PARTICIPANTS ENTRIES ERROR:",
 
-                    entriesError
+                    )
 
-                );
 
 
+                    .maybeSingle();
 
-                return res.status(500).json({
 
-                    success: false,
 
-                    error:
 
-                        entriesError.message
 
-                });
 
-            }
 
+            if (tournamentError) {
 
 
-            const safeEntries =
 
-                entries || [];
 
 
 
-            // ====================================================
 
-            // GET REAL USER NAMES
+                console.error(
 
-            // ====================================================
 
 
+                    "PARTICIPANTS TOURNAMENT ERROR:",
 
-            const userIds = [
 
-                ...new Set(
 
-                    safeEntries
+                    tournamentError
 
-                        .map(
 
-                            entry =>
 
-                                entry.user_id
+                );
 
-                        )
 
-                        .filter(Boolean)
 
-                )
 
-            ];
 
 
 
-            let users = [];
+                return res.status(500).json({
 
 
 
-            if (userIds.length > 0) {
+                    success: false,
 
 
 
-                const {
+                    error:
 
-                    data,
 
-                    error: usersError
 
-                } =
+                        tournamentError.message
 
-                    await supabase
 
-                        .from("users")
 
-                        .select(`
+                });
 
-                            id,
 
-                            full_name,
 
-                            level,
+            }
 
-                            bio,
 
-                            avatar_url
 
-                        `)
 
-                        .in(
 
-                            "id",
 
-                            userIds
 
-                        );
+            if (!tournament) {
 
 
 
-                if (usersError) {
 
 
 
-                    console.error(
 
-                        "PARTICIPANTS USERS ERROR:",
+                return res.status(404).json({
 
-                        usersError
 
-                    );
 
+                    success: false,
 
 
-                    return res.status(500).json({
 
-                        success: false,
+                    code:
 
-                        error:
 
-                            usersError.message
 
-                    });
+                        "TOURNAMENT_NOT_FOUND",
 
-                }
 
 
+                    error:
 
-                users = data || [];
 
-            }
 
+                        "Tournament not found."
 
 
-            // ====================================================
 
-            // USER LOOKUP
+                });
 
-            // ====================================================
 
 
+            }
 
-            const userMap =
 
-                new Map();
 
 
 
-            for (const user of users) {
 
 
+            // ====================================================
 
-                userMap.set(
 
-                    String(user.id),
 
-                    user
+            // GET REAL JOINED ENTRIES
 
-                );
 
-            }
 
+            // ====================================================
 
 
-            // ====================================================
 
-            // PROFILE FALLBACK + FINAL PARTICIPANTS
 
-            // ====================================================
 
-            // The users table is the source of truth for profile level,
 
-            // bio and avatar. If the batch lookup returns an incomplete
 
-            // row, fetch that exact user once more.
+            const {
 
 
 
-            const missingProfileIds = [
+                data: entries,
 
-                ...new Set(
 
-                    safeEntries
 
-                        .map(entry => String(entry.user_id || "").trim())
+                error: entriesError
 
-                        .filter(Boolean)
 
-                        .filter(id => {
 
-                            const user = userMap.get(id);
+            } =
 
-                            return !user ||
 
-                                user.level == null ||
 
-                                user.bio == null ||
+                await supabase
 
-                                user.avatar_url == null;
 
-                        })
 
-                )
+                    .from("tournament_entries")
 
-            ];
 
 
+                    .select(`
 
-            for (const profileUserId of missingProfileIds) {
 
-                try {
 
-                    const { data: profile, error: profileError } =
+                        id,
 
-                        await supabase
 
-                            .from("users")
 
-                            .select("id,full_name,level,bio,avatar_url")
+                        tournament_id,
 
-                            .eq("id", profileUserId)
 
-                            .maybeSingle();
 
+                        user_id,
 
 
-                    if (!profileError && profile) {
 
-                        userMap.set(String(profile.id), profile);
+                        free_fire_uid,
 
-                    }
 
-                } catch (profileException) {
 
-                    console.error(
+                        game_name,
 
-                        "PARTICIPANT PROFILE FALLBACK ERROR:",
 
-                        profileException
 
-                    );
+                        level,
 
-                }
 
-            }
 
+                        cancelled,
 
 
-            const participants =
 
-                safeEntries.map(
+                        created_at
 
-                    (entry, index) => {
 
 
+                    `)
 
-                        const user =
 
-                            userMap.get(
 
-                                String(entry.user_id)
+                    .eq(
 
-                            ) || {};
 
 
+                        "tournament_id",
 
-                        const profileLevel =
 
-                            Number(user.level);
 
+                        tournamentId
 
 
-                        const entryLevel =
 
-                            Number(entry.level);
+                    )
 
 
 
-                        return {
+                    .eq(
 
-                            participant_number: index + 1,
 
-                            entry_id: entry.id,
 
-                            user_id: entry.user_id,
+                        "cancelled",
 
-                            real_name: String(user.full_name || "").trim(),
 
-                            player_name: String(entry.game_name || "").trim(),
 
-                            uid: String(entry.free_fire_uid || "").trim(),
+                        false
 
-                            level: Number.isFinite(profileLevel)
 
-                                ? profileLevel
 
-                                : (Number.isFinite(entryLevel) ? entryLevel : 0),
+                    )
 
-                            bio: String(user.bio || "").trim(),
 
-                            profile_pic: String(user.avatar_url || "").trim(),
 
-                            created_at: entry.created_at
+                    .order(
 
-                        };
 
-                    }
 
-                );
+                        "created_at",
 
 
 
-            // ====================================================
+                        {
 
-            // RESPONSE
 
-            // ====================================================
 
+                            ascending: true
 
 
-            return res.status(200).json({
 
+                        }
 
 
-                success: true,
 
+                    );
 
 
-                players_joined:
 
-                    participants.length,
 
 
 
-                max_players:
 
-                    Number(
+            if (entriesError) {
 
-                        tournament.max_players || 0
 
-                    ),
 
 
 
-                participants
 
-            });
 
+                console.error(
 
 
-        } catch (error) {
 
+                    "PARTICIPANTS ENTRIES ERROR:",
 
 
-            console.error(
 
-                "PARTICIPANTS EXCEPTION:",
+                    entriesError
 
-                error
 
-            );
 
+                );
 
 
-            return res.status(500).json({
 
-                success: false,
 
-                error:
 
-                    error?.message ||
 
-                    "Internal server error"
 
-            });
+                return res.status(500).json({
 
-        }
 
-    }
+
+                    success: false,
+
+
+
+                    error:
+
+
+
+                        entriesError.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            const safeEntries =
+
+
+
+                entries || [];
+
+
+
+
+
+
+
+            // ====================================================
+
+
+
+            // GET REAL USER NAMES
+
+
+
+            // ====================================================
+
+
+
+
+
+
+
+            const userIds = [
+
+
+
+                ...new Set(
+
+
+
+                    safeEntries
+
+
+
+                        .map(
+
+
+
+                            entry =>
+
+
+
+                                entry.user_id
+
+
+
+                        )
+
+
+
+                        .filter(Boolean)
+
+
+
+                )
+
+
+
+            ];
+
+
+
+
+
+
+
+            let users = [];
+
+
+
+
+
+
+
+            if (userIds.length > 0) {
+
+
+
+
+
+
+
+                const {
+
+
+
+                    data,
+
+
+
+                    error: usersError
+
+
+
+                } =
+
+
+
+                    await supabase
+
+
+
+                        .from("users")
+
+
+
+                        .select(`
+
+
+
+                            id,
+
+
+
+                            full_name,
+
+
+
+                            level,
+
+
+
+                            bio,
+
+
+
+                            avatar_url
+
+
+
+                        `)
+
+
+
+                        .in(
+
+
+
+                            "id",
+
+
+
+                            userIds
+
+
+
+                        );
+
+
+
+
+
+
+
+                if (usersError) {
+
+
+
+
+
+
+
+                    console.error(
+
+
+
+                        "PARTICIPANTS USERS ERROR:",
+
+
+
+                        usersError
+
+
+
+                    );
+
+
+
+
+
+
+
+                    return res.status(500).json({
+
+
+
+                        success: false,
+
+
+
+                        error:
+
+
+
+                            usersError.message
+
+
+
+                    });
+
+
+
+                }
+
+
+
+
+
+
+
+                users = data || [];
+
+
+
+            }
+
+
+
+
+
+
+
+            // ====================================================
+
+
+
+            // USER LOOKUP
+
+
+
+            // ====================================================
+
+
+
+
+
+
+
+            const userMap =
+
+
+
+                new Map();
+
+
+
+
+
+
+
+            for (const user of users) {
+
+
+
+
+
+
+
+                userMap.set(
+
+
+
+                    String(user.id),
+
+
+
+                    user
+
+
+
+                );
+
+
+
+            }
+
+
+
+
+
+
+
+            // ====================================================
+
+
+
+            // PROFILE FALLBACK + FINAL PARTICIPANTS
+
+
+
+            // ====================================================
+
+
+
+            // The users table is the source of truth for profile level,
+
+
+
+            // bio and avatar. If the batch lookup returns an incomplete
+
+
+
+            // row, fetch that exact user once more.
+
+
+
+
+
+
+
+            const missingProfileIds = [
+
+
+
+                ...new Set(
+
+
+
+                    safeEntries
+
+
+
+                        .map(entry => String(entry.user_id || "").trim())
+
+
+
+                        .filter(Boolean)
+
+
+
+                        .filter(id => {
+
+
+
+                            const user = userMap.get(id);
+
+
+
+                            return !user ||
+
+
+
+                                user.level == null ||
+
+
+
+                                user.bio == null ||
+
+
+
+                                user.avatar_url == null;
+
+
+
+                        })
+
+
+
+                )
+
+
+
+            ];
+
+
+
+
+
+
+
+            for (const profileUserId of missingProfileIds) {
+
+
+
+                try {
+
+
+
+                    const { data: profile, error: profileError } =
+
+
+
+                        await supabase
+
+
+
+                            .from("users")
+
+
+
+                            .select("id,full_name,level,bio,avatar_url")
+
+
+
+                            .eq("id", profileUserId)
+
+
+
+                            .maybeSingle();
+
+
+
+
+
+
+
+                    if (!profileError && profile) {
+
+
+
+                        userMap.set(String(profile.id), profile);
+
+
+
+                    }
+
+
+
+                } catch (profileException) {
+
+
+
+                    console.error(
+
+
+
+                        "PARTICIPANT PROFILE FALLBACK ERROR:",
+
+
+
+                        profileException
+
+
+
+                    );
+
+
+
+                }
+
+
+
+            }
+
+
+
+
+
+
+
+            const participants =
+
+
+
+                safeEntries.map(
+
+
+
+                    (entry, index) => {
+
+
+
+
+
+
+
+                        const user =
+
+
+
+                            userMap.get(
+
+
+
+                                String(entry.user_id)
+
+
+
+                            ) || {};
+
+
+
+
+
+
+
+                        const profileLevel =
+
+
+
+                            Number(user.level);
+
+
+
+
+
+
+
+                        const entryLevel =
+
+
+
+                            Number(entry.level);
+
+
+
+
+
+
+
+                        return {
+
+
+
+                            participant_number: index + 1,
+
+
+
+                            entry_id: entry.id,
+
+
+
+                            user_id: entry.user_id,
+
+
+
+                            real_name: String(user.full_name || "").trim(),
+
+
+
+                            player_name: String(entry.game_name || "").trim(),
+
+
+
+                            uid: String(entry.free_fire_uid || "").trim(),
+
+
+
+                            level: Number.isFinite(profileLevel)
+
+
+
+                                ? profileLevel
+
+
+
+                                : (Number.isFinite(entryLevel) ? entryLevel : 0),
+
+
+
+                            bio: String(user.bio || "").trim(),
+
+
+
+                            profile_pic: String(user.avatar_url || "").trim(),
+
+
+
+                            created_at: entry.created_at
+
+
+
+                        };
+
+
+
+                    }
+
+
+
+                );
+
+
+
+
+
+
+
+            // ====================================================
+
+
+
+            // RESPONSE
+
+
+
+            // ====================================================
+
+
+
+
+
+
+
+            return res.status(200).json({
+
+
+
+
+
+
+
+                success: true,
+
+
+
+
+
+
+
+                players_joined:
+
+
+
+                    participants.length,
+
+
+
+
+
+
+
+                max_players:
+
+
+
+                    Number(
+
+
+
+                        tournament.max_players || 0
+
+
+
+                    ),
+
+
+
+
+
+
+
+                participants
+
+
+
+            });
+
+
+
+
+
+
+
+        } catch (error) {
+
+
+
+
+
+
+
+            console.error(
+
+
+
+                "PARTICIPANTS EXCEPTION:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                error:
+
+
+
+                    error?.message ||
+
+
+
+                    "Internal server error"
+
+
+
+            });
+
+
+
+        }
+
+
+
+    }
+
+
 
 );
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // GET MY ENTRY
 
+
+
 // GET /api/tournaments/my-entry?tournamentId=UUID
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 router.get(
 
-    "/my-entry",
 
-    async (req, res) => {
 
+    "/my-entry",
 
 
-        try {
 
+    async (req, res) => {
 
 
-            const userId =
 
-                getUserId(req);
 
 
 
-            const tournamentId =
 
-                String(
+        try {
 
-                    req.query.tournamentId ||
 
-                    ""
 
-                ).trim();
 
 
 
-            if (!userId) {
 
+            const userId =
 
 
-                return res.status(401).json({
 
-                    success: false,
+                getUserId(req);
 
-                    code: "AUTH_REQUIRED",
 
-                    error:
 
-                        "User session not found."
 
-                });
 
-            }
 
 
+            const tournamentId =
 
-            if (!tournamentId) {
 
 
+                String(
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    error:
+                    req.query.tournamentId ||
 
-                        "Tournament ID is required."
 
-                });
 
-            }
+                    ""
 
 
 
-            const {
+                ).trim();
 
-                data,
 
-                error
 
-            } =
 
-                await supabase
 
-                    .from(
 
-                        "tournament_entries"
 
-                    )
+            if (!userId) {
 
-                    .select(`
 
-                        id,
 
-                        tournament_id,
 
-                        user_id,
 
-                        free_fire_uid,
 
-                        game_name,
 
-                        level,
+                return res.status(401).json({
 
-                        cancelled,
 
-                        created_at
 
-                    `)
+                    success: false,
 
-                    .eq(
 
-                        "tournament_id",
 
-                        tournamentId
+                    code: "AUTH_REQUIRED",
 
-                    )
 
-                    .eq(
 
-                        "user_id",
+                    error:
 
-                        userId
 
-                    )
 
-                    .eq(
+                        "User session not found."
 
-                        "cancelled",
 
-                        false
 
-                    )
+                });
 
-                    .maybeSingle();
 
 
+            }
 
-            if (error) {
 
 
 
-                console.error(
 
-                    "MY ENTRY ERROR:",
 
-                    error
 
-                );
+            if (!tournamentId) {
 
 
 
-                return res.status(500).json({
 
-                    success: false,
 
-                    error: error.message
 
-                });
 
-            }
+                return res.status(400).json({
 
 
 
-            return res.status(200).json({
+                    success: false,
 
-                success: true,
 
-                entry:
 
-                    data || null,
+                    error:
 
-                joined:
 
-                    !!data
 
-            });
+                        "Tournament ID is required."
 
 
 
-        } catch (error) {
+                });
 
 
 
-            console.error(
+            }
 
-                "MY ENTRY EXCEPTION:",
 
-                error
 
-            );
 
 
 
-            return res.status(500).json({
 
-                success: false,
+            const {
 
-                error:
 
-                    error?.message ||
 
-                    "Internal server error"
+                data,
 
-            });
 
-        }
 
-    }
+                error
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from(
+
+
+
+                        "tournament_entries"
+
+
+
+                    )
+
+
+
+                    .select(`
+
+
+
+                        id,
+
+
+
+                        tournament_id,
+
+
+
+                        user_id,
+
+
+
+                        free_fire_uid,
+
+
+
+                        game_name,
+
+
+
+                        level,
+
+
+
+                        cancelled,
+
+
+
+                        created_at
+
+
+
+                    `)
+
+
+
+                    .eq(
+
+
+
+                        "tournament_id",
+
+
+
+                        tournamentId
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "user_id",
+
+
+
+                        userId
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "cancelled",
+
+
+
+                        false
+
+
+
+                    )
+
+
+
+                    .maybeSingle();
+
+
+
+
+
+
+
+            if (error) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "MY ENTRY ERROR:",
+
+
+
+                    error
+
+
+
+                );
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    error: error.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            return res.status(200).json({
+
+
+
+                success: true,
+
+
+
+                entry:
+
+
+
+                    data || null,
+
+
+
+                joined:
+
+
+
+                    !!data
+
+
+
+            });
+
+
+
+
+
+
+
+        } catch (error) {
+
+
+
+
+
+
+
+            console.error(
+
+
+
+                "MY ENTRY EXCEPTION:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                error:
+
+
+
+                    error?.message ||
+
+
+
+                    "Internal server error"
+
+
+
+            });
+
+
+
+        }
+
+
+
+    }
+
+
 
 );
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // JOIN TOURNAMENT
 
+
+
 //
+
+
 
 // IMPORTANT:
 
+
+
 // THIS ROUTE MUST COME BEFORE /:id
+
+
 
 //
 
+
+
 // POST /api/tournaments/join
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 router.post(
 
-    "/join",
 
-    async (req, res) => {
 
+    "/join",
 
 
-        let originalDeposit = 0;
 
-        let originalBonus = 0;
+    async (req, res) => {
 
-        let originalWinning = 0;
 
-        let walletUpdated = false;
 
-        let userId = "";
 
 
 
-        try {
 
+        let originalDeposit = 0;
 
 
-            userId =
 
-                getUserId(req);
+        let originalBonus = 0;
 
 
 
-            const {
+        let originalWinning = 0;
 
-                tournamentId,
 
-                gameName,
 
-                uid,
+        let walletUpdated = false;
 
-                level
 
-            } = req.body || {};
 
+        let userId = "";
 
 
-            const cleanTournamentId =
 
-                String(
 
-                    tournamentId || ""
 
-                ).trim();
 
 
+        try {
 
-            const cleanGameName =
 
-                String(
 
-                    gameName || ""
 
-                ).trim();
 
 
 
-            const cleanUid =
+            userId =
 
-                String(
 
-                    uid || ""
 
-                ).trim();
+                getUserId(req);
 
 
 
-            const cleanLevel =
 
-                Number(level);
 
 
 
-            // =================================================
+            const {
 
-            // AUTH
 
-            // =================================================
 
+                tournamentId,
 
 
-            if (!userId) {
 
+                gameName,
 
 
-                return res.status(401).json({
 
-                    success: false,
+                uid,
 
-                    code: "AUTH_REQUIRED",
 
-                    error:
 
-                        "User session not found. Please login again."
+                level
 
-                });
 
-            }
 
+            } = req.body || {};
 
 
-            // =================================================
 
-            // VALIDATION
 
-            // =================================================
 
 
 
-            if (!cleanTournamentId) {
+            const cleanTournamentId =
 
 
 
-                return res.status(400).json({
+                String(
 
-                    success: false,
 
-                    code: "INVALID_TOURNAMENT",
 
-                    error:
+                    tournamentId || ""
 
-                        "Tournament ID is required."
 
-                });
 
-            }
+                ).trim();
 
 
 
-            if (!cleanGameName) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
+            const cleanGameName =
 
-                    code: "INVALID_GAME_NAME",
 
-                    error:
 
-                        "In-Game Name is required."
+                String(
 
-                });
 
-            }
 
+                    gameName || ""
 
 
-            if (!cleanUid) {
 
+                ).trim();
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    code: "INVALID_UID",
 
-                    error:
 
-                        "Free Fire UID is required."
 
-                });
+            const cleanUid =
 
-            }
 
 
+                String(
 
-            if (
 
-                !Number.isInteger(
 
-                    cleanLevel
+                    uid || ""
 
-                ) ||
 
-                cleanLevel < 1 ||
 
-                cleanLevel > 100
+                ).trim();
 
-            ) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    code: "INVALID_LEVEL",
 
-                    error:
+            const cleanLevel =
 
-                        "Level must be between 1 and 100."
 
-                });
 
-            }
+                Number(level);
 
 
 
-            // =================================================
 
-            // TOURNAMENT
 
-            // =================================================
 
 
+            // =================================================
 
-            const {
 
-                data: tournament,
 
-                error: tournamentError
+            // AUTH
 
-            } =
 
-                await supabase
 
-                    .from(
+            // =================================================
 
-                        "tournaments"
 
-                    )
 
-                    .select(`
 
-                        id,
 
-                        title,
 
-                        game,
 
-                        mode,
+            if (!userId) {
 
-                        entry_fee,
 
-                        prize_pool,
 
-                        max_players,
 
-                        status,
 
-                        bonus_usable_percent
 
-                    `)
 
-                    .eq(
+                return res.status(401).json({
 
-                        "id",
 
-                        cleanTournamentId
 
-                    )
+                    success: false,
 
-                    .maybeSingle();
 
 
+                    code: "AUTH_REQUIRED",
 
-            if (tournamentError) {
 
 
+                    error:
 
-                console.error(
 
-                    "TOURNAMENT FETCH ERROR:",
 
-                    tournamentError
+                        "User session not found. Please login again."
 
-                );
 
 
+                });
 
-                return res.status(500).json({
 
-                    success: false,
 
-                    error:
+            }
 
-                        tournamentError.message
 
-                });
 
-            }
 
 
 
-            if (!tournament) {
 
+            // =================================================
 
 
-                return res.status(404).json({
 
-                    success: false,
+            // VALIDATION
 
-                    code:
 
-                        "TOURNAMENT_NOT_FOUND",
 
-                    error:
+            // =================================================
 
-                        "Tournament not found."
 
-                });
 
-            }
 
 
 
-            // =================================================
 
-            // STATUS
+            if (!cleanTournamentId) {
 
-            // =================================================
 
 
 
-            const status =
 
-                String(
 
-                    tournament.status || ""
 
-                )
+                return res.status(400).json({
 
-                    .trim()
 
-                    .toLowerCase();
 
+                    success: false,
 
 
-            const allowedStatuses = [
 
-                "",
+                    code: "INVALID_TOURNAMENT",
 
-                "upcoming",
 
-                "open",
 
-                "active",
+                    error:
 
-                "live",
 
-                "scheduled"
 
-            ];
+                        "Tournament ID is required."
 
 
 
-            if (
+                });
 
-                !allowedStatuses.includes(
 
-                    status
 
-                )
+            }
 
-            ) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    code:
 
-                        "TOURNAMENT_CLOSED",
+            if (!cleanGameName) {
 
-                    error:
 
-                        "This tournament is not open for joining."
 
-                });
 
-            }
 
 
 
-            // =================================================
+                return res.status(400).json({
 
-            // ENTRY FEE
 
-            // =================================================
 
+                    success: false,
 
 
-            const entryFee =
 
-                cleanNumber(
+                    code: "INVALID_GAME_NAME",
 
-                    tournament.entry_fee,
 
-                    0
 
-                );
+                    error:
 
 
 
-            if (entryFee < 0) {
+                        "In-Game Name is required."
 
 
 
-                return res.status(400).json({
+                });
 
-                    success: false,
 
-                    error:
 
-                        "Invalid tournament entry fee."
+            }
 
-                });
 
-            }
 
 
 
-            // =================================================
 
-            // PLAYER LIMIT
 
-            // =================================================
+            if (!cleanUid) {
 
 
 
-            if (
 
-                tournament.max_players &&
 
-                Number(
 
-                    tournament.max_players
 
-                ) > 0
+                return res.status(400).json({
 
-            ) {
 
 
+                    success: false,
 
-                const {
 
-                    count,
 
-                    error: countError
+                    code: "INVALID_UID",
 
-                } =
 
-                    await supabase
 
-                        .from(
+                    error:
 
-                            "tournament_entries"
 
-                        )
 
-                        .select(
+                        "Free Fire UID is required."
 
-                            "id",
 
-                            {
 
-                                count: "exact",
+                });
 
-                                head: true
 
-                            }
 
-                        )
+            }
 
-                        .eq(
 
-                            "tournament_id",
 
-                            cleanTournamentId
 
-                        )
 
-                        .eq(
 
-                            "cancelled",
 
-                            false
+            if (
 
-                        );
 
 
+                !Number.isInteger(
 
-                if (countError) {
 
 
+                    cleanLevel
 
-                    console.error(
 
-                        "PLAYER COUNT ERROR:",
 
-                        countError
+                ) ||
 
-                    );
 
 
+                cleanLevel < 1 ||
 
-                    return res.status(500).json({
 
-                        success: false,
 
-                        error:
+                cleanLevel > 100
 
-                            countError.message
 
-                    });
 
-                }
+            ) {
 
 
 
-                if (
 
-                    (count || 0) >=
 
-                    Number(
 
-                        tournament.max_players
 
-                    )
+                return res.status(400).json({
 
-                ) {
 
 
+                    success: false,
 
-                    return res.status(400).json({
 
-                        success: false,
 
-                        code:
+                    code: "INVALID_LEVEL",
 
-                            "TOURNAMENT_FULL",
 
-                        error:
 
-                            "Tournament is full."
+                    error:
 
-                    });
 
-                }
 
-            }
+                        "Level must be between 1 and 100."
 
 
 
-            // =================================================
+                });
 
-            // DUPLICATE CHECK
 
-            // =================================================
 
+            }
 
 
-            const {
 
-                data: existingEntry,
 
-                error: existingError
 
-            } =
 
-                await supabase
 
-                    .from(
+            // =================================================
 
-                        "tournament_entries"
 
-                    )
 
-                    .select("id")
+            // TOURNAMENT
 
-                    .eq(
 
-                        "tournament_id",
 
-                        cleanTournamentId
+            // =================================================
 
-                    )
 
-                    .eq(
 
-                        "user_id",
 
-                        userId
 
-                    )
 
-                    .eq(
 
-                        "cancelled",
+            const {
 
-                        false
 
-                    )
 
-                    .maybeSingle();
+                data: tournament,
 
 
 
-            if (existingError) {
+                error: tournamentError
 
 
 
-                console.error(
+            } =
 
-                    "DUPLICATE CHECK ERROR:",
 
-                    existingError
 
-                );
+                await supabase
 
 
 
-                return res.status(500).json({
+                    .from(
 
-                    success: false,
 
-                    error:
 
-                        existingError.message
+                        "tournaments"
 
-                });
 
-            }
 
+                    )
 
 
-            if (existingEntry) {
 
+                    .select(`
 
 
-                return res.status(409).json({
 
-                    success: false,
+                        id,
 
-                    code:
 
-                        "ALREADY_JOINED",
 
-                    error:
+                        title,
 
-                        "You have already joined this tournament."
 
-                });
 
-            }
+                        game,
 
 
 
-            // =================================================
+                        mode,
 
-            // WALLET
 
-            // =================================================
 
+                        entry_fee,
 
 
-            const {
 
-                data: wallet,
+                        prize_pool,
 
-                error: walletError
 
-            } =
 
-                await supabase
+                        max_players,
 
-                    .from("wallet_balances")
 
-                    .select(`
 
-                        user_id,
+                        status,
 
-                        deposit_balance,
 
-                        bonus_balance,
 
-                        winning_balance
+                        bonus_usable_percent
 
-                    `)
 
-                    .eq(
 
-                        "user_id",
+                    `)
 
-                        userId
 
-                    )
 
-                    .maybeSingle();
+                    .eq(
 
 
 
-            if (walletError) {
+                        "id",
 
 
 
-                console.error(
+                        cleanTournamentId
 
-                    "WALLET FETCH ERROR:",
 
-                    walletError
 
-                );
+                    )
 
 
 
-                return res.status(500).json({
+                    .maybeSingle();
 
-                    success: false,
 
-                    error:
 
-                        walletError.message
 
-                });
 
-            }
 
 
+            if (tournamentError) {
 
-            if (!wallet) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    code:
 
-                        "WALLET_NOT_FOUND",
+                console.error(
 
-                    error:
 
-                        "Wallet not found."
 
-                });
+                    "TOURNAMENT FETCH ERROR:",
 
-            }
 
 
+                    tournamentError
 
-            // =================================================
 
-            // BALANCES
 
-            // =================================================
+                );
 
 
 
-            let deposit =
 
-                cleanNumber(
 
-                    wallet.deposit_balance
 
-                );
 
+                return res.status(500).json({
 
 
-            let bonus =
 
-                cleanNumber(
+                    success: false,
 
-                    wallet.bonus_balance
 
-                );
 
+                    error:
 
 
-            let winning =
 
-                cleanNumber(
+                        tournamentError.message
 
-                    wallet.winning_balance
 
-                );
 
+                });
 
 
-            originalDeposit =
 
-                deposit;
+            }
 
 
 
-            originalBonus =
 
-                bonus;
 
 
 
-            originalWinning =
+            if (!tournament) {
 
-                winning;
 
 
 
-            const total =
 
-                deposit +
 
-                bonus +
 
-                winning;
+                return res.status(404).json({
 
 
 
-            if (
+                    success: false,
 
-                total <
 
-                entryFee
 
-            ) {
+                    code:
 
 
 
-                return res.status(402).json({
+                        "TOURNAMENT_NOT_FOUND",
 
-                    success: false,
 
-                    code:
 
-                        "INSUFFICIENT_BALANCE",
+                    error:
 
-                    error:
 
-                        "Insufficient wallet balance."
 
-                });
+                        "Tournament not found."
 
-            }
 
 
+                });
 
-            // =================================================
 
-            // BONUS USABLE %
 
-            // =================================================
+            }
 
 
 
-            let bonusPercent =
 
-                cleanNumber(
 
-                    tournament.bonus_usable_percent,
 
-                    0
 
-                );
+            // =================================================
 
 
 
-            bonusPercent =
+            // STATUS
 
-                Math.max(
 
-                    0,
 
-                    Math.min(
+            // =================================================
 
-                        100,
 
-                        bonusPercent
 
-                    )
 
-                );
 
 
 
-            const maxBonusUsable =
+            const status =
 
-                entryFee *
 
-                (
 
-                    bonusPercent /
+                String(
 
-                    100
 
-                );
 
+                    tournament.status || ""
 
 
-            // =================================================
 
-            // DEDUCTION ORDER
+                )
 
-            //
 
-            // BONUS
 
-            // ↓
+                    .trim()
 
-            // DEPOSIT
 
-            // ↓
 
-            // WINNING
+                    .toLowerCase();
 
-            // =================================================
 
 
 
-            let remaining =
 
-                entryFee;
 
 
+            const allowedStatuses = [
 
-            const bonusDeduction =
 
-                Math.min(
 
-                    bonus,
+                "",
 
-                    maxBonusUsable,
 
-                    remaining
 
-                );
+                "upcoming",
 
 
 
-            remaining -=
+                "open",
 
-                bonusDeduction;
 
 
+                "active",
 
-            const depositDeduction =
 
-                Math.min(
 
-                    deposit,
+                "live",
 
-                    remaining
 
-                );
 
+                "scheduled"
 
 
-            remaining -=
 
-                depositDeduction;
+            ];
 
 
 
-            const winningDeduction =
 
-                Math.min(
 
-                    winning,
 
-                    remaining
 
-                );
+            if (
 
 
 
-            remaining -=
+                !allowedStatuses.includes(
 
-                winningDeduction;
 
 
+                    status
 
-            if (
 
-                remaining >
 
-                0.0001
+                )
 
-            ) {
 
 
+            ) {
 
-                return res.status(402).json({
 
-                    success: false,
 
-                    code:
 
-                        "INSUFFICIENT_BALANCE",
 
-                    error:
 
-                        "Insufficient usable wallet balance."
 
-                });
+                return res.status(400).json({
 
-            }
 
 
+                    success: false,
 
-            // =================================================
 
-            // NEW BALANCES
 
-            // =================================================
+                    code:
 
 
 
-            const newDeposit =
+                        "TOURNAMENT_CLOSED",
 
-                Number(
 
-                    (
 
-                        deposit -
+                    error:
 
-                        depositDeduction
 
-                    ).toFixed(2)
 
-                );
+                        "This tournament is not open for joining."
 
 
 
-            const newBonus =
+                });
 
-                Number(
 
-                    (
 
-                        bonus -
+            }
 
-                        bonusDeduction
 
-                    ).toFixed(2)
 
-                );
 
 
 
-            const newWinning =
 
-                Number(
+            // =================================================
 
-                    (
 
-                        winning -
 
-                        winningDeduction
+            // ENTRY FEE
 
-                    ).toFixed(2)
 
-                );
 
+            // =================================================
 
 
-            // =================================================
 
-            // UPDATE WALLET
 
-            // =================================================
 
 
 
-            const {
+            const entryFee =
 
-                error:
 
-                    updateWalletError
 
-            } =
+                cleanNumber(
 
-                await supabase
 
-                    .from("wallet_balances")
 
-                    .update({
+                    tournament.entry_fee,
 
-                        deposit_balance:
 
-                            newDeposit,
 
+                    0
 
 
-                        bonus_balance:
 
-                            newBonus,
+                );
 
 
 
-                        winning_balance:
 
-                            newWinning,
 
 
 
-                        updated_at:
+            if (entryFee < 0) {
 
-                            new Date()
 
-                                .toISOString()
 
-                    })
 
-                    .eq(
 
-                        "user_id",
 
-                        userId
 
-                    );
+                return res.status(400).json({
 
 
 
-            if (updateWalletError) {
+                    success: false,
 
 
 
-                console.error(
+                    error:
 
-                    "WALLET UPDATE ERROR:",
 
-                    updateWalletError
 
-                );
+                        "Invalid tournament entry fee."
 
 
 
-                return res.status(500).json({
+                });
 
-                    success: false,
 
-                    code:
 
-                        "WALLET_UPDATE_FAILED",
+            }
 
-                    error:
 
-                        updateWalletError.message
 
-                });
 
-            }
 
 
 
-            walletUpdated = true;
+            // =================================================
 
 
 
-            // =================================================
+            // PLAYER LIMIT
 
-            // CREATE ENTRY
 
-            // =================================================
 
+            // =================================================
 
 
-            const {
 
-                data: entry,
 
-                error: entryError
 
-            } =
 
-                await supabase
 
-                    .from(
+            if (
 
-                        "tournament_entries"
 
-                    )
 
-                    .insert({
+                tournament.max_players &&
 
-                        tournament_id:
 
-                            cleanTournamentId,
 
+                Number(
 
 
-                        user_id:
 
-                            userId,
+                    tournament.max_players
 
 
 
-                        free_fire_uid:
+                ) > 0
 
-                            cleanUid,
 
 
+            ) {
 
-                        game_name:
 
-                            cleanGameName,
 
 
 
-                        level:
 
-                            cleanLevel,
 
+                const {
 
 
-                        cancelled:
 
-                            false
+                    count,
 
-                    })
 
-                    .select(`
 
-                        id,
+                    error: countError
 
-                        tournament_id,
 
-                        user_id,
 
-                        free_fire_uid,
+                } =
 
-                        game_name,
 
-                        level,
 
-                        cancelled,
+                    await supabase
 
-                        created_at
 
-                    `)
 
-                    .single();
+                        .from(
 
 
 
-            // =================================================
+                            "tournament_entries"
 
-            // ENTRY FAILED → WALLET ROLLBACK
 
-            // =================================================
 
+                        )
 
 
-            if (entryError) {
 
+                        .select(
 
 
-                console.error(
 
-                    "TOURNAMENT ENTRY ERROR:",
+                            "id",
 
-                    entryError
 
-                );
 
+                            {
 
 
-                if (walletUpdated) {
 
+                                count: "exact",
 
 
-                    const {
 
-                        error:
+                                head: true
 
-                            rollbackError
 
-                    } =
 
-                        await supabase
+                            }
 
-                            .from("wallet_balances")
 
-                            .update({
 
-                                deposit_balance:
+                        )
 
-                                    originalDeposit,
 
 
+                        .eq(
 
-                                bonus_balance:
 
-                                    originalBonus,
 
+                            "tournament_id",
 
 
-                                winning_balance:
 
-                                    originalWinning,
+                            cleanTournamentId
 
 
 
-                                updated_at:
+                        )
 
-                                    new Date()
 
-                                        .toISOString()
 
-                            })
+                        .eq(
 
-                            .eq(
 
-                                "user_id",
 
-                                userId
+                            "cancelled",
 
-                            );
 
 
+                            false
 
-                    if (rollbackError) {
 
 
+                        );
 
-                        console.error(
 
-                            "WALLET ROLLBACK ERROR:",
 
-                            rollbackError
 
-                        );
 
-                    }
 
-                }
 
+                if (countError) {
 
 
-                return res.status(500).json({
 
-                    success: false,
 
-                    code:
 
-                        "JOIN_FAILED",
 
-                    error:
 
-                        entryError.message ||
+                    console.error(
 
-                        "Unable to join tournament."
 
-                });
 
-            }
+                        "PLAYER COUNT ERROR:",
 
 
 
-            // =================================================
+                        countError
 
-            // SUCCESS
 
-            // =================================================
 
+                    );
 
 
-            const remainingBalance =
 
-                Number(
 
-                    (
 
-                        newDeposit +
 
-                        newBonus +
 
-                        newWinning
+                    return res.status(500).json({
 
-                    ).toFixed(2)
 
-                );
 
+                        success: false,
 
 
-            return res.status(200).json({
 
+                        error:
 
 
-                success: true,
 
+                            countError.message
 
 
-                code:
 
-                    "TOURNAMENT_JOINED",
+                    });
 
 
 
-                message:
+                }
 
-                    "Tournament joined successfully!",
 
 
 
-                entryId:
 
-                    entry?.id || null,
 
 
+                if (
 
-                tournamentId:
 
-                    cleanTournamentId,
 
+                    (count || 0) >=
 
 
-                wallet: {
 
+                    Number(
 
 
-                    depositBalance:
 
-                        newDeposit,
+                        tournament.max_players
 
 
 
-                    bonusBalance:
+                    )
 
-                        newBonus,
 
 
+                ) {
 
-                    winningBalance:
 
-                        newWinning,
 
 
 
-                    totalBalance:
 
-                        remainingBalance
 
-                },
+                    return res.status(400).json({
 
 
 
-                deduction: {
+                        success: false,
 
 
 
-                    entryFee:
+                        code:
 
-                        entryFee,
 
 
+                            "TOURNAMENT_FULL",
 
-                    bonus:
 
-                        Number(
 
-                            bonusDeduction
+                        error:
 
-                                .toFixed(2)
 
-                        ),
 
+                            "Tournament is full."
 
 
-                    deposit:
 
-                        Number(
+                    });
 
-                            depositDeduction
 
-                                .toFixed(2)
 
-                        ),
+                }
 
 
 
-                    winning:
+            }
 
-                        Number(
 
-                            winningDeduction
 
-                                .toFixed(2)
 
-                        )
 
-                }
 
-            });
 
+            // =================================================
 
 
-        } catch (error) {
 
+            // DUPLICATE CHECK
 
 
-            console.error(
 
-                "JOIN TOURNAMENT EXCEPTION:",
+            // =================================================
 
-                error
 
-            );
 
 
 
-            // =================================================
 
-            // SAFETY ROLLBACK
 
-            // =================================================
+            const {
 
 
 
-            if (
+                data: existingEntry,
 
-                walletUpdated &&
 
-                userId
 
-            ) {
+                error: existingError
 
 
 
-                try {
+            } =
 
 
 
-                    await supabase
+                await supabase
 
-                        .from("wallet_balances")
 
-                        .update({
 
-                            deposit_balance:
+                    .from(
 
-                                originalDeposit,
 
 
+                        "tournament_entries"
 
-                            bonus_balance:
 
-                                originalBonus,
 
+                    )
 
 
-                            winning_balance:
 
-                                originalWinning,
+                    .select("id")
 
 
 
-                            updated_at:
+                    .eq(
 
-                                new Date()
 
-                                    .toISOString()
 
-                        })
+                        "tournament_id",
 
-                        .eq(
 
-                            "user_id",
 
-                            userId
+                        cleanTournamentId
 
-                        );
 
 
+                    )
 
-                } catch (
 
-                    rollbackException
 
-                ) {
+                    .eq(
 
 
 
-                    console.error(
+                        "user_id",
 
-                        "EXCEPTION ROLLBACK ERROR:",
 
-                        rollbackException
 
-                    );
+                        userId
 
-                }
 
-            }
 
+                    )
 
 
-            return res.status(500).json({
 
-                success: false,
+                    .eq(
 
-                code:
 
-                    "SERVER_ERROR",
 
-                error:
+                        "cancelled",
 
-                    error?.message ||
 
-                    "Internal server error"
 
-            });
+                        false
 
-        }
 
-    }
+
+                    )
+
+
+
+                    .maybeSingle();
+
+
+
+
+
+
+
+            if (existingError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "DUPLICATE CHECK ERROR:",
+
+
+
+                    existingError
+
+
+
+                );
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    error:
+
+
+
+                        existingError.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            if (existingEntry) {
+
+
+
+
+
+
+
+                return res.status(409).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "ALREADY_JOINED",
+
+
+
+                    error:
+
+
+
+                        "You have already joined this tournament."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // WALLET
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            const {
+
+
+
+                data: wallet,
+
+
+
+                error: walletError
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from("wallet_balances")
+
+
+
+                    .select(`
+
+
+
+                        user_id,
+
+
+
+                        deposit_balance,
+
+
+
+                        bonus_balance,
+
+
+
+                        winning_balance
+
+
+
+                    `)
+
+
+
+                    .eq(
+
+
+
+                        "user_id",
+
+
+
+                        userId
+
+
+
+                    )
+
+
+
+                    .maybeSingle();
+
+
+
+
+
+
+
+            if (walletError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "WALLET FETCH ERROR:",
+
+
+
+                    walletError
+
+
+
+                );
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    error:
+
+
+
+                        walletError.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            if (!wallet) {
+
+
+
+
+
+
+
+                return res.status(400).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "WALLET_NOT_FOUND",
+
+
+
+                    error:
+
+
+
+                        "Wallet not found."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // BALANCES
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            let deposit =
+
+
+
+                cleanNumber(
+
+
+
+                    wallet.deposit_balance
+
+
+
+                );
+
+
+
+
+
+
+
+            let bonus =
+
+
+
+                cleanNumber(
+
+
+
+                    wallet.bonus_balance
+
+
+
+                );
+
+
+
+
+
+
+
+            let winning =
+
+
+
+                cleanNumber(
+
+
+
+                    wallet.winning_balance
+
+
+
+                );
+
+
+
+
+
+
+
+            originalDeposit =
+
+
+
+                deposit;
+
+
+
+
+
+
+
+            originalBonus =
+
+
+
+                bonus;
+
+
+
+
+
+
+
+            originalWinning =
+
+
+
+                winning;
+
+
+
+
+
+
+
+            const total =
+
+
+
+                deposit +
+
+
+
+                bonus +
+
+
+
+                winning;
+
+
+
+
+
+
+
+            if (
+
+
+
+                total <
+
+
+
+                entryFee
+
+
+
+            ) {
+
+
+
+
+
+
+
+                return res.status(402).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "INSUFFICIENT_BALANCE",
+
+
+
+                    error:
+
+
+
+                        "Insufficient wallet balance."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // BONUS USABLE %
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            let bonusPercent =
+
+
+
+                cleanNumber(
+
+
+
+                    tournament.bonus_usable_percent,
+
+
+
+                    0
+
+
+
+                );
+
+
+
+
+
+
+
+            bonusPercent =
+
+
+
+                Math.max(
+
+
+
+                    0,
+
+
+
+                    Math.min(
+
+
+
+                        100,
+
+
+
+                        bonusPercent
+
+
+
+                    )
+
+
+
+                );
+
+
+
+
+
+
+
+            const maxBonusUsable =
+
+
+
+                entryFee *
+
+
+
+                (
+
+
+
+                    bonusPercent /
+
+
+
+                    100
+
+
+
+                );
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // DEDUCTION ORDER
+
+
+
+            //
+
+
+
+            // BONUS
+
+
+
+            // ↓
+
+
+
+            // DEPOSIT
+
+
+
+            // ↓
+
+
+
+            // WINNING
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            let remaining =
+
+
+
+                entryFee;
+
+
+
+
+
+
+
+            const bonusDeduction =
+
+
+
+                Math.min(
+
+
+
+                    bonus,
+
+
+
+                    maxBonusUsable,
+
+
+
+                    remaining
+
+
+
+                );
+
+
+
+
+
+
+
+            remaining -=
+
+
+
+                bonusDeduction;
+
+
+
+
+
+
+
+            const depositDeduction =
+
+
+
+                Math.min(
+
+
+
+                    deposit,
+
+
+
+                    remaining
+
+
+
+                );
+
+
+
+
+
+
+
+            remaining -=
+
+
+
+                depositDeduction;
+
+
+
+
+
+
+
+            const winningDeduction =
+
+
+
+                Math.min(
+
+
+
+                    winning,
+
+
+
+                    remaining
+
+
+
+                );
+
+
+
+
+
+
+
+            remaining -=
+
+
+
+                winningDeduction;
+
+
+
+
+
+
+
+            if (
+
+
+
+                remaining >
+
+
+
+                0.0001
+
+
+
+            ) {
+
+
+
+
+
+
+
+                return res.status(402).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "INSUFFICIENT_BALANCE",
+
+
+
+                    error:
+
+
+
+                        "Insufficient usable wallet balance."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // NEW BALANCES
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            const newDeposit =
+
+
+
+                Number(
+
+
+
+                    (
+
+
+
+                        deposit -
+
+
+
+                        depositDeduction
+
+
+
+                    ).toFixed(2)
+
+
+
+                );
+
+
+
+
+
+
+
+            const newBonus =
+
+
+
+                Number(
+
+
+
+                    (
+
+
+
+                        bonus -
+
+
+
+                        bonusDeduction
+
+
+
+                    ).toFixed(2)
+
+
+
+                );
+
+
+
+
+
+
+
+            const newWinning =
+
+
+
+                Number(
+
+
+
+                    (
+
+
+
+                        winning -
+
+
+
+                        winningDeduction
+
+
+
+                    ).toFixed(2)
+
+
+
+                );
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // UPDATE WALLET
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            const {
+
+
+
+                error:
+
+
+
+                    updateWalletError
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from("wallet_balances")
+
+
+
+                    .update({
+
+
+
+                        deposit_balance:
+
+
+
+                            newDeposit,
+
+
+
+
+
+
+
+                        bonus_balance:
+
+
+
+                            newBonus,
+
+
+
+
+
+
+
+                        winning_balance:
+
+
+
+                            newWinning,
+
+
+
+
+
+
+
+                        updated_at:
+
+
+
+                            new Date()
+
+
+
+                                .toISOString()
+
+
+
+                    })
+
+
+
+                    .eq(
+
+
+
+                        "user_id",
+
+
+
+                        userId
+
+
+
+                    );
+
+
+
+
+
+
+
+            if (updateWalletError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "WALLET UPDATE ERROR:",
+
+
+
+                    updateWalletError
+
+
+
+                );
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "WALLET_UPDATE_FAILED",
+
+
+
+                    error:
+
+
+
+                        updateWalletError.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            walletUpdated = true;
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // CREATE ENTRY
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            const {
+
+
+
+                data: entry,
+
+
+
+                error: entryError
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from(
+
+
+
+                        "tournament_entries"
+
+
+
+                    )
+
+
+
+                    .insert({
+
+
+
+                        tournament_id:
+
+
+
+                            cleanTournamentId,
+
+
+
+
+
+
+
+                        user_id:
+
+
+
+                            userId,
+
+
+
+
+
+
+
+                        free_fire_uid:
+
+
+
+                            cleanUid,
+
+
+
+
+
+
+
+                        game_name:
+
+
+
+                            cleanGameName,
+
+
+
+
+
+
+
+                        level:
+
+
+
+                            cleanLevel,
+
+
+
+
+
+
+
+                        cancelled:
+
+
+
+                            false
+
+
+
+                    })
+
+
+
+                    .select(`
+
+
+
+                        id,
+
+
+
+                        tournament_id,
+
+
+
+                        user_id,
+
+
+
+                        free_fire_uid,
+
+
+
+                        game_name,
+
+
+
+                        level,
+
+
+
+                        cancelled,
+
+
+
+                        created_at
+
+
+
+                    `)
+
+
+
+                    .single();
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // ENTRY FAILED → WALLET ROLLBACK
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            if (entryError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "TOURNAMENT ENTRY ERROR:",
+
+
+
+                    entryError
+
+
+
+                );
+
+
+
+
+
+
+
+                if (walletUpdated) {
+
+
+
+
+
+
+
+                    const {
+
+
+
+                        error:
+
+
+
+                            rollbackError
+
+
+
+                    } =
+
+
+
+                        await supabase
+
+
+
+                            .from("wallet_balances")
+
+
+
+                            .update({
+
+
+
+                                deposit_balance:
+
+
+
+                                    originalDeposit,
+
+
+
+
+
+
+
+                                bonus_balance:
+
+
+
+                                    originalBonus,
+
+
+
+
+
+
+
+                                winning_balance:
+
+
+
+                                    originalWinning,
+
+
+
+
+
+
+
+                                updated_at:
+
+
+
+                                    new Date()
+
+
+
+                                        .toISOString()
+
+
+
+                            })
+
+
+
+                            .eq(
+
+
+
+                                "user_id",
+
+
+
+                                userId
+
+
+
+                            );
+
+
+
+
+
+
+
+                    if (rollbackError) {
+
+
+
+
+
+
+
+                        console.error(
+
+
+
+                            "WALLET ROLLBACK ERROR:",
+
+
+
+                            rollbackError
+
+
+
+                        );
+
+
+
+                    }
+
+
+
+                }
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "JOIN_FAILED",
+
+
+
+                    error:
+
+
+
+                        entryError.message ||
+
+
+
+                        "Unable to join tournament."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // SUCCESS
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            const remainingBalance =
+
+
+
+                Number(
+
+
+
+                    (
+
+
+
+                        newDeposit +
+
+
+
+                        newBonus +
+
+
+
+                        newWinning
+
+
+
+                    ).toFixed(2)
+
+
+
+                );
+
+
+
+
+
+
+
+            return res.status(200).json({
+
+
+
+
+
+
+
+                success: true,
+
+
+
+
+
+
+
+                code:
+
+
+
+                    "TOURNAMENT_JOINED",
+
+
+
+
+
+
+
+                message:
+
+
+
+                    "Tournament joined successfully!",
+
+
+
+
+
+
+
+                entryId:
+
+
+
+                    entry?.id || null,
+
+
+
+
+
+
+
+                tournamentId:
+
+
+
+                    cleanTournamentId,
+
+
+
+
+
+
+
+                wallet: {
+
+
+
+
+
+
+
+                    depositBalance:
+
+
+
+                        newDeposit,
+
+
+
+
+
+
+
+                    bonusBalance:
+
+
+
+                        newBonus,
+
+
+
+
+
+
+
+                    winningBalance:
+
+
+
+                        newWinning,
+
+
+
+
+
+
+
+                    totalBalance:
+
+
+
+                        remainingBalance
+
+
+
+                },
+
+
+
+
+
+
+
+                deduction: {
+
+
+
+
+
+
+
+                    entryFee:
+
+
+
+                        entryFee,
+
+
+
+
+
+
+
+                    bonus:
+
+
+
+                        Number(
+
+
+
+                            bonusDeduction
+
+
+
+                                .toFixed(2)
+
+
+
+                        ),
+
+
+
+
+
+
+
+                    deposit:
+
+
+
+                        Number(
+
+
+
+                            depositDeduction
+
+
+
+                                .toFixed(2)
+
+
+
+                        ),
+
+
+
+
+
+
+
+                    winning:
+
+
+
+                        Number(
+
+
+
+                            winningDeduction
+
+
+
+                                .toFixed(2)
+
+
+
+                        )
+
+
+
+                }
+
+
+
+            });
+
+
+
+
+
+
+
+        } catch (error) {
+
+
+
+
+
+
+
+            console.error(
+
+
+
+                "JOIN TOURNAMENT EXCEPTION:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            // =================================================
+
+
+
+            // SAFETY ROLLBACK
+
+
+
+            // =================================================
+
+
+
+
+
+
+
+            if (
+
+
+
+                walletUpdated &&
+
+
+
+                userId
+
+
+
+            ) {
+
+
+
+
+
+
+
+                try {
+
+
+
+
+
+
+
+                    await supabase
+
+
+
+                        .from("wallet_balances")
+
+
+
+                        .update({
+
+
+
+                            deposit_balance:
+
+
+
+                                originalDeposit,
+
+
+
+
+
+
+
+                            bonus_balance:
+
+
+
+                                originalBonus,
+
+
+
+
+
+
+
+                            winning_balance:
+
+
+
+                                originalWinning,
+
+
+
+
+
+
+
+                            updated_at:
+
+
+
+                                new Date()
+
+
+
+                                    .toISOString()
+
+
+
+                        })
+
+
+
+                        .eq(
+
+
+
+                            "user_id",
+
+
+
+                            userId
+
+
+
+                        );
+
+
+
+
+
+
+
+                } catch (
+
+
+
+                    rollbackException
+
+
+
+                ) {
+
+
+
+
+
+
+
+                    console.error(
+
+
+
+                        "EXCEPTION ROLLBACK ERROR:",
+
+
+
+                        rollbackException
+
+
+
+                    );
+
+
+
+                }
+
+
+
+            }
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                code:
+
+
+
+                    "SERVER_ERROR",
+
+
+
+                error:
+
+
+
+                    error?.message ||
+
+
+
+                    "Internal server error"
+
+
+
+            });
+
+
+
+        }
+
+
+
+    }
+
+
 
 );
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // GET SINGLE TOURNAMENT
 
+
+
 //
+
+
 
 // VERY IMPORTANT:
 
+
+
 // THIS MUST REMAIN AFTER /join
+
+
 
 // THIS MUST REMAIN AFTER /participants
 
+
+
 // THIS MUST REMAIN AFTER /my-entry
+
+
 
 //
 
+
+
 // GET /api/tournaments/:id
+
+
 
 // ============================================================
 
+
+
+
+
+
+
+
+// ============================================================
+// GET MY MATCH / ROOM DETAILS
+// GET /api/tournaments/my-match?tournamentId=UUID
+// ============================================================
+
+router.get(
+    "/my-match",
+    async (req, res) => {
+        try {
+            const userId = getUserId(req);
+            const tournamentId = String(req.query.tournamentId || "").trim();
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    code: "AUTH_REQUIRED",
+                    error: "User session not found. Please login again."
+                });
+            }
+
+            if (!tournamentId) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Tournament ID is required."
+                });
+            }
+
+            const { data: entry, error: entryError } = await supabase
+                .from("tournament_entries")
+                .select("id,tournament_id,user_id,cancelled")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .eq("cancelled", false)
+                .maybeSingle();
+
+            if (entryError) {
+                console.error("MY MATCH ENTRY ERROR:", entryError);
+                return res.status(500).json({
+                    success: false,
+                    error: entryError.message
+                });
+            }
+
+            if (!entry) {
+                return res.status(403).json({
+                    success: false,
+                    code: "NOT_JOINED",
+                    error: "You have not joined this tournament."
+                });
+            }
+
+            const { data: match, error: matchError } = await supabase
+                .from("matches")
+                .select("id,tournament_id,room_id,room_password")
+                .eq("tournament_id", tournamentId)
+                .order("id", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (matchError) {
+                console.error("MY MATCH FETCH ERROR:", matchError);
+                return res.status(500).json({
+                    success: false,
+                    error: matchError.message
+                });
+            }
+
+            if (!match) {
+                return res.status(404).json({
+                    success: false,
+                    code: "ROOM_NOT_AVAILABLE",
+                    error: "Room ID and password are not available yet."
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                match: {
+                    id: match.id || null,
+                    tournament_id: match.tournament_id || tournamentId,
+                    room_id: String(match.room_id || ""),
+                    room_password: String(match.room_password || "")
+                }
+            });
+        } catch (error) {
+            console.error("MY MATCH EXCEPTION:", error);
+            return res.status(500).json({
+                success: false,
+                error: error?.message || "Internal server error"
+            });
+        }
+    }
+);
+
+// ============================================================
+// GET MY RESULTS
+// GET /api/tournaments/my-results?tournamentId=UUID
+// ============================================================
+
+router.get(
+    "/my-results",
+    async (req, res) => {
+        try {
+            const userId = getUserId(req);
+            const tournamentId = String(req.query.tournamentId || "").trim();
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    code: "AUTH_REQUIRED",
+                    error: "User session not found. Please login again."
+                });
+            }
+
+            if (!tournamentId) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Tournament ID is required."
+                });
+            }
+
+            const { data: entry, error: entryError } = await supabase
+                .from("tournament_entries")
+                .select("id,tournament_id,user_id,game_name,free_fire_uid,cancelled")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .eq("cancelled", false)
+                .maybeSingle();
+
+            if (entryError) {
+                console.error("MY RESULTS ENTRY ERROR:", entryError);
+                return res.status(500).json({
+                    success: false,
+                    error: entryError.message
+                });
+            }
+
+            if (!entry) {
+                return res.status(403).json({
+                    success: false,
+                    code: "NOT_JOINED",
+                    error: "You have not joined this tournament."
+                });
+            }
+
+            const { data: result, error: resultError } = await supabase
+                .from("tournament_results")
+                .select("user_id,tournament_id,rank,kills,winning_amount")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .maybeSingle();
+
+            if (resultError) {
+                console.error("MY RESULTS FETCH ERROR:", resultError);
+                return res.status(500).json({
+                    success: false,
+                    error: resultError.message
+                });
+            }
+
+            if (!result) {
+                return res.status(404).json({
+                    success: false,
+                    code: "RESULTS_NOT_AVAILABLE",
+                    error: "Results are not available yet."
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                results: [
+                    {
+                        user_id: result.user_id,
+                        tournament_id: result.tournament_id || tournamentId,
+                        game_name: String(entry.game_name || ""),
+                        free_fire_uid: String(entry.free_fire_uid || ""),
+                        rank: Number(result.rank) || 0,
+                        kills: Number(result.kills) || 0,
+                        winning_amount: Number(result.winning_amount) || 0
+                    }
+                ]
+            });
+        } catch (error) {
+            console.error("MY RESULTS EXCEPTION:", error);
+            return res.status(500).json({
+                success: false,
+                error: error?.message || "Internal server error"
+            });
+        }
+    }
+);
 
 
 router.get(
 
-    "/:id",
 
-    async (req, res) => {
 
+    "/:id",
 
 
-        try {
 
+    async (req, res) => {
 
 
-            const id =
 
-                String(
 
-                    req.params.id || ""
 
-                ).trim();
 
 
+        try {
 
-            if (!id) {
 
 
 
-                return res.status(400).json({
 
-                    success: false,
 
-                    error:
 
-                        "Tournament ID is required."
+            const id =
 
-                });
 
-            }
 
+                String(
 
 
-            const {
 
-                data: tournament,
+                    req.params.id || ""
 
-                error
 
-            } =
 
-                await supabase
+                ).trim();
 
-                    .from(
 
-                        "tournaments"
 
-                    )
 
-                    .select(`
 
-                        id,
 
-                        title,
 
-                        game,
+            if (!id) {
 
-                        mode,
 
-                        entry_fee,
 
-                        prize_pool,
 
-                        kill_reward,
 
-                        max_players,
 
-                        start_time,
 
-                        map,
+                return res.status(400).json({
 
-                        status,
 
-                        rules,
 
-                        bonus_usable_percent
+                    success: false,
 
-                    `)
 
-                    .eq(
 
-                        "id",
+                    error:
 
-                        id
 
-                    )
 
-                    .maybeSingle();
+                        "Tournament ID is required."
 
 
 
-            if (error) {
+                });
 
 
 
-                console.error(
+            }
 
-                    "GET TOURNAMENT ERROR:",
 
-                    error
 
-                );
 
 
 
-                return res.status(500).json({
 
-                    success: false,
+            const {
 
-                    error:
 
-                        error.message
 
-                });
+                data: tournament,
 
-            }
 
 
+                error
 
-            if (!tournament) {
 
 
+            } =
 
-                return res.status(404).json({
 
-                    success: false,
 
-                    code:
+                await supabase
 
-                        "TOURNAMENT_NOT_FOUND",
 
-                    error:
 
-                        "Tournament not found."
+                    .from(
 
-                });
 
-            }
 
+                        "tournaments"
 
 
-            // Load rank-wise prizes; failures here must not break tournament details.
-        let prizes = [];
-        try {
-            const { data: prizeRows, error: prizeError } = await supabase
-                .from("tournament_prizes")
-                .select("rank,label,amount")
-                .eq("tournament_id", id)
-                .order("rank", { ascending: true });
-            if (prizeError) {
-                console.error("SINGLE TOURNAMENT PRIZES ERROR:", prizeError);
-            } else {
-                prizes = (prizeRows || []).map((prize) => ({
-                    rank: Number(prize.rank) || 0,
-                    label: String(prize.label || "").trim(),
-                    amount: cleanNumber(prize.amount, 0)
-                }));
-            }
-        } catch (prizeException) {
-            console.error("SINGLE TOURNAMENT PRIZES EXCEPTION:", prizeException);
-            prizes = [];
-        }
 
-        const {
+                    )
 
-                count,
 
-                error: countError
 
-            } =
+                    .select(`
 
-                await supabase
 
-                    .from(
 
-                        "tournament_entries"
+                        id,
 
-                    )
 
-                    .select(
 
-                        "id",
+                        title,
 
-                        {
 
-                            count: "exact",
 
-                            head: true
+                        game,
 
-                        }
 
-                    )
 
-                    .eq(
+                        mode,
 
-                        "tournament_id",
 
-                        id
 
-                    )
+                        entry_fee,
 
-                    .eq(
 
-                        "cancelled",
 
-                        false
+                        prize_pool,
 
-                    );
 
 
+                        kill_reward,
 
-            if (countError) {
 
 
+                        max_players,
 
-                console.error(
 
-                    "SINGLE TOURNAMENT COUNT ERROR:",
 
-                    countError
+                        start_time,
 
-                );
 
-            }
 
+                        map,
 
 
-            return res.status(200).json({
 
+                        status,
 
 
-                success: true,
 
+                        rules,
 
 
-                tournament: {
 
-                    ...tournament,
+                        bonus_usable_percent
 
 
 
-                    joined_count:
+                    `)
 
-                        count || 0,
-                    prizes
 
-                }
 
-            });
+                    .eq(
 
 
 
-        } catch (error) {
+                        "id",
 
 
 
-            console.error(
+                        id
 
-                "GET SINGLE TOURNAMENT EXCEPTION:",
 
-                error
 
-            );
+                    )
 
 
 
-            return res.status(500).json({
+                    .maybeSingle();
 
-                success: false,
 
-                error:
 
-                    error?.message ||
 
-                    "Internal server error"
 
-            });
 
-        }
 
-    }
+            if (error) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "GET TOURNAMENT ERROR:",
+
+
+
+                    error
+
+
+
+                );
+
+
+
+
+
+
+
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    error:
+
+
+
+                        error.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            if (!tournament) {
+
+
+
+
+
+
+
+                return res.status(404).json({
+
+
+
+                    success: false,
+
+
+
+                    code:
+
+
+
+                        "TOURNAMENT_NOT_FOUND",
+
+
+
+                    error:
+
+
+
+                        "Tournament not found."
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            // Load rank-wise prizes; failures here must not break tournament details.
+
+        let prizes = [];
+
+        try {
+
+            const { data: prizeRows, error: prizeError } = await supabase
+
+                .from("tournament_prizes")
+
+                .select("rank,label,amount")
+
+                .eq("tournament_id", id)
+
+                .order("rank", { ascending: true });
+
+            if (prizeError) {
+
+                console.error("SINGLE TOURNAMENT PRIZES ERROR:", prizeError);
+
+            } else {
+
+                prizes = (prizeRows || []).map((prize) => ({
+
+                    rank: Number(prize.rank) || 0,
+
+                    label: String(prize.label || "").trim(),
+
+                    amount: cleanNumber(prize.amount, 0)
+
+                }));
+
+            }
+
+        } catch (prizeException) {
+
+            console.error("SINGLE TOURNAMENT PRIZES EXCEPTION:", prizeException);
+
+            prizes = [];
+
+        }
+
+
+
+        const {
+
+
+
+                count,
+
+
+
+                error: countError
+
+
+
+            } =
+
+
+
+                await supabase
+
+
+
+                    .from(
+
+
+
+                        "tournament_entries"
+
+
+
+                    )
+
+
+
+                    .select(
+
+
+
+                        "id",
+
+
+
+                        {
+
+
+
+                            count: "exact",
+
+
+
+                            head: true
+
+
+
+                        }
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "tournament_id",
+
+
+
+                        id
+
+
+
+                    )
+
+
+
+                    .eq(
+
+
+
+                        "cancelled",
+
+
+
+                        false
+
+
+
+                    );
+
+
+
+
+
+
+
+            if (countError) {
+
+
+
+
+
+
+
+                console.error(
+
+
+
+                    "SINGLE TOURNAMENT COUNT ERROR:",
+
+
+
+                    countError
+
+
+
+                );
+
+
+
+            }
+
+
+
+
+
+
+
+            return res.status(200).json({
+
+
+
+
+
+
+
+                success: true,
+
+
+
+
+
+
+
+                tournament: {
+
+
+
+                    ...tournament,
+
+
+
+
+
+
+
+                    joined_count:
+
+
+
+                        count || 0,
+
+                    prizes
+
+
+
+                }
+
+
+
+            });
+
+
+
+
+
+
+
+        } catch (error) {
+
+
+
+
+
+
+
+            console.error(
+
+
+
+                "GET SINGLE TOURNAMENT EXCEPTION:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                error:
+
+
+
+                    error?.message ||
+
+
+
+                    "Internal server error"
+
+
+
+            });
+
+
+
+        }
+
+
+
+    }
+
+
 
 );
 
 
 
+
+
+
+
 // ============================================================
+
+
 
 // EXPORT
 
+
+
 // ============================================================
+
+
+
+
 
 
 
