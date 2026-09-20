@@ -159,6 +159,7 @@ function verifySessionToken(token) {
         }
 
         return payload;
+
     } catch (error) {
         console.error(
             "SESSION VERIFY ERROR:",
@@ -597,6 +598,7 @@ router.post(
                             "active"
                     }
                 });
+
         } catch (error) {
             console.error(
                 "ADMIN LOGIN ERROR:",
@@ -660,6 +662,7 @@ router.get(
                             "active"
                     }
                 });
+
         } catch (error) {
             console.error(
                 "ADMIN SESSION ERROR:",
@@ -697,6 +700,7 @@ router.post(
                     message:
                         "Admin logged out successfully."
                 });
+
         } catch (error) {
             console.error(
                 "ADMIN LOGOUT ERROR:",
@@ -1096,35 +1100,24 @@ router.post(
 
             const tournamentData = {
                 title: cleanTitle,
-
                 game: cleanGame,
-
                 mode: cleanMode,
-
                 entry_fee: entryFee,
-
                 prize_pool: prizePool,
-
                 kill_reward: killReward,
-
                 max_players: maxPlayers,
-
                 start_time:
                     cleanStartTime,
-
                 map:
                     String(
                         map || ""
                     ).trim() || null,
-
                 status:
                     cleanStatus,
-
                 rules:
                     String(
                         rules || ""
                     ).trim() || null,
-
                 bonus_usable_percent:
                     bonusPercent
             };
@@ -1208,9 +1201,352 @@ router.post(
                         "Tournament created successfully.",
                     tournament: data
                 });
+
         } catch (error) {
             console.error(
                 "CREATE TOURNAMENT ERROR:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    success: false,
+                    code:
+                        "SERVER_ERROR",
+                    error:
+                        error?.message ||
+                        "Internal server error."
+                });
+        }
+    }
+);
+
+/*
+|--------------------------------------------------------------------------
+| POST /api/admin/keys
+| MAKE ROOM ID + PASSWORD LIVE
+|--------------------------------------------------------------------------
+*/
+
+router.post(
+    "/keys",
+    async (req, res) => {
+        try {
+            /*
+            |--------------------------------------------------------------------------
+            | ADMIN AUTH
+            |--------------------------------------------------------------------------
+            */
+
+            const admin =
+                await verifyAdmin(req);
+
+            if (
+                !admin.authenticated
+            ) {
+                return res
+                    .status(401)
+                    .json({
+                        success: false,
+                        code:
+                            "ADMIN_AUTH_REQUIRED",
+                        error:
+                            "Admin login required."
+                    });
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | REQUEST DATA
+            |--------------------------------------------------------------------------
+            */
+
+            const {
+                tournamentId,
+                roomId,
+                roomPassword
+            } = req.body || {};
+
+            const cleanTournamentId =
+                String(
+                    tournamentId || ""
+                ).trim();
+
+            const cleanRoomId =
+                String(
+                    roomId || ""
+                ).trim();
+
+            const cleanRoomPassword =
+                String(
+                    roomPassword || ""
+                ).trim();
+
+            if (!cleanTournamentId) {
+                return res
+                    .status(400)
+                    .json({
+                        success: false,
+                        error:
+                            "Tournament ID is required."
+                    });
+            }
+
+            if (!cleanRoomId) {
+                return res
+                    .status(400)
+                    .json({
+                        success: false,
+                        error:
+                            "Room ID is required."
+                    });
+            }
+
+            if (!cleanRoomPassword) {
+                return res
+                    .status(400)
+                    .json({
+                        success: false,
+                        error:
+                            "Room Password is required."
+                    });
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | CHECK TOURNAMENT
+            |--------------------------------------------------------------------------
+            */
+
+            const {
+                data: tournament,
+                error: tournamentError
+            } = await supabase
+                .from("tournaments")
+                .select(
+                    "id, title, status"
+                )
+                .eq(
+                    "id",
+                    cleanTournamentId
+                )
+                .maybeSingle();
+
+            if (tournamentError) {
+                console.error(
+                    "KEYS TOURNAMENT LOOKUP ERROR:",
+                    tournamentError
+                );
+
+                return res
+                    .status(500)
+                    .json({
+                        success: false,
+                        error:
+                            tournamentError.message ||
+                            "Unable to verify tournament."
+                    });
+            }
+
+            if (!tournament) {
+                return res
+                    .status(404)
+                    .json({
+                        success: false,
+                        error:
+                            "Tournament not found."
+                    });
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | FIND EXISTING MATCH
+            |--------------------------------------------------------------------------
+            */
+
+            const {
+                data: existingMatch,
+                error: existingMatchError
+            } = await supabase
+                .from("matches")
+                .select("id")
+                .eq(
+                    "tournament_id",
+                    cleanTournamentId
+                )
+                .order(
+                    "id",
+                    {
+                        ascending: false
+                    }
+                )
+                .limit(1)
+                .maybeSingle();
+
+            if (existingMatchError) {
+                console.error(
+                    "EXISTING MATCH LOOKUP ERROR:",
+                    existingMatchError
+                );
+
+                return res
+                    .status(500)
+                    .json({
+                        success: false,
+                        error:
+                            existingMatchError.message ||
+                            "Unable to check existing match."
+                    });
+            }
+
+            let match;
+            let matchError;
+
+            /*
+            |--------------------------------------------------------------------------
+            | UPDATE EXISTING MATCH
+            |--------------------------------------------------------------------------
+            */
+
+            if (existingMatch?.id) {
+                const result =
+                    await supabase
+                        .from("matches")
+                        .update({
+                            room_id:
+                                cleanRoomId,
+                            room_password:
+                                cleanRoomPassword
+                        })
+                        .eq(
+                            "id",
+                            existingMatch.id
+                        )
+                        .select(
+                            "id, tournament_id, room_id, room_password"
+                        )
+                        .single();
+
+                match = result.data;
+                matchError =
+                    result.error;
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | CREATE MATCH
+            |--------------------------------------------------------------------------
+            */
+
+            else {
+                const result =
+                    await supabase
+                        .from("matches")
+                        .insert({
+                            tournament_id:
+                                cleanTournamentId,
+                            room_id:
+                                cleanRoomId,
+                            room_password:
+                                cleanRoomPassword
+                        })
+                        .select(
+                            "id, tournament_id, room_id, room_password"
+                        )
+                        .single();
+
+                match = result.data;
+                matchError =
+                    result.error;
+            }
+
+            if (matchError) {
+                console.error(
+                    "SAVE ROOM KEYS ERROR:",
+                    matchError
+                );
+
+                return res
+                    .status(500)
+                    .json({
+                        success: false,
+                        code:
+                            "ROOM_KEYS_SAVE_FAILED",
+                        error:
+                            matchError.message ||
+                            "Unable to save room keys."
+                    });
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | MAKE TOURNAMENT LIVE
+            |--------------------------------------------------------------------------
+            */
+
+            const {
+                error:
+                    tournamentUpdateError
+            } = await supabase
+                .from("tournaments")
+                .update({
+                    status: "live",
+                    updated_at:
+                        new Date().toISOString()
+                })
+                .eq(
+                    "id",
+                    cleanTournamentId
+                );
+
+            if (tournamentUpdateError) {
+                console.error(
+                    "TOURNAMENT LIVE UPDATE ERROR:",
+                    tournamentUpdateError
+                );
+
+                return res
+                    .status(500)
+                    .json({
+                        success: false,
+                        code:
+                            "TOURNAMENT_STATUS_UPDATE_FAILED",
+                        error:
+                            tournamentUpdateError.message ||
+                            "Room keys saved but tournament status could not be updated."
+                    });
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | SUCCESS
+            |--------------------------------------------------------------------------
+            */
+
+            console.log(
+                "ROOM KEYS LIVE:",
+                cleanTournamentId
+            );
+
+            return res
+                .status(200)
+                .json({
+                    success: true,
+                    message:
+                        "Room ID & Password are now live.",
+                    tournamentId:
+                        cleanTournamentId,
+                    roomId:
+                        cleanRoomId,
+                    roomPassword:
+                        cleanRoomPassword,
+                    match
+                });
+
+        } catch (error) {
+            console.error(
+                "ADMIN ROOM KEYS ERROR:",
                 error
             );
 
