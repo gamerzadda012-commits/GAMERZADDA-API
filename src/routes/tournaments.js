@@ -6,7 +6,23 @@ const express = require("express");
 
 
 
+
+
+
+
+
+
+
+
 const router = express.Router();
+
+
+
+
+
+
+
+
 
 
 
@@ -22,7 +38,19 @@ const supabase = require("../config/supabase");
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -30,7 +58,19 @@ const supabase = require("../config/supabase");
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -42,7 +82,15 @@ function getUserId(req) {
 
 
 
+
+
+
+
     const headerUserId =
+
+
+
+
 
 
 
@@ -54,7 +102,19 @@ function getUserId(req) {
 
 
 
+
+
+
+
+
+
+
+
     const bodyUserId =
+
+
+
+
 
 
 
@@ -66,7 +126,19 @@ function getUserId(req) {
 
 
 
+
+
+
+
+
+
+
+
     const queryUserId =
+
+
+
+
 
 
 
@@ -78,7 +150,19 @@ function getUserId(req) {
 
 
 
+
+
+
+
+
+
+
+
     return String(
+
+
+
+
 
 
 
@@ -86,7 +170,15 @@ function getUserId(req) {
 
 
 
+
+
+
+
         bodyUserId ||
+
+
+
+
 
 
 
@@ -94,7 +186,15 @@ function getUserId(req) {
 
 
 
+
+
+
+
         ""
+
+
+
+
 
 
 
@@ -102,7 +202,19 @@ function getUserId(req) {
 
 
 
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -114,7 +226,19 @@ function cleanNumber(value, fallback = 0) {
 
 
 
+
+
+
+
     const number = Number(value);
+
+
+
+
+
+
+
+
 
 
 
@@ -126,7 +250,15 @@ function cleanNumber(value, fallback = 0) {
 
 
 
+
+
+
+
         ? number
+
+
+
+
 
 
 
@@ -134,6 +266,22 @@ function cleanNumber(value, fallback = 0) {
 
 
 
+
+
+
+
+}
+
+
+// Remove invisible / zero-width Unicode characters while preserving normal Unicode text.
+function cleanVisibleText(value) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .replace(/[ \t\r\n]+/g, " ")
+    .trim();
 }
 
 
@@ -142,7 +290,19 @@ function cleanNumber(value, fallback = 0) {
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -150,11 +310,27 @@ function cleanNumber(value, fallback = 0) {
 
 
 
+
+
+
+
 // GET /api/tournaments
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -166,7 +342,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
     try {
+
+
+
+
 
 
 
@@ -174,11 +358,23 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             String(
 
 
 
+
+
+
+
                 req.query.game || ""
+
+
+
+
 
 
 
@@ -190,7 +386,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         let query =
+
+
+
+
 
 
 
@@ -198,7 +406,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 .from("tournaments")
+
+
+
+
 
 
 
@@ -206,7 +422,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     id,
+
+
+
+
 
 
 
@@ -214,7 +438,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     game,
+
+
+
+
 
 
 
@@ -222,7 +454,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     entry_fee,
+
+
+
+
 
 
 
@@ -230,7 +470,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     kill_reward,
+
+
+
+
 
 
 
@@ -238,7 +486,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     start_time,
+
+
+
+
 
 
 
@@ -246,7 +502,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     status,
+
+
+
+
 
 
 
@@ -254,7 +518,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     bonus_usable_percent
+
+
+
+
 
 
 
@@ -262,7 +534,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 .order(
+
+
+
+
 
 
 
@@ -270,7 +550,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     {
+
+
+
+
 
 
 
@@ -278,11 +566,27 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     }
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -294,7 +598,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             query =
+
+
+
+
 
 
 
@@ -302,7 +614,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     "game",
+
+
+
+
 
 
 
@@ -310,7 +630,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 );
+
+
+
+
 
 
 
@@ -322,7 +650,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         const {
+
+
+
+
 
 
 
@@ -330,11 +670,27 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             error
 
 
 
+
+
+
+
         } = await query;
+
+
+
+
+
+
+
+
 
 
 
@@ -350,7 +706,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
             console.error(
+
+
+
+
 
 
 
@@ -358,7 +726,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -370,7 +746,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
             return res.status(500).json({
+
+
+
+
 
 
 
@@ -378,11 +766,23 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 error: error.message
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -394,7 +794,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         const list =
+
+
+
+
 
 
 
@@ -406,7 +818,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         // Load all active entry rows once instead of making
+
+
+
+
 
 
 
@@ -414,7 +838,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
         const tournamentIds = list
+
+
+
+
 
 
 
@@ -422,7 +854,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             .filter(Boolean);
+
+
+
+
+
+
+
+
 
 
 
@@ -438,7 +882,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         if (tournamentIds.length) {
+
+
+
+
 
 
 
@@ -446,7 +902,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 data: entryRows,
+
+
+
+
 
 
 
@@ -454,7 +918,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             } = await supabase
+
+
+
+
 
 
 
@@ -462,11 +934,23 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 .select("tournament_id")
 
 
 
+
+
+
+
                 .in("tournament_id", tournamentIds)
+
+
+
+
 
 
 
@@ -478,7 +962,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
             if (countError) {
+
+
+
+
 
 
 
@@ -486,7 +982,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     "COUNT ERROR:",
+
+
+
+
 
 
 
@@ -494,7 +998,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 );
+
+
+
+
 
 
 
@@ -502,7 +1014,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 for (const row of entryRows || []) {
+
+
+
+
 
 
 
@@ -510,7 +1030,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                     countMap[key] =
+
+
+
+
 
 
 
@@ -518,11 +1046,23 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 }
 
 
 
+
+
+
+
             }
+
+
+
+
 
 
 
@@ -534,7 +1074,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         const result = list.map((tournament) => ({
+
+
+
+
 
 
 
@@ -542,11 +1094,23 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             joined_count:
 
 
 
+
+
+
+
                 countMap[String(tournament.id)] || 0
+
+
+
+
 
 
 
@@ -558,7 +1122,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         return res.status(200).json({
+
+
+
+
 
 
 
@@ -566,11 +1142,27 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             tournaments: result
 
 
 
+
+
+
+
         });
+
+
+
+
+
+
+
+
 
 
 
@@ -586,7 +1178,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         console.error(
+
+
+
+
 
 
 
@@ -594,7 +1198,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             error
+
+
+
+
 
 
 
@@ -606,7 +1218,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
         return res.status(500).json({
+
+
+
+
 
 
 
@@ -614,7 +1238,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
             error:
+
+
+
+
 
 
 
@@ -622,7 +1254,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
                 "Internal server error"
+
+
+
+
 
 
 
@@ -630,7 +1270,15 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -642,7 +1290,19 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -650,11 +1310,27 @@ router.get("/", async (req, res) => {
 
 
 
+
+
+
+
 // GET /api/tournaments/participants?tournamentId=UUID
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -666,11 +1342,27 @@ router.get(
 
 
 
+
+
+
+
     "/participants",
 
 
 
+
+
+
+
     async (req, res) => {
+
+
+
+
+
+
+
+
 
 
 
@@ -686,7 +1378,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const tournamentId =
+
+
+
+
 
 
 
@@ -694,7 +1398,15 @@ router.get(
 
 
 
+
+
+
+
                     req.query.tournamentId ||
+
+
+
+
 
 
 
@@ -702,7 +1414,19 @@ router.get(
 
 
 
+
+
+
+
                 ).trim();
+
+
+
+
+
+
+
+
 
 
 
@@ -718,7 +1442,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -726,7 +1462,15 @@ router.get(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -734,7 +1478,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -746,7 +1498,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -754,7 +1518,15 @@ router.get(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -762,7 +1534,15 @@ router.get(
 
 
 
+
+
+
+
                 await supabase
+
+
+
+
 
 
 
@@ -770,11 +1550,23 @@ router.get(
 
 
 
+
+
+
+
                         "tournament_entries"
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -782,7 +1574,15 @@ router.get(
 
 
 
+
+
+
+
                         id,
+
+
+
+
 
 
 
@@ -790,7 +1590,15 @@ router.get(
 
 
 
+
+
+
+
                         user_id,
+
+
+
+
 
 
 
@@ -798,7 +1606,15 @@ router.get(
 
 
 
+
+
+
+
                         game_name,
+
+
+
+
 
 
 
@@ -806,7 +1622,15 @@ router.get(
 
 
 
+
+
+
+
                         cancelled,
+
+
+
+
 
 
 
@@ -814,11 +1638,23 @@ router.get(
 
 
 
+
+
+
+
                     `)
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -826,11 +1662,23 @@ router.get(
 
 
 
+
+
+
+
                         tournamentId
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -838,7 +1686,15 @@ router.get(
 
 
 
+
+
+
+
                         "cancelled",
+
+
+
+
 
 
 
@@ -846,7 +1702,15 @@ router.get(
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -854,7 +1718,15 @@ router.get(
 
 
 
+
+
+
+
                         "created_at",
+
+
+
+
 
 
 
@@ -862,7 +1734,15 @@ router.get(
 
 
 
+
+
+
+
                             ascending: true
+
+
+
+
 
 
 
@@ -870,7 +1750,19 @@ router.get(
 
 
 
+
+
+
+
                     );
+
+
+
+
+
+
+
+
 
 
 
@@ -886,7 +1778,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -894,7 +1798,15 @@ router.get(
 
 
 
+
+
+
+
                     error
+
+
+
+
 
 
 
@@ -906,11 +1818,27 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
 
 
 
+
+
+
+
                     success: false,
+
+
+
+
 
 
 
@@ -918,7 +1846,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -930,11 +1866,27 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(200).json({
 
 
 
+
+
+
+
                 success: true,
+
+
+
+
 
 
 
@@ -942,11 +1894,27 @@ router.get(
 
 
 
+
+
+
+
                     data || []
 
 
 
+
+
+
+
             });
+
+
+
+
+
+
+
+
 
 
 
@@ -962,7 +1930,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             console.error(
+
+
+
+
 
 
 
@@ -970,7 +1950,15 @@ router.get(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -982,7 +1970,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(500).json({
+
+
+
+
 
 
 
@@ -990,7 +1990,15 @@ router.get(
 
 
 
+
+
+
+
                 error:
+
+
+
+
 
 
 
@@ -998,7 +2006,15 @@ router.get(
 
 
 
+
+
+
+
                     "Internal server error"
+
+
+
+
 
 
 
@@ -1006,11 +2022,23 @@ router.get(
 
 
 
+
+
+
+
         }
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -1022,221 +2050,447 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
 
 
 
 
 
+
+
+
+
+
+
 // ============================================================
+
+
 
 // GET MY MATCHES
 
+
+
 // GET /api/tournaments/my-matches
+
+
 
 // Returns only tournaments joined by the current user.
 
+
+
 // ============================================================
+
+
+
+
 
 
 
 router.get(
 
+
+
     "/my-matches",
+
+
 
     async (req, res) => {
 
+
+
         try {
+
+
 
             const userId = getUserId(req);
 
 
 
+
+
+
+
             if (!userId) {
+
+
 
                 return res.status(401).json({
 
+
+
                     success: false,
+
+
 
                     code: "AUTH_REQUIRED",
 
+
+
                     error: "User session not found."
+
+
 
                 });
 
+
+
             }
+
+
+
+
 
 
 
             const game = String(
 
+
+
                 req.query.game || ""
+
+
 
             ).trim();
 
 
 
+
+
+
+
             const {
+
+
 
                 data: entries,
 
+
+
                 error: entryError
+
+
 
             } = await supabase
 
+
+
                 .from("tournament_entries")
+
+
 
                 .select("tournament_id")
 
+
+
                 .eq("user_id", userId)
+
+
 
                 .eq("cancelled", false);
 
 
 
+
+
+
+
             if (entryError) {
+
+
 
                 console.error(
 
+
+
                     "MY MATCHES ENTRY ERROR:",
 
+
+
                     entryError
+
+
 
                 );
 
 
 
+
+
+
+
                 return res.status(500).json({
+
+
 
                     success: false,
 
+
+
                     error: entryError.message
+
+
 
                 });
 
+
+
             }
+
+
+
+
 
 
 
             const tournamentIds = [
 
+
+
                 ...new Set(
+
+
 
                     (entries || [])
 
+
+
                         .map((row) => row.tournament_id)
+
+
 
                         .filter(Boolean)
 
+
+
                         .map(String)
 
+
+
                 )
+
+
 
             ];
 
 
 
+
+
+
+
             if (!tournamentIds.length) {
+
+
 
                 return res.status(200).json({
 
+
+
                     success: true,
+
+
 
                     tournaments: []
 
+
+
                 });
 
+
+
             }
+
+
+
+
 
 
 
             let query = supabase
 
+
+
                 .from("tournaments")
+
+
 
                 .select(`
 
+
+
                     id,
+
+
 
                     title,
 
+
+
                     game,
+
+
 
                     mode,
 
+
+
                     entry_fee,
+
+
 
                     prize_pool,
 
+
+
                     kill_reward,
+
+
 
                     max_players,
 
+
+
                     start_time,
+
+
 
                     map,
 
+
+
                     status,
+
+
 
                     rules,
 
+
+
                     bonus_usable_percent
+
+
 
                 `)
 
+
+
                 .in("id", tournamentIds)
+
+
 
                 .order("start_time", { ascending: true });
 
 
 
+
+
+
+
             if (game) {
+
+
 
                 query = query.eq("game", game);
 
+
+
             }
+
+
+
+
 
 
 
             const {
 
+
+
                 data: tournaments,
 
+
+
                 error: tournamentError
+
+
 
             } = await query;
 
 
 
+
+
+
+
             if (tournamentError) {
+
+
 
                 console.error(
 
+
+
                     "MY MATCHES TOURNAMENT ERROR:",
 
+
+
                     tournamentError
+
+
 
                 );
 
 
 
+
+
+
+
                 return res.status(500).json({
+
+
 
                     success: false,
 
+
+
                     error: tournamentError.message
 
+
+
                 });
+
+
 
             }
 
 
 
+
+
+
+
             const ids = (tournaments || [])
+
+
 
                 .map((tournament) => tournament.id)
 
+
+
                 .filter(Boolean);
+
+
+
+
 
 
 
@@ -1244,45 +2498,165 @@ router.get(
 
 
 
+
+
+
+
             if (ids.length) {
+
+
 
                 const {
 
+
+
                     data: entryRows,
+
+
 
                     error: countError
 
+
+
                 } = await supabase
+
+
 
                     .from("tournament_entries")
 
+
+
                     .select("tournament_id")
 
+
+
                     .in("tournament_id", ids)
+
+
 
                     .eq("cancelled", false);
 
 
 
+
+
+
+
                 if (countError) {
+
+
 
                     console.error(
 
+
+
                         "MY MATCHES COUNT ERROR:",
 
+
+
                         countError
+
+
+
+                    );
+
+
+
+                } else {
+
+
+
+                    for (const row of entryRows || []) {
+
+
+
+                        const key = String(row.tournament_id);
+
+
+
+                        countMap[key] =
+
+
+
+                            (countMap[key] || 0) + 1;
+
+
+
+                    }
+
+
+
+                }
+
+
+
+            }
+
+
+
+            // ============================================================
+
+            // LOAD RESULTS FOR CURRENT USER
+
+            // ============================================================
+
+
+
+            const resultMap = {};
+
+
+
+            if (ids.length) {
+
+                const {
+
+                    data: resultRows,
+
+                    error: resultError
+
+                } = await supabase
+
+                    .from("tournament_results")
+
+                    .select(`
+
+                        id,
+
+                        tournament_id,
+
+                        match_id,
+
+                        user_id,
+
+                        rank,
+
+                        kills,
+
+                        winning_amount
+
+                    `)
+
+                    .in("tournament_id", ids)
+
+                    .eq("user_id", userId);
+
+
+
+                if (resultError) {
+
+                    console.error(
+
+                        "MY MATCHES RESULTS ERROR:",
+
+                        resultError
 
                     );
 
                 } else {
 
-                    for (const row of entryRows || []) {
+                    for (const row of resultRows || []) {
 
-                        const key = String(row.tournament_id);
-
-                        countMap[key] =
-
-                            (countMap[key] || 0) + 1;
+                        resultMap[String(row.tournament_id)] = row;
 
                     }
 
@@ -1290,96 +2664,119 @@ router.get(
 
             }
 
-            // ============================================================
-            // LOAD RESULTS FOR CURRENT USER
-            // ============================================================
 
-            const resultMap = {};
 
-            if (ids.length) {
-                const {
-                    data: resultRows,
-                    error: resultError
-                } = await supabase
-                    .from("tournament_results")
-                    .select(`
-                        id,
-                        tournament_id,
-                        match_id,
-                        user_id,
-                        rank,
-                        kills,
-                        winning_amount
-                    `)
-                    .in("tournament_id", ids)
-                    .eq("user_id", userId);
+            const result = (tournaments || []).map(
 
-                if (resultError) {
-                    console.error(
-                        "MY MATCHES RESULTS ERROR:",
-                        resultError
-                    );
-                } else {
-                    for (const row of resultRows || []) {
-                        resultMap[String(row.tournament_id)] = row;
-                    }
-                }
-            }
+                (tournament) => {
 
-            const result = (tournaments || []).map(
-                (tournament) => {
-                    const tournamentResult =
-                        resultMap[String(tournament.id)] || null;
+                    const tournamentResult =
 
-                    return {
-                        ...tournament,
-                        joined_count:
-                            countMap[String(tournament.id)] || 0,
-                        result: tournamentResult,
-                        has_result: !!tournamentResult
-                    };
-                }
-            );
+                        resultMap[String(tournament.id)] || null;
 
 
 
-            return res.status(200).json({
+                    return {
 
-                success: true,
+                        ...tournament,
 
-                tournaments: result
+                        joined_count:
 
-            });
+                            countMap[String(tournament.id)] || 0,
 
-        } catch (error) {
+                        result: tournamentResult,
 
-            console.error(
+                        has_result: !!tournamentResult
 
-                "MY MATCHES EXCEPTION:",
+                    };
 
-                error
+                }
 
             );
 
 
 
-            return res.status(500).json({
 
-                success: false,
 
-                error:
 
-                    error?.message ||
 
-                    "Internal server error"
+            return res.status(200).json({
+
+
+
+                success: true,
+
+
+
+                tournaments: result
+
+
 
             });
 
+
+
+        } catch (error) {
+
+
+
+            console.error(
+
+
+
+                "MY MATCHES EXCEPTION:",
+
+
+
+                error
+
+
+
+            );
+
+
+
+
+
+
+
+            return res.status(500).json({
+
+
+
+                success: false,
+
+
+
+                error:
+
+
+
+                    error?.message ||
+
+
+
+                    "Internal server error"
+
+
+
+            });
+
+
+
         }
+
+
 
     }
 
+
+
 );
+
+
+
+
 
 
 
@@ -1387,7 +2784,15 @@ router.get(
 
 
 
+
+
+
+
 // GET /api/tournaments/my-entry?tournamentId=UUID
+
+
+
+
 
 
 
@@ -1399,11 +2804,27 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 router.get(
 
 
 
+
+
+
+
     "/my-entry",
+
+
+
+
 
 
 
@@ -1415,7 +2836,23 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
         try {
+
+
+
+
+
+
+
+
 
 
 
@@ -1427,7 +2864,19 @@ router.get(
 
 
 
+
+
+
+
                 getUserId(req);
+
+
+
+
+
+
+
+
 
 
 
@@ -1439,7 +2888,15 @@ router.get(
 
 
 
+
+
+
+
                 String(
+
+
+
+
 
 
 
@@ -1447,11 +2904,27 @@ router.get(
 
 
 
+
+
+
+
                     ""
 
 
 
+
+
+
+
                 ).trim();
+
+
+
+
+
+
+
+
 
 
 
@@ -1467,7 +2940,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(401).json({
+
+
+
+
 
 
 
@@ -1475,7 +2960,15 @@ router.get(
 
 
 
+
+
+
+
                     code: "AUTH_REQUIRED",
+
+
+
+
 
 
 
@@ -1483,7 +2976,15 @@ router.get(
 
 
 
+
+
+
+
                         "User session not found."
+
+
+
+
 
 
 
@@ -1491,7 +2992,19 @@ router.get(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1507,7 +3020,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -1515,7 +3040,15 @@ router.get(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -1523,7 +3056,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -1535,7 +3076,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -1543,7 +3096,15 @@ router.get(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -1551,7 +3112,15 @@ router.get(
 
 
 
+
+
+
+
                 await supabase
+
+
+
+
 
 
 
@@ -1559,11 +3128,23 @@ router.get(
 
 
 
+
+
+
+
                         "tournament_entries"
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -1571,7 +3152,15 @@ router.get(
 
 
 
+
+
+
+
                         id,
+
+
+
+
 
 
 
@@ -1579,7 +3168,15 @@ router.get(
 
 
 
+
+
+
+
                         user_id,
+
+
+
+
 
 
 
@@ -1587,7 +3184,15 @@ router.get(
 
 
 
+
+
+
+
                         game_name,
+
+
+
+
 
 
 
@@ -1595,7 +3200,15 @@ router.get(
 
 
 
+
+
+
+
                         cancelled,
+
+
+
+
 
 
 
@@ -1603,11 +3216,23 @@ router.get(
 
 
 
+
+
+
+
                     `)
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -1615,7 +3240,15 @@ router.get(
 
 
 
+
+
+
+
                         tournamentId
+
+
+
+
 
 
 
@@ -1623,7 +3256,15 @@ router.get(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -1631,11 +3272,23 @@ router.get(
 
 
 
+
+
+
+
                         userId
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -1643,7 +3296,15 @@ router.get(
 
 
 
+
+
+
+
                         "cancelled",
+
+
+
+
 
 
 
@@ -1651,11 +3312,27 @@ router.get(
 
 
 
+
+
+
+
                     )
 
 
 
+
+
+
+
                     .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -1671,7 +3348,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -1679,7 +3368,15 @@ router.get(
 
 
 
+
+
+
+
                     error
+
+
+
+
 
 
 
@@ -1691,7 +3388,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -1699,11 +3408,23 @@ router.get(
 
 
 
+
+
+
+
                     error: error.message
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -1715,7 +3436,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(200).json({
+
+
+
+
 
 
 
@@ -1723,7 +3456,15 @@ router.get(
 
 
 
+
+
+
+
                 entry:
+
+
+
+
 
 
 
@@ -1731,11 +3472,23 @@ router.get(
 
 
 
+
+
+
+
                 joined:
 
 
 
+
+
+
+
                     !!data
+
+
+
+
 
 
 
@@ -1747,7 +3500,23 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
         } catch (error) {
+
+
+
+
+
+
+
+
 
 
 
@@ -1759,11 +3528,23 @@ router.get(
 
 
 
+
+
+
+
                 "MY ENTRY EXCEPTION:",
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -1775,7 +3556,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(500).json({
+
+
+
+
 
 
 
@@ -1783,7 +3576,15 @@ router.get(
 
 
 
+
+
+
+
                 error:
+
+
+
+
 
 
 
@@ -1791,7 +3592,15 @@ router.get(
 
 
 
+
+
+
+
                     "Internal server error"
+
+
+
+
 
 
 
@@ -1799,11 +3608,23 @@ router.get(
 
 
 
+
+
+
+
         }
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -1815,7 +3636,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -1823,11 +3656,27 @@ router.get(
 
 
 
+
+
+
+
 // GET /api/tournaments/my-match?tournamentId=UUID
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -1839,7 +3688,15 @@ router.get(
 
 
 
+
+
+
+
     "/my-match",
+
+
+
+
 
 
 
@@ -1847,7 +3704,15 @@ router.get(
 
 
 
+
+
+
+
         try {
+
+
+
+
 
 
 
@@ -1855,11 +3720,23 @@ router.get(
 
 
 
+
+
+
+
             const tournamentId = String(
 
 
 
+
+
+
+
                 req.query.tournamentId || ""
+
+
+
+
 
 
 
@@ -1871,7 +3748,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             if (!userId) {
+
+
+
+
 
 
 
@@ -1879,7 +3768,15 @@ router.get(
 
 
 
+
+
+
+
                     success: false,
+
+
+
+
 
 
 
@@ -1887,7 +3784,15 @@ router.get(
 
 
 
+
+
+
+
                     error: "User session not found."
+
+
+
+
 
 
 
@@ -1895,7 +3800,19 @@ router.get(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -1907,7 +3824,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -1915,11 +3840,23 @@ router.get(
 
 
 
+
+
+
+
                     error: "Tournament ID is required."
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -1931,7 +3868,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -1939,7 +3888,15 @@ router.get(
 
 
 
+
+
+
+
                 error: entryError
+
+
+
+
 
 
 
@@ -1947,7 +3904,15 @@ router.get(
 
 
 
+
+
+
+
                 .from("tournament_entries")
+
+
+
+
 
 
 
@@ -1955,7 +3920,15 @@ router.get(
 
 
 
+
+
+
+
                 .eq("tournament_id", tournamentId)
+
+
+
+
 
 
 
@@ -1963,11 +3936,27 @@ router.get(
 
 
 
+
+
+
+
                 .eq("cancelled", false)
 
 
 
+
+
+
+
                 .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -1979,7 +3968,15 @@ router.get(
 
 
 
+
+
+
+
                 console.error("MY MATCH ENTRY ERROR:", entryError);
+
+
+
+
 
 
 
@@ -1987,7 +3984,15 @@ router.get(
 
 
 
+
+
+
+
                     success: false,
+
+
+
+
 
 
 
@@ -1995,11 +4000,27 @@ router.get(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2011,7 +4032,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(403).json({
+
+
+
+
 
 
 
@@ -2019,7 +4048,15 @@ router.get(
 
 
 
+
+
+
+
                     code: "NOT_JOINED",
+
+
+
+
 
 
 
@@ -2027,7 +4064,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -2039,7 +4084,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -2047,7 +4104,15 @@ router.get(
 
 
 
+
+
+
+
                 error: matchError
+
+
+
+
 
 
 
@@ -2055,7 +4120,15 @@ router.get(
 
 
 
+
+
+
+
                 .from("matches")
+
+
+
+
 
 
 
@@ -2063,7 +4136,15 @@ router.get(
 
 
 
+
+
+
+
                 .eq("tournament_id", tournamentId)
+
+
+
+
 
 
 
@@ -2071,11 +4152,27 @@ router.get(
 
 
 
+
+
+
+
                 .limit(1)
 
 
 
+
+
+
+
                 .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -2087,7 +4184,15 @@ router.get(
 
 
 
+
+
+
+
                 console.error("MY MATCH ERROR:", matchError);
+
+
+
+
 
 
 
@@ -2095,7 +4200,15 @@ router.get(
 
 
 
+
+
+
+
                     success: false,
+
+
+
+
 
 
 
@@ -2103,7 +4216,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -2115,7 +4236,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(200).json({
+
+
+
+
 
 
 
@@ -2123,7 +4256,15 @@ router.get(
 
 
 
+
+
+
+
                 match: match || null,
+
+
+
+
 
 
 
@@ -2131,11 +4272,23 @@ router.get(
 
 
 
+
+
+
+
                 room_password: match?.room_password || null
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -2143,7 +4296,15 @@ router.get(
 
 
 
+
+
+
+
             console.error("MY MATCH EXCEPTION:", error);
+
+
+
+
 
 
 
@@ -2151,7 +4312,15 @@ router.get(
 
 
 
+
+
+
+
                 success: false,
+
+
+
+
 
 
 
@@ -2159,7 +4328,15 @@ router.get(
 
 
 
+
+
+
+
                     error?.message ||
+
+
+
+
 
 
 
@@ -2167,7 +4344,15 @@ router.get(
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -2175,7 +4360,15 @@ router.get(
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -2187,7 +4380,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -2195,11 +4400,27 @@ router.get(
 
 
 
+
+
+
+
 // GET /api/tournaments/my-results?tournamentId=UUID
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -2211,7 +4432,15 @@ router.get(
 
 
 
+
+
+
+
     "/my-results",
+
+
+
+
 
 
 
@@ -2219,7 +4448,15 @@ router.get(
 
 
 
+
+
+
+
         try {
+
+
+
+
 
 
 
@@ -2227,11 +4464,23 @@ router.get(
 
 
 
+
+
+
+
             const tournamentId = String(
 
 
 
+
+
+
+
                 req.query.tournamentId || ""
+
+
+
+
 
 
 
@@ -2243,7 +4492,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             if (!userId) {
+
+
+
+
 
 
 
@@ -2251,7 +4512,15 @@ router.get(
 
 
 
+
+
+
+
                     success: false,
+
+
+
+
 
 
 
@@ -2259,7 +4528,15 @@ router.get(
 
 
 
+
+
+
+
                     error: "User session not found."
+
+
+
+
 
 
 
@@ -2267,7 +4544,19 @@ router.get(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2279,7 +4568,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -2287,11 +4584,23 @@ router.get(
 
 
 
+
+
+
+
                     error: "Tournament ID is required."
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -2303,7 +4612,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -2311,7 +4632,15 @@ router.get(
 
 
 
+
+
+
+
                 error: entryError
+
+
+
+
 
 
 
@@ -2319,7 +4648,15 @@ router.get(
 
 
 
+
+
+
+
                 .from("tournament_entries")
+
+
+
+
 
 
 
@@ -2327,7 +4664,15 @@ router.get(
 
 
 
+
+
+
+
                 .eq("tournament_id", tournamentId)
+
+
+
+
 
 
 
@@ -2335,7 +4680,15 @@ router.get(
 
 
 
+
+
+
+
                 .eq("cancelled", false)
+
+
+
+
 
 
 
@@ -2347,7 +4700,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             if (entryError) {
+
+
+
+
 
 
 
@@ -2355,7 +4720,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -2363,7 +4736,15 @@ router.get(
 
 
 
+
+
+
+
                     error: entryError.message
+
+
+
+
 
 
 
@@ -2371,7 +4752,19 @@ router.get(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2383,7 +4776,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(403).json({
+
+
+
+
 
 
 
@@ -2391,7 +4792,15 @@ router.get(
 
 
 
+
+
+
+
                     code: "NOT_JOINED",
+
+
+
+
 
 
 
@@ -2399,11 +4808,27 @@ router.get(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2415,7 +4840,15 @@ router.get(
 
 
 
+
+
+
+
                 data: results,
+
+
+
+
 
 
 
@@ -2423,7 +4856,15 @@ router.get(
 
 
 
+
+
+
+
             } = await supabase
+
+
+
+
 
 
 
@@ -2431,15 +4872,31 @@ router.get(
 
 
 
+
+
+
+
                 .select(`
-                    id,
-                    tournament_id,
-                    match_id,
-                    user_id,
-                    rank,
-                    kills,
-                    winning_amount
-                `)
+
+                    id,
+
+                    tournament_id,
+
+                    match_id,
+
+                    user_id,
+
+                    rank,
+
+                    kills,
+
+                    winning_amount
+
+                `)
+
+
+
+
 
 
 
@@ -2447,7 +4904,15 @@ router.get(
 
 
 
+
+
+
+
                 .eq("user_id", userId)
+
+
+
+
 
 
 
@@ -2459,7 +4924,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             if (resultsError) {
+
+
+
+
 
 
 
@@ -2467,7 +4944,15 @@ router.get(
 
 
 
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -2475,11 +4960,23 @@ router.get(
 
 
 
+
+
+
+
                     error: resultsError.message
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -2491,7 +4988,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(200).json({
+
+
+
+
 
 
 
@@ -2499,17 +5008,35 @@ router.get(
 
 
 
+
+
+
+
                 tournamentId,
 
-                userId,
 
-                published: (results || []).length > 0,
 
-                results: results || []
+                userId,
+
+
+
+                published: (results || []).length > 0,
+
+
+
+                results: results || []
+
+
+
+
 
 
 
             });
+
+
+
+
 
 
 
@@ -2517,7 +5044,15 @@ router.get(
 
 
 
+
+
+
+
             console.error("MY RESULTS EXCEPTION:", error);
+
+
+
+
 
 
 
@@ -2525,7 +5060,15 @@ router.get(
 
 
 
+
+
+
+
                 success: false,
+
+
+
+
 
 
 
@@ -2533,7 +5076,15 @@ router.get(
 
 
 
+
+
+
+
                     error?.message ||
+
+
+
+
 
 
 
@@ -2541,7 +5092,15 @@ router.get(
 
 
 
+
+
+
+
             });
+
+
+
+
 
 
 
@@ -2549,7 +5108,15 @@ router.get(
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -2561,7 +5128,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -2569,7 +5148,15 @@ router.get(
 
 
 
+
+
+
+
 //
+
+
+
+
 
 
 
@@ -2577,7 +5164,15 @@ router.get(
 
 
 
+
+
+
+
 // THIS ROUTE MUST COME BEFORE /:id
+
+
+
+
 
 
 
@@ -2585,11 +5180,27 @@ router.get(
 
 
 
+
+
+
+
 // POST /api/tournaments/join
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -2601,7 +5212,15 @@ router.post(
 
 
 
+
+
+
+
     "/join",
+
+
+
+
 
 
 
@@ -2613,7 +5232,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
         let originalDeposit = 0;
+
+
+
+
 
 
 
@@ -2621,7 +5252,15 @@ router.post(
 
 
 
+
+
+
+
         let originalWinning = 0;
+
+
+
+
 
 
 
@@ -2629,7 +5268,19 @@ router.post(
 
 
 
+
+
+
+
         let userId = "";
+
+
+
+
+
+
+
+
 
 
 
@@ -2645,7 +5296,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             userId =
+
+
+
+
 
 
 
@@ -2657,7 +5320,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -2665,7 +5340,15 @@ router.post(
 
 
 
+
+
+
+
                 gameName,
+
+
+
+
 
 
 
@@ -2673,7 +5356,15 @@ router.post(
 
 
 
+
+
+
+
                 level
+
+
+
+
 
 
 
@@ -2685,7 +5376,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const cleanTournamentId =
+
+
+
+
 
 
 
@@ -2693,11 +5396,27 @@ router.post(
 
 
 
+
+
+
+
                     tournamentId || ""
 
 
 
+
+
+
+
                 ).trim();
+
+
+
+
+
+
+
+
 
 
 
@@ -2709,7 +5428,15 @@ router.post(
 
 
 
+
+
+
+
                 String(
+
+
+
+
 
 
 
@@ -2717,7 +5444,19 @@ router.post(
 
 
 
+
+
+
+
                 ).trim();
+
+
+
+
+
+
+
+
 
 
 
@@ -2729,11 +5468,23 @@ router.post(
 
 
 
+
+
+
+
                 String(
 
 
 
+
+
+
+
                     uid || ""
+
+
+
+
 
 
 
@@ -2745,7 +5496,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const cleanLevel =
+
+
+
+
 
 
 
@@ -2757,7 +5520,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -2765,7 +5540,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -2781,7 +5568,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(401).json({
+
+
+
+
 
 
 
@@ -2789,7 +5588,15 @@ router.post(
 
 
 
+
+
+
+
                     code: "AUTH_REQUIRED",
+
+
+
+
 
 
 
@@ -2797,11 +5604,23 @@ router.post(
 
 
 
+
+
+
+
                         "User session not found. Please login again."
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -2813,7 +5632,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -2821,7 +5652,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -2837,7 +5680,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -2845,7 +5700,15 @@ router.post(
 
 
 
+
+
+
+
                     code: "INVALID_TOURNAMENT",
+
+
+
+
 
 
 
@@ -2853,7 +5716,15 @@ router.post(
 
 
 
+
+
+
+
                         "Tournament ID is required."
+
+
+
+
 
 
 
@@ -2861,7 +5732,19 @@ router.post(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2877,7 +5760,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -2885,7 +5780,15 @@ router.post(
 
 
 
+
+
+
+
                     code: "INVALID_GAME_NAME",
+
+
+
+
 
 
 
@@ -2893,7 +5796,15 @@ router.post(
 
 
 
+
+
+
+
                         "In-Game Name is required."
+
+
+
+
 
 
 
@@ -2901,7 +5812,19 @@ router.post(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2917,7 +5840,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -2925,7 +5860,15 @@ router.post(
 
 
 
+
+
+
+
                     code: "INVALID_UID",
+
+
+
+
 
 
 
@@ -2933,7 +5876,15 @@ router.post(
 
 
 
+
+
+
+
                         "Free Fire UID is required."
+
+
+
+
 
 
 
@@ -2941,7 +5892,19 @@ router.post(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -2953,7 +5916,15 @@ router.post(
 
 
 
+
+
+
+
                 !Number.isInteger(
+
+
+
+
 
 
 
@@ -2961,7 +5932,15 @@ router.post(
 
 
 
+
+
+
+
                 ) ||
+
+
+
+
 
 
 
@@ -2969,7 +5948,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanLevel > 100
+
+
+
+
 
 
 
@@ -2981,7 +5968,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -2989,7 +5988,15 @@ router.post(
 
 
 
+
+
+
+
                     code: "INVALID_LEVEL",
+
+
+
+
 
 
 
@@ -2997,11 +6004,23 @@ router.post(
 
 
 
+
+
+
+
                         "Level must be between 1 and 100."
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -3013,7 +6032,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3021,7 +6052,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3033,7 +6076,15 @@ router.post(
 
 
 
+
+
+
+
                 data: tournament,
+
+
+
+
 
 
 
@@ -3041,7 +6092,15 @@ router.post(
 
 
 
+
+
+
+
             } =
+
+
+
+
 
 
 
@@ -3049,7 +6108,15 @@ router.post(
 
 
 
+
+
+
+
                     .from(
+
+
+
+
 
 
 
@@ -3057,7 +6124,15 @@ router.post(
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -3065,7 +6140,15 @@ router.post(
 
 
 
+
+
+
+
                         id,
+
+
+
+
 
 
 
@@ -3073,7 +6156,15 @@ router.post(
 
 
 
+
+
+
+
                         game,
+
+
+
+
 
 
 
@@ -3081,7 +6172,15 @@ router.post(
 
 
 
+
+
+
+
                         entry_fee,
+
+
+
+
 
 
 
@@ -3089,7 +6188,15 @@ router.post(
 
 
 
+
+
+
+
                         max_players,
+
+
+
+
 
 
 
@@ -3097,7 +6204,15 @@ router.post(
 
 
 
+
+
+
+
                         bonus_usable_percent
+
+
+
+
 
 
 
@@ -3105,7 +6220,15 @@ router.post(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -3113,7 +6236,15 @@ router.post(
 
 
 
+
+
+
+
                         cleanTournamentId
+
+
+
+
 
 
 
@@ -3121,7 +6252,19 @@ router.post(
 
 
 
+
+
+
+
                     .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -3137,7 +6280,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -3145,7 +6300,15 @@ router.post(
 
 
 
+
+
+
+
                     tournamentError
+
+
+
+
 
 
 
@@ -3157,7 +6320,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -3165,7 +6340,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3173,11 +6356,27 @@ router.post(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -3193,7 +6392,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(404).json({
+
+
+
+
 
 
 
@@ -3201,7 +6412,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -3209,7 +6428,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3217,7 +6444,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -3229,7 +6464,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3237,7 +6484,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3249,7 +6508,15 @@ router.post(
 
 
 
+
+
+
+
                 String(
+
+
+
+
 
 
 
@@ -3257,11 +6524,23 @@ router.post(
 
 
 
+
+
+
+
                 )
 
 
 
+
+
+
+
                     .trim()
+
+
+
+
 
 
 
@@ -3273,7 +6552,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const allowedStatuses = [
+
+
+
+
 
 
 
@@ -3281,7 +6572,15 @@ router.post(
 
 
 
+
+
+
+
                 "upcoming",
+
+
+
+
 
 
 
@@ -3289,7 +6588,15 @@ router.post(
 
 
 
+
+
+
+
                 "active",
+
+
+
+
 
 
 
@@ -3297,7 +6604,15 @@ router.post(
 
 
 
+
+
+
+
                 "scheduled"
+
+
+
+
 
 
 
@@ -3309,7 +6624,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             if (
+
+
+
+
 
 
 
@@ -3317,11 +6644,23 @@ router.post(
 
 
 
+
+
+
+
                     status
 
 
 
+
+
+
+
                 )
+
+
+
+
 
 
 
@@ -3333,7 +6672,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -3341,7 +6692,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -3349,7 +6708,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3357,7 +6724,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -3369,7 +6744,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3377,7 +6764,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3389,7 +6788,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanNumber(
+
+
+
+
 
 
 
@@ -3397,11 +6804,27 @@ router.post(
 
 
 
+
+
+
+
                     0
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -3417,7 +6840,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -3425,7 +6860,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3433,7 +6876,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -3445,7 +6896,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3453,7 +6916,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3465,7 +6940,15 @@ router.post(
 
 
 
+
+
+
+
                 tournament.max_players &&
+
+
+
+
 
 
 
@@ -3473,11 +6956,23 @@ router.post(
 
 
 
+
+
+
+
                     tournament.max_players
 
 
 
+
+
+
+
                 ) > 0
+
+
+
+
 
 
 
@@ -3489,7 +6984,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 const {
+
+
+
+
 
 
 
@@ -3497,7 +7004,15 @@ router.post(
 
 
 
+
+
+
+
                     error: countError
+
+
+
+
 
 
 
@@ -3505,7 +7020,15 @@ router.post(
 
 
 
+
+
+
+
                     await supabase
+
+
+
+
 
 
 
@@ -3513,11 +7036,23 @@ router.post(
 
 
 
+
+
+
+
                             "tournament_entries"
 
 
 
+
+
+
+
                         )
+
+
+
+
 
 
 
@@ -3525,7 +7060,15 @@ router.post(
 
 
 
+
+
+
+
                             "id",
+
+
+
+
 
 
 
@@ -3533,7 +7076,15 @@ router.post(
 
 
 
+
+
+
+
                                 count: "exact",
+
+
+
+
 
 
 
@@ -3541,7 +7092,15 @@ router.post(
 
 
 
+
+
+
+
                             }
+
+
+
+
 
 
 
@@ -3549,7 +7108,15 @@ router.post(
 
 
 
+
+
+
+
                         .eq(
+
+
+
+
 
 
 
@@ -3557,7 +7124,15 @@ router.post(
 
 
 
+
+
+
+
                             cleanTournamentId
+
+
+
+
 
 
 
@@ -3565,7 +7140,15 @@ router.post(
 
 
 
+
+
+
+
                         .eq(
+
+
+
+
 
 
 
@@ -3573,11 +7156,27 @@ router.post(
 
 
 
+
+
+
+
                             false
 
 
 
+
+
+
+
                         );
+
+
+
+
+
+
+
+
 
 
 
@@ -3593,7 +7192,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     console.error(
+
+
+
+
 
 
 
@@ -3601,7 +7212,15 @@ router.post(
 
 
 
+
+
+
+
                         countError
+
+
+
+
 
 
 
@@ -3613,7 +7232,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     return res.status(500).json({
+
+
+
+
 
 
 
@@ -3621,7 +7252,15 @@ router.post(
 
 
 
+
+
+
+
                         error:
+
+
+
+
 
 
 
@@ -3629,11 +7268,27 @@ router.post(
 
 
 
+
+
+
+
                     });
 
 
 
+
+
+
+
                 }
+
+
+
+
+
+
+
+
 
 
 
@@ -3645,7 +7300,15 @@ router.post(
 
 
 
+
+
+
+
                     (count || 0) >=
+
+
+
+
 
 
 
@@ -3653,11 +7316,23 @@ router.post(
 
 
 
+
+
+
+
                         tournament.max_players
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -3669,7 +7344,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     return res.status(400).json({
+
+
+
+
 
 
 
@@ -3677,7 +7364,15 @@ router.post(
 
 
 
+
+
+
+
                         code:
+
+
+
+
 
 
 
@@ -3685,7 +7380,15 @@ router.post(
 
 
 
+
+
+
+
                         error:
+
+
+
+
 
 
 
@@ -3693,11 +7396,23 @@ router.post(
 
 
 
+
+
+
+
                     });
 
 
 
+
+
+
+
                 }
+
+
+
+
 
 
 
@@ -3709,7 +7424,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3717,7 +7444,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3729,7 +7468,15 @@ router.post(
 
 
 
+
+
+
+
                 data: existingEntry,
+
+
+
+
 
 
 
@@ -3737,7 +7484,15 @@ router.post(
 
 
 
+
+
+
+
             } =
+
+
+
+
 
 
 
@@ -3745,7 +7500,15 @@ router.post(
 
 
 
+
+
+
+
                     .from(
+
+
+
+
 
 
 
@@ -3753,7 +7516,15 @@ router.post(
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -3761,7 +7532,15 @@ router.post(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -3769,7 +7548,15 @@ router.post(
 
 
 
+
+
+
+
                         cleanTournamentId
+
+
+
+
 
 
 
@@ -3777,7 +7564,15 @@ router.post(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -3785,11 +7580,23 @@ router.post(
 
 
 
+
+
+
+
                         userId
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -3797,7 +7604,15 @@ router.post(
 
 
 
+
+
+
+
                         "cancelled",
+
+
+
+
 
 
 
@@ -3805,11 +7620,27 @@ router.post(
 
 
 
+
+
+
+
                     )
 
 
 
+
+
+
+
                     .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -3825,7 +7656,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -3833,7 +7676,15 @@ router.post(
 
 
 
+
+
+
+
                     existingError
+
+
+
+
 
 
 
@@ -3845,7 +7696,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -3853,7 +7716,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3861,11 +7732,27 @@ router.post(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -3881,7 +7768,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(409).json({
+
+
+
+
 
 
 
@@ -3889,7 +7788,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -3897,7 +7804,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -3905,7 +7820,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -3917,7 +7840,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -3925,7 +7860,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -3937,7 +7884,15 @@ router.post(
 
 
 
+
+
+
+
                 data: wallet,
+
+
+
+
 
 
 
@@ -3945,7 +7900,15 @@ router.post(
 
 
 
+
+
+
+
             } =
+
+
+
+
 
 
 
@@ -3953,7 +7916,15 @@ router.post(
 
 
 
+
+
+
+
                     .from("wallet_balances")
+
+
+
+
 
 
 
@@ -3961,7 +7932,15 @@ router.post(
 
 
 
+
+
+
+
                         user_id,
+
+
+
+
 
 
 
@@ -3969,7 +7948,15 @@ router.post(
 
 
 
+
+
+
+
                         bonus_balance,
+
+
+
+
 
 
 
@@ -3977,7 +7964,15 @@ router.post(
 
 
 
+
+
+
+
                     `)
+
+
+
+
 
 
 
@@ -3985,7 +7980,15 @@ router.post(
 
 
 
+
+
+
+
                         "user_id",
+
+
+
+
 
 
 
@@ -3993,11 +7996,27 @@ router.post(
 
 
 
+
+
+
+
                     )
 
 
 
+
+
+
+
                     .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -4013,7 +8032,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -4021,7 +8052,15 @@ router.post(
 
 
 
+
+
+
+
                     walletError
+
+
+
+
 
 
 
@@ -4033,7 +8072,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -4041,7 +8092,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -4049,11 +8108,27 @@ router.post(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4069,7 +8144,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -4077,7 +8164,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -4085,7 +8180,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -4093,7 +8196,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -4105,7 +8216,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4113,7 +8236,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4125,7 +8260,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanNumber(
+
+
+
+
 
 
 
@@ -4133,7 +8276,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4145,7 +8300,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanNumber(
+
+
+
+
 
 
 
@@ -4153,7 +8316,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4165,7 +8340,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanNumber(
+
+
+
+
 
 
 
@@ -4173,7 +8356,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4185,7 +8380,19 @@ router.post(
 
 
 
+
+
+
+
                 deposit;
+
+
+
+
+
+
+
+
 
 
 
@@ -4197,7 +8404,19 @@ router.post(
 
 
 
+
+
+
+
                 bonus;
+
+
+
+
+
+
+
+
 
 
 
@@ -4209,7 +8428,19 @@ router.post(
 
 
 
+
+
+
+
                 winning;
+
+
+
+
+
+
+
+
 
 
 
@@ -4221,11 +8452,23 @@ router.post(
 
 
 
+
+
+
+
                 deposit +
 
 
 
+
+
+
+
                 bonus +
+
+
+
+
 
 
 
@@ -4237,7 +8480,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             if (
+
+
+
+
 
 
 
@@ -4245,7 +8500,15 @@ router.post(
 
 
 
+
+
+
+
                 entryFee
+
+
+
+
 
 
 
@@ -4257,7 +8520,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(402).json({
+
+
+
+
 
 
 
@@ -4265,7 +8540,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -4273,7 +8556,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -4281,7 +8572,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -4293,7 +8592,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4301,7 +8612,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4313,7 +8636,15 @@ router.post(
 
 
 
+
+
+
+
                 cleanNumber(
+
+
+
+
 
 
 
@@ -4321,11 +8652,27 @@ router.post(
 
 
 
+
+
+
+
                     0
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4337,7 +8684,15 @@ router.post(
 
 
 
+
+
+
+
                 Math.max(
+
+
+
+
 
 
 
@@ -4345,7 +8700,15 @@ router.post(
 
 
 
+
+
+
+
                     Math.min(
+
+
+
+
 
 
 
@@ -4353,7 +8716,15 @@ router.post(
 
 
 
+
+
+
+
                         bonusPercent
+
+
+
+
 
 
 
@@ -4361,7 +8732,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4373,7 +8756,15 @@ router.post(
 
 
 
+
+
+
+
                 entryFee *
+
+
+
+
 
 
 
@@ -4381,11 +8772,23 @@ router.post(
 
 
 
+
+
+
+
                     bonusPercent /
 
 
 
+
+
+
+
                     100
+
+
+
+
 
 
 
@@ -4397,7 +8800,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4405,7 +8820,15 @@ router.post(
 
 
 
+
+
+
+
             //
+
+
+
+
 
 
 
@@ -4413,7 +8836,15 @@ router.post(
 
 
 
+
+
+
+
             // ↓
+
+
+
+
 
 
 
@@ -4421,7 +8852,15 @@ router.post(
 
 
 
+
+
+
+
             // ↓
+
+
+
+
 
 
 
@@ -4429,7 +8868,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4441,7 +8892,19 @@ router.post(
 
 
 
+
+
+
+
                 entryFee;
+
+
+
+
+
+
+
+
 
 
 
@@ -4453,7 +8916,15 @@ router.post(
 
 
 
+
+
+
+
                 Math.min(
+
+
+
+
 
 
 
@@ -4461,11 +8932,23 @@ router.post(
 
 
 
+
+
+
+
                     maxBonusUsable,
 
 
 
+
+
+
+
                     remaining
+
+
+
+
 
 
 
@@ -4477,7 +8960,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             remaining -=
+
+
+
+
 
 
 
@@ -4489,7 +8984,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const depositDeduction =
+
+
+
+
 
 
 
@@ -4497,11 +9004,23 @@ router.post(
 
 
 
+
+
+
+
                     deposit,
 
 
 
+
+
+
+
                     remaining
+
+
+
+
 
 
 
@@ -4513,7 +9032,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             remaining -=
+
+
+
+
 
 
 
@@ -4525,7 +9056,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             const winningDeduction =
+
+
+
+
 
 
 
@@ -4533,7 +9076,15 @@ router.post(
 
 
 
+
+
+
+
                     winning,
+
+
+
+
 
 
 
@@ -4541,7 +9092,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4553,7 +9116,19 @@ router.post(
 
 
 
+
+
+
+
                 winningDeduction;
+
+
+
+
+
+
+
+
 
 
 
@@ -4565,11 +9140,23 @@ router.post(
 
 
 
+
+
+
+
                 remaining >
 
 
 
+
+
+
+
                 0.0001
+
+
+
+
 
 
 
@@ -4581,7 +9168,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(402).json({
+
+
+
+
 
 
 
@@ -4589,7 +9188,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -4597,7 +9204,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -4605,7 +9220,15 @@ router.post(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -4617,7 +9240,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4625,7 +9260,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4637,7 +9284,15 @@ router.post(
 
 
 
+
+
+
+
                 Number(
+
+
+
+
 
 
 
@@ -4645,7 +9300,15 @@ router.post(
 
 
 
+
+
+
+
                         deposit -
+
+
+
+
 
 
 
@@ -4653,11 +9316,27 @@ router.post(
 
 
 
+
+
+
+
                     ).toFixed(2)
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4669,7 +9348,15 @@ router.post(
 
 
 
+
+
+
+
                 Number(
+
+
+
+
 
 
 
@@ -4677,7 +9364,15 @@ router.post(
 
 
 
+
+
+
+
                         bonus -
+
+
+
+
 
 
 
@@ -4685,11 +9380,27 @@ router.post(
 
 
 
+
+
+
+
                     ).toFixed(2)
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -4701,7 +9412,15 @@ router.post(
 
 
 
+
+
+
+
                 Number(
+
+
+
+
 
 
 
@@ -4709,7 +9428,15 @@ router.post(
 
 
 
+
+
+
+
                         winning -
+
+
+
+
 
 
 
@@ -4717,7 +9444,15 @@ router.post(
 
 
 
+
+
+
+
                     ).toFixed(2)
+
+
+
+
 
 
 
@@ -4729,7 +9464,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4737,7 +9484,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4749,7 +9508,15 @@ router.post(
 
 
 
+
+
+
+
                 error:
+
+
+
+
 
 
 
@@ -4757,7 +9524,15 @@ router.post(
 
 
 
+
+
+
+
             } =
+
+
+
+
 
 
 
@@ -4765,7 +9540,15 @@ router.post(
 
 
 
+
+
+
+
                     .from("wallet_balances")
+
+
+
+
 
 
 
@@ -4773,7 +9556,15 @@ router.post(
 
 
 
+
+
+
+
                         deposit_balance:
+
+
+
+
 
 
 
@@ -4785,7 +9576,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         bonus_balance:
+
+
+
+
 
 
 
@@ -4797,7 +9600,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         winning_balance:
+
+
+
+
 
 
 
@@ -4809,7 +9624,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         updated_at:
+
+
+
+
 
 
 
@@ -4817,7 +9644,15 @@ router.post(
 
 
 
+
+
+
+
                                 .toISOString()
+
+
+
+
 
 
 
@@ -4825,7 +9660,15 @@ router.post(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -4833,11 +9676,27 @@ router.post(
 
 
 
+
+
+
+
                         userId
 
 
 
+
+
+
+
                     );
+
+
+
+
+
+
+
+
 
 
 
@@ -4853,7 +9712,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -4861,7 +9732,15 @@ router.post(
 
 
 
+
+
+
+
                     updateWalletError
+
+
+
+
 
 
 
@@ -4873,7 +9752,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -4881,7 +9772,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -4889,7 +9788,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -4897,11 +9804,27 @@ router.post(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -4917,7 +9840,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -4925,7 +9860,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -4937,7 +9884,15 @@ router.post(
 
 
 
+
+
+
+
                 data: entry,
+
+
+
+
 
 
 
@@ -4945,7 +9900,15 @@ router.post(
 
 
 
+
+
+
+
             } =
+
+
+
+
 
 
 
@@ -4953,7 +9916,15 @@ router.post(
 
 
 
+
+
+
+
                     .from(
+
+
+
+
 
 
 
@@ -4961,7 +9932,15 @@ router.post(
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -4969,7 +9948,15 @@ router.post(
 
 
 
+
+
+
+
                         tournament_id:
+
+
+
+
 
 
 
@@ -4981,7 +9968,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         user_id:
+
+
+
+
 
 
 
@@ -4993,7 +9992,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         free_fire_uid:
+
+
+
+
 
 
 
@@ -5005,7 +10016,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         game_name:
+
+
+
+
 
 
 
@@ -5017,7 +10040,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         level:
+
+
+
+
 
 
 
@@ -5029,7 +10064,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         cancelled:
+
+
+
+
 
 
 
@@ -5037,7 +10084,15 @@ router.post(
 
 
 
+
+
+
+
                     })
+
+
+
+
 
 
 
@@ -5045,7 +10100,15 @@ router.post(
 
 
 
+
+
+
+
                         id,
+
+
+
+
 
 
 
@@ -5053,7 +10116,15 @@ router.post(
 
 
 
+
+
+
+
                         user_id,
+
+
+
+
 
 
 
@@ -5061,7 +10132,15 @@ router.post(
 
 
 
+
+
+
+
                         game_name,
+
+
+
+
 
 
 
@@ -5069,7 +10148,15 @@ router.post(
 
 
 
+
+
+
+
                         cancelled,
+
+
+
+
 
 
 
@@ -5077,7 +10164,15 @@ router.post(
 
 
 
+
+
+
+
                     `)
+
+
+
+
 
 
 
@@ -5089,7 +10184,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -5097,7 +10204,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -5113,7 +10232,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -5121,11 +10252,27 @@ router.post(
 
 
 
+
+
+
+
                     entryError
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -5141,7 +10288,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     const {
+
+
+
+
 
 
 
@@ -5149,7 +10308,15 @@ router.post(
 
 
 
+
+
+
+
                             rollbackError
+
+
+
+
 
 
 
@@ -5157,7 +10324,15 @@ router.post(
 
 
 
+
+
+
+
                         await supabase
+
+
+
+
 
 
 
@@ -5165,11 +10340,23 @@ router.post(
 
 
 
+
+
+
+
                             .update({
 
 
 
+
+
+
+
                                 deposit_balance:
+
+
+
+
 
 
 
@@ -5181,7 +10368,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                                 bonus_balance:
+
+
+
+
 
 
 
@@ -5193,7 +10392,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                                 winning_balance:
+
+
+
+
 
 
 
@@ -5205,7 +10416,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                                 updated_at:
+
+
+
+
 
 
 
@@ -5213,7 +10436,15 @@ router.post(
 
 
 
+
+
+
+
                                         .toISOString()
+
+
+
+
 
 
 
@@ -5221,7 +10452,15 @@ router.post(
 
 
 
+
+
+
+
                             .eq(
+
+
+
+
 
 
 
@@ -5229,11 +10468,27 @@ router.post(
 
 
 
+
+
+
+
                                 userId
 
 
 
+
+
+
+
                             );
+
+
+
+
+
+
+
+
 
 
 
@@ -5249,7 +10504,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                         console.error(
+
+
+
+
 
 
 
@@ -5257,7 +10524,15 @@ router.post(
 
 
 
+
+
+
+
                             rollbackError
+
+
+
+
 
 
 
@@ -5265,7 +10540,15 @@ router.post(
 
 
 
+
+
+
+
                     }
+
+
+
+
 
 
 
@@ -5277,7 +10560,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -5285,7 +10580,15 @@ router.post(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -5293,7 +10596,15 @@ router.post(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -5301,11 +10612,23 @@ router.post(
 
 
 
+
+
+
+
                         "Unable to join tournament."
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -5317,7 +10640,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -5325,7 +10660,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -5337,7 +10684,15 @@ router.post(
 
 
 
+
+
+
+
                 Number(
+
+
+
+
 
 
 
@@ -5345,7 +10700,15 @@ router.post(
 
 
 
+
+
+
+
                         newDeposit +
+
+
+
+
 
 
 
@@ -5353,7 +10716,15 @@ router.post(
 
 
 
+
+
+
+
                         newWinning
+
+
+
+
 
 
 
@@ -5361,7 +10732,19 @@ router.post(
 
 
 
+
+
+
+
                 );
+
+
+
+
+
+
+
+
 
 
 
@@ -5377,7 +10760,23 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 success: true,
+
+
+
+
+
+
+
+
 
 
 
@@ -5389,7 +10788,19 @@ router.post(
 
 
 
+
+
+
+
                     "TOURNAMENT_JOINED",
+
+
+
+
+
+
+
+
 
 
 
@@ -5401,7 +10812,19 @@ router.post(
 
 
 
+
+
+
+
                     "Tournament joined successfully!",
+
+
+
+
+
+
+
+
 
 
 
@@ -5413,7 +10836,19 @@ router.post(
 
 
 
+
+
+
+
                     entry?.id || null,
+
+
+
+
+
+
+
+
 
 
 
@@ -5425,7 +10860,19 @@ router.post(
 
 
 
+
+
+
+
                     cleanTournamentId,
+
+
+
+
+
+
+
+
 
 
 
@@ -5441,7 +10888,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     depositBalance:
+
+
+
+
 
 
 
@@ -5453,7 +10912,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     bonusBalance:
+
+
+
+
 
 
 
@@ -5465,7 +10936,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     winningBalance:
+
+
+
+
 
 
 
@@ -5477,7 +10960,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     totalBalance:
+
+
+
+
 
 
 
@@ -5485,7 +10980,19 @@ router.post(
 
 
 
+
+
+
+
                 },
+
+
+
+
+
+
+
+
 
 
 
@@ -5501,7 +11008,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     entryFee:
+
+
+
+
 
 
 
@@ -5513,7 +11032,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     bonus:
+
+
+
+
 
 
 
@@ -5521,7 +11052,15 @@ router.post(
 
 
 
+
+
+
+
                             bonusDeduction
+
+
+
+
 
 
 
@@ -5529,7 +11068,19 @@ router.post(
 
 
 
+
+
+
+
                         ),
+
+
+
+
+
+
+
+
 
 
 
@@ -5541,7 +11092,15 @@ router.post(
 
 
 
+
+
+
+
                         Number(
+
+
+
+
 
 
 
@@ -5549,7 +11108,15 @@ router.post(
 
 
 
+
+
+
+
                                 .toFixed(2)
+
+
+
+
 
 
 
@@ -5561,7 +11128,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     winning:
+
+
+
+
 
 
 
@@ -5569,7 +11148,15 @@ router.post(
 
 
 
+
+
+
+
                             winningDeduction
+
+
+
+
 
 
 
@@ -5577,7 +11164,15 @@ router.post(
 
 
 
+
+
+
+
                         )
+
+
+
+
 
 
 
@@ -5585,7 +11180,19 @@ router.post(
 
 
 
+
+
+
+
             });
+
+
+
+
+
+
+
+
 
 
 
@@ -5601,7 +11208,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             console.error(
+
+
+
+
 
 
 
@@ -5609,7 +11228,15 @@ router.post(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -5621,7 +11248,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             // =================================================
+
+
+
+
 
 
 
@@ -5629,7 +11268,19 @@ router.post(
 
 
 
+
+
+
+
             // =================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -5641,7 +11292,15 @@ router.post(
 
 
 
+
+
+
+
                 walletUpdated &&
+
+
+
+
 
 
 
@@ -5649,7 +11308,19 @@ router.post(
 
 
 
+
+
+
+
             ) {
+
+
+
+
+
+
+
+
 
 
 
@@ -5665,7 +11336,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     await supabase
+
+
+
+
 
 
 
@@ -5673,11 +11356,23 @@ router.post(
 
 
 
+
+
+
+
                         .update({
 
 
 
+
+
+
+
                             deposit_balance:
+
+
+
+
 
 
 
@@ -5689,7 +11384,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                             bonus_balance:
+
+
+
+
 
 
 
@@ -5701,7 +11408,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                             winning_balance:
+
+
+
+
 
 
 
@@ -5713,7 +11432,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                             updated_at:
+
+
+
+
 
 
 
@@ -5721,7 +11452,15 @@ router.post(
 
 
 
+
+
+
+
                                     .toISOString()
+
+
+
+
 
 
 
@@ -5729,7 +11468,15 @@ router.post(
 
 
 
+
+
+
+
                         .eq(
+
+
+
+
 
 
 
@@ -5737,7 +11484,15 @@ router.post(
 
 
 
+
+
+
+
                             userId
+
+
+
+
 
 
 
@@ -5749,11 +11504,27 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                 } catch (
 
 
 
+
+
+
+
                     rollbackException
+
+
+
+
 
 
 
@@ -5765,7 +11536,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
                     console.error(
+
+
+
+
 
 
 
@@ -5773,7 +11556,15 @@ router.post(
 
 
 
+
+
+
+
                         rollbackException
+
+
+
+
 
 
 
@@ -5781,7 +11572,15 @@ router.post(
 
 
 
+
+
+
+
                 }
+
+
+
+
 
 
 
@@ -5793,7 +11592,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(500).json({
+
+
+
+
 
 
 
@@ -5801,7 +11612,15 @@ router.post(
 
 
 
+
+
+
+
                 code:
+
+
+
+
 
 
 
@@ -5809,7 +11628,15 @@ router.post(
 
 
 
+
+
+
+
                 error:
+
+
+
+
 
 
 
@@ -5817,7 +11644,15 @@ router.post(
 
 
 
+
+
+
+
                     "Internal server error"
+
+
+
+
 
 
 
@@ -5825,11 +11660,23 @@ router.post(
 
 
 
+
+
+
+
         }
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -5841,7 +11688,19 @@ router.post(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -5849,7 +11708,15 @@ router.post(
 
 
 
+
+
+
+
 //
+
+
+
+
 
 
 
@@ -5857,7 +11724,15 @@ router.post(
 
 
 
+
+
+
+
 // THIS MUST REMAIN AFTER /join
+
+
+
+
 
 
 
@@ -5865,7 +11740,15 @@ router.post(
 
 
 
+
+
+
+
 // THIS MUST REMAIN AFTER /my-entry
+
+
+
+
 
 
 
@@ -5873,11 +11756,27 @@ router.post(
 
 
 
+
+
+
+
 // GET /api/tournaments/:id
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
@@ -5889,11 +11788,27 @@ router.get(
 
 
 
+
+
+
+
     "/:id",
 
 
 
+
+
+
+
     async (req, res) => {
+
+
+
+
+
+
+
+
 
 
 
@@ -5909,7 +11824,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const id =
+
+
+
+
 
 
 
@@ -5917,11 +11844,27 @@ router.get(
 
 
 
+
+
+
+
                     req.params.id || ""
 
 
 
+
+
+
+
                 ).trim();
+
+
+
+
+
+
+
+
 
 
 
@@ -5937,7 +11880,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(400).json({
+
+
+
+
 
 
 
@@ -5945,7 +11900,15 @@ router.get(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -5953,7 +11916,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -5965,7 +11936,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -5973,7 +11956,15 @@ router.get(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -5981,7 +11972,15 @@ router.get(
 
 
 
+
+
+
+
                 await supabase
+
+
+
+
 
 
 
@@ -5989,11 +11988,23 @@ router.get(
 
 
 
+
+
+
+
                         "tournaments"
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -6001,7 +12012,15 @@ router.get(
 
 
 
+
+
+
+
                         id,
+
+
+
+
 
 
 
@@ -6009,7 +12028,15 @@ router.get(
 
 
 
+
+
+
+
                         game,
+
+
+
+
 
 
 
@@ -6017,7 +12044,15 @@ router.get(
 
 
 
+
+
+
+
                         entry_fee,
+
+
+
+
 
 
 
@@ -6025,7 +12060,15 @@ router.get(
 
 
 
+
+
+
+
                         kill_reward,
+
+
+
+
 
 
 
@@ -6033,7 +12076,15 @@ router.get(
 
 
 
+
+
+
+
                         start_time,
+
+
+
+
 
 
 
@@ -6041,7 +12092,15 @@ router.get(
 
 
 
+
+
+
+
                         status,
+
+
+
+
 
 
 
@@ -6049,7 +12108,15 @@ router.get(
 
 
 
+
+
+
+
                         bonus_usable_percent
+
+
+
+
 
 
 
@@ -6057,7 +12124,15 @@ router.get(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -6065,7 +12140,15 @@ router.get(
 
 
 
+
+
+
+
                         id
+
+
+
+
 
 
 
@@ -6073,7 +12156,19 @@ router.get(
 
 
 
+
+
+
+
                     .maybeSingle();
+
+
+
+
+
+
+
+
 
 
 
@@ -6089,7 +12184,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -6097,7 +12204,15 @@ router.get(
 
 
 
+
+
+
+
                     error
+
+
+
+
 
 
 
@@ -6109,7 +12224,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(500).json({
+
+
+
+
 
 
 
@@ -6117,7 +12244,15 @@ router.get(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -6125,11 +12260,27 @@ router.get(
 
 
 
+
+
+
+
                 });
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -6145,7 +12296,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 return res.status(404).json({
+
+
+
+
 
 
 
@@ -6153,7 +12316,15 @@ router.get(
 
 
 
+
+
+
+
                     code:
+
+
+
+
 
 
 
@@ -6161,7 +12332,15 @@ router.get(
 
 
 
+
+
+
+
                     error:
+
+
+
+
 
 
 
@@ -6169,7 +12348,15 @@ router.get(
 
 
 
+
+
+
+
                 });
+
+
+
+
 
 
 
@@ -6181,7 +12368,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             const {
+
+
+
+
 
 
 
@@ -6189,7 +12388,15 @@ router.get(
 
 
 
+
+
+
+
                 error: countError
+
+
+
+
 
 
 
@@ -6197,7 +12404,15 @@ router.get(
 
 
 
+
+
+
+
                 await supabase
+
+
+
+
 
 
 
@@ -6205,11 +12420,23 @@ router.get(
 
 
 
+
+
+
+
                         "tournament_entries"
 
 
 
+
+
+
+
                     )
+
+
+
+
 
 
 
@@ -6217,7 +12444,15 @@ router.get(
 
 
 
+
+
+
+
                         "id",
+
+
+
+
 
 
 
@@ -6225,7 +12460,15 @@ router.get(
 
 
 
+
+
+
+
                             count: "exact",
+
+
+
+
 
 
 
@@ -6233,7 +12476,15 @@ router.get(
 
 
 
+
+
+
+
                         }
+
+
+
+
 
 
 
@@ -6241,7 +12492,15 @@ router.get(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -6249,7 +12508,15 @@ router.get(
 
 
 
+
+
+
+
                         id
+
+
+
+
 
 
 
@@ -6257,7 +12524,15 @@ router.get(
 
 
 
+
+
+
+
                     .eq(
+
+
+
+
 
 
 
@@ -6265,11 +12540,27 @@ router.get(
 
 
 
+
+
+
+
                         false
 
 
 
+
+
+
+
                     );
+
+
+
+
+
+
+
+
 
 
 
@@ -6285,7 +12576,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 console.error(
+
+
+
+
 
 
 
@@ -6293,7 +12596,15 @@ router.get(
 
 
 
+
+
+
+
                     countError
+
+
+
+
 
 
 
@@ -6301,7 +12612,19 @@ router.get(
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -6313,7 +12636,15 @@ router.get(
 
 
 
+
+
+
+
                 data: prizes,
+
+
+
+
 
 
 
@@ -6321,7 +12652,15 @@ router.get(
 
 
 
+
+
+
+
             } = await supabase
+
+
+
+
 
 
 
@@ -6329,11 +12668,23 @@ router.get(
 
 
 
+
+
+
+
                 .select("rank,label,amount")
 
 
 
+
+
+
+
                 .eq("tournament_id", id)
+
+
+
+
 
 
 
@@ -6345,7 +12696,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             if (prizeError) {
+
+
+
+
 
 
 
@@ -6353,7 +12716,15 @@ router.get(
 
 
 
+
+
+
+
                     "PRIZE FETCH ERROR:",
+
+
+
+
 
 
 
@@ -6361,11 +12732,27 @@ router.get(
 
 
 
+
+
+
+
                 );
 
 
 
+
+
+
+
             }
+
+
+
+
+
+
+
+
 
 
 
@@ -6381,7 +12768,23 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
                 success: true,
+
+
+
+
+
+
+
+
 
 
 
@@ -6393,7 +12796,19 @@ router.get(
 
 
 
+
+
+
+
                     ...tournament,
+
+
+
+
+
+
+
+
 
 
 
@@ -6405,7 +12820,19 @@ router.get(
 
 
 
+
+
+
+
                         count || 0,
+
+
+
+
+
+
+
+
 
 
 
@@ -6417,7 +12844,15 @@ router.get(
 
 
 
+
+
+
+
                         prizes || []
+
+
+
+
 
 
 
@@ -6425,7 +12860,19 @@ router.get(
 
 
 
+
+
+
+
             });
+
+
+
+
+
+
+
+
 
 
 
@@ -6441,7 +12888,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             console.error(
+
+
+
+
 
 
 
@@ -6449,7 +12908,15 @@ router.get(
 
 
 
+
+
+
+
                 error
+
+
+
+
 
 
 
@@ -6461,7 +12928,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
             return res.status(500).json({
+
+
+
+
 
 
 
@@ -6469,7 +12948,15 @@ router.get(
 
 
 
+
+
+
+
                 error:
+
+
+
+
 
 
 
@@ -6477,7 +12964,15 @@ router.get(
 
 
 
+
+
+
+
                     "Internal server error"
+
+
+
+
 
 
 
@@ -6485,11 +12980,23 @@ router.get(
 
 
 
+
+
+
+
         }
 
 
 
+
+
+
+
     }
+
+
+
+
 
 
 
@@ -6501,7 +13008,19 @@ router.get(
 
 
 
+
+
+
+
+
+
+
+
 // ============================================================
+
+
+
+
 
 
 
@@ -6509,7 +13028,19 @@ router.get(
 
 
 
+
+
+
+
 // ============================================================
+
+
+
+
+
+
+
+
 
 
 
