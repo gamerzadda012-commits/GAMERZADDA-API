@@ -464,183 +464,39 @@ router.get("/", async (req, res) => {
 
 
 
-        const result = [];
-
-
-
-
-
-
-
-        for (const tournament of list) {
-
-
-
-
-
-
-
-            const {
-
-
-
-                count,
-
-
-
-                error: countError
-
-
-
-            } =
-
-
-
-                await supabase
-
-
-
-                    .from(
-
-
-
-                        "tournament_entries"
-
-
-
-                    )
-
-
-
-                    .select(
-
-
-
-                        "id",
-
-
-
-                        {
-
-
-
-                            count: "exact",
-
-
-
-                            head: true
-
-
-
-                        }
-
-
-
-                    )
-
-
-
-                    .eq(
-
-
-
-                        "tournament_id",
-
-
-
-                        tournament.id
-
-
-
-                    )
-
-
-
-                    .eq(
-
-
-
-                        "cancelled",
-
-
-
-                        false
-
-
-
-                    );
-
-
-
-
-
-
-
-            if (countError) {
-
-
-
-
-
-
-
-                console.error(
-
-
-
-                    "COUNT ERROR:",
-
-
-
-                    countError
-
-
-
-                );
-
-
-
-            }
-
-
-
-
-
-
-
-            result.push({
-
-
-
-                ...tournament,
-
-
-
-                joined_count:
-
-
-
-                    count || 0
-
-
-
-            ,
-
-                prizes: prizeMap[String(tournament.id)] || []
-
-            });
-
-
-
-        }
-
-
-
-
-
-
-
-        return res.status(200).json({
+        const joinedCountMap = {};
+
+        // One entry query replaces the old N+1 COUNT queries.
+        try {
+            const tournamentIds = list.map((tournament) => tournament.id).filter(Boolean);
+
+            if (tournamentIds.length > 0) {
+                const { data: entryRows, error: entryCountError } = await supabase
+                    .from("tournament_entries")
+                    .select("tournament_id")
+                    .in("tournament_id", tournamentIds)
+                    .eq("cancelled", false);
+
+                if (entryCountError) {
+                    console.error("TOURNAMENT ENTRY COUNT ERROR:", entryCountError);
+                } else {
+                    for (const row of entryRows || []) {
+                        const key = String(row.tournament_id);
+                        joinedCountMap[key] = (joinedCountMap[key] || 0) + 1;
+                    }
+                }
+            }
+        } catch (countException) {
+            console.error("TOURNAMENT ENTRY COUNT EXCEPTION:", countException);
+        }
+
+        const result = list.map((tournament) => ({
+            ...tournament,
+            joined_count: joinedCountMap[String(tournament.id)] || 0,
+            prizes: prizeMap[String(tournament.id)] || []
+        }));
+
+        return res.status(200).json({
 
 
 
