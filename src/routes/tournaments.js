@@ -86,7 +86,7 @@ function getUserId(req) {
 
 
 
-    const headerUserId =
+    const headerUserId =
 
 
 
@@ -94,7 +94,7 @@ function getUserId(req) {
 
 
 
-        req.headers["x-user-id"];
+        req.headers["x-user-id"];
 
 
 
@@ -110,7 +110,7 @@ function getUserId(req) {
 
 
 
-    const bodyUserId =
+    const bodyUserId =
 
 
 
@@ -118,7 +118,7 @@ function getUserId(req) {
 
 
 
-        req.body?.userId;
+        req.body?.userId;
 
 
 
@@ -134,7 +134,7 @@ function getUserId(req) {
 
 
 
-    const queryUserId =
+    const queryUserId =
 
 
 
@@ -142,7 +142,7 @@ function getUserId(req) {
 
 
 
-        req.query?.userId;
+        req.query?.userId;
 
 
 
@@ -158,7 +158,7 @@ function getUserId(req) {
 
 
 
-    return String(
+    return String(
 
 
 
@@ -166,7 +166,7 @@ function getUserId(req) {
 
 
 
-        headerUserId ||
+        headerUserId ||
 
 
 
@@ -174,7 +174,7 @@ function getUserId(req) {
 
 
 
-        bodyUserId ||
+        bodyUserId ||
 
 
 
@@ -182,7 +182,7 @@ function getUserId(req) {
 
 
 
-        queryUserId ||
+        queryUserId ||
 
 
 
@@ -190,7 +190,7 @@ function getUserId(req) {
 
 
 
-        ""
+        ""
 
 
 
@@ -198,7 +198,7 @@ function getUserId(req) {
 
 
 
-    ).trim();
+    ).trim();
 
 
 
@@ -230,7 +230,7 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-    const number = Number(value);
+    const number = Number(value);
 
 
 
@@ -246,7 +246,7 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-    return Number.isFinite(number)
+    return Number.isFinite(number)
 
 
 
@@ -254,7 +254,7 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-        ? number
+        ? number
 
 
 
@@ -262,7 +262,7 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-        : fallback;
+        : fallback;
 
 
 
@@ -270,18 +270,6 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-}
-
-
-// Remove invisible / zero-width Unicode characters while preserving normal Unicode text.
-function cleanVisibleText(value) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
-    .replace(/\u00A0/g, " ")
-    .replace(/[ \t\r\n]+/g, " ")
-    .trim();
 }
 
 
@@ -346,7 +334,7 @@ router.get("/", async (req, res) => {
 
 
 
-    try {
+    try {
 
 
 
@@ -354,7 +342,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const game =
+        const game =
 
 
 
@@ -362,7 +350,7 @@ router.get("/", async (req, res) => {
 
 
 
-            String(
+            String(
 
 
 
@@ -370,7 +358,7 @@ router.get("/", async (req, res) => {
 
 
 
-                req.query.game || ""
+                req.query.game || ""
 
 
 
@@ -378,7 +366,7 @@ router.get("/", async (req, res) => {
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -394,7 +382,7 @@ router.get("/", async (req, res) => {
 
 
 
-        let query =
+        let query =
 
 
 
@@ -402,7 +390,7 @@ router.get("/", async (req, res) => {
 
 
 
-            supabase
+            supabase
 
 
 
@@ -410,7 +398,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .from("tournaments")
+                .from("tournaments")
 
 
 
@@ -418,7 +406,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .select(`
+                .select(`
 
 
 
@@ -426,7 +414,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    id,
+                    id,
 
 
 
@@ -434,7 +422,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    title,
+                    title,
 
 
 
@@ -442,7 +430,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    game,
+                    game,
 
 
 
@@ -450,7 +438,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    mode,
+                    mode,
 
 
 
@@ -458,7 +446,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    entry_fee,
+                    entry_fee,
 
 
 
@@ -466,7 +454,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    prize_pool,
+                    prize_pool,
 
 
 
@@ -474,7 +462,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    kill_reward,
+                    kill_reward,
 
 
 
@@ -482,7 +470,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    max_players,
+                    max_players,
 
 
 
@@ -490,7 +478,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    start_time,
+                    start_time,
 
 
 
@@ -498,7 +486,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    map,
+                    map,
 
 
 
@@ -506,7 +494,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    status,
+                    status,
 
 
 
@@ -514,7 +502,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    rules,
+                    rules,
 
 
 
@@ -522,7 +510,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    bonus_usable_percent
+                    bonus_usable_percent
 
 
 
@@ -530,7 +518,7 @@ router.get("/", async (req, res) => {
 
 
 
-                `)
+                `)
 
 
 
@@ -538,7 +526,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .order(
+                .order(
 
 
 
@@ -546,7 +534,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    "start_time",
+                    "start_time",
 
 
 
@@ -554,7 +542,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    {
+                    {
 
 
 
@@ -562,7 +550,7 @@ router.get("/", async (req, res) => {
 
 
 
-                        ascending: true
+                        ascending: true
 
 
 
@@ -570,7 +558,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    }
+                    }
 
 
 
@@ -578,7 +566,7 @@ router.get("/", async (req, res) => {
 
 
 
-                );
+                );
 
 
 
@@ -594,7 +582,7 @@ router.get("/", async (req, res) => {
 
 
 
-        if (game) {
+        if (game) {
 
 
 
@@ -602,7 +590,7 @@ router.get("/", async (req, res) => {
 
 
 
-            query =
+            query =
 
 
 
@@ -610,7 +598,7 @@ router.get("/", async (req, res) => {
 
 
 
-                query.eq(
+                query.eq(
 
 
 
@@ -618,7 +606,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    "game",
+                    "game",
 
 
 
@@ -626,7 +614,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    game
+                    game
 
 
 
@@ -634,7 +622,7 @@ router.get("/", async (req, res) => {
 
 
 
-                );
+                );
 
 
 
@@ -642,7 +630,7 @@ router.get("/", async (req, res) => {
 
 
 
-        }
+        }
 
 
 
@@ -658,7 +646,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const {
+        const {
 
 
 
@@ -666,7 +654,7 @@ router.get("/", async (req, res) => {
 
 
 
-            data: tournaments,
+            data: tournaments,
 
 
 
@@ -674,7 +662,7 @@ router.get("/", async (req, res) => {
 
 
 
-            error
+            error
 
 
 
@@ -682,7 +670,7 @@ router.get("/", async (req, res) => {
 
 
 
-        } = await query;
+        } = await query;
 
 
 
@@ -698,7 +686,7 @@ router.get("/", async (req, res) => {
 
 
 
-        if (error) {
+        if (error) {
 
 
 
@@ -714,7 +702,7 @@ router.get("/", async (req, res) => {
 
 
 
-            console.error(
+            console.error(
 
 
 
@@ -722,7 +710,7 @@ router.get("/", async (req, res) => {
 
 
 
-                "GET TOURNAMENTS ERROR:",
+                "GET TOURNAMENTS ERROR:",
 
 
 
@@ -730,7 +718,7 @@ router.get("/", async (req, res) => {
 
 
 
-                error
+                error
 
 
 
@@ -738,7 +726,7 @@ router.get("/", async (req, res) => {
 
 
 
-            );
+            );
 
 
 
@@ -754,7 +742,7 @@ router.get("/", async (req, res) => {
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -762,7 +750,7 @@ router.get("/", async (req, res) => {
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -770,7 +758,7 @@ router.get("/", async (req, res) => {
 
 
 
-                error: error.message
+                error: error.message
 
 
 
@@ -778,7 +766,7 @@ router.get("/", async (req, res) => {
 
 
 
-            });
+            });
 
 
 
@@ -786,7 +774,7 @@ router.get("/", async (req, res) => {
 
 
 
-        }
+        }
 
 
 
@@ -802,7 +790,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const list =
+        const list =
 
 
 
@@ -810,7 +798,7 @@ router.get("/", async (req, res) => {
 
 
 
-            tournaments || [];
+            tournaments || [];
 
 
 
@@ -826,7 +814,7 @@ router.get("/", async (req, res) => {
 
 
 
-        // Load all active entry rows once instead of making
+        // Load all active entry rows once instead of making
 
 
 
@@ -834,7 +822,7 @@ router.get("/", async (req, res) => {
 
 
 
-        // one Supabase request per tournament.
+        // one Supabase request per tournament.
 
 
 
@@ -842,7 +830,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const tournamentIds = list
+        const tournamentIds = list
 
 
 
@@ -850,7 +838,7 @@ router.get("/", async (req, res) => {
 
 
 
-            .map((tournament) => tournament.id)
+            .map((tournament) => tournament.id)
 
 
 
@@ -858,7 +846,7 @@ router.get("/", async (req, res) => {
 
 
 
-            .filter(Boolean);
+            .filter(Boolean);
 
 
 
@@ -874,7 +862,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const countMap = {};
+        const countMap = {};
 
 
 
@@ -890,7 +878,7 @@ router.get("/", async (req, res) => {
 
 
 
-        if (tournamentIds.length) {
+        if (tournamentIds.length) {
 
 
 
@@ -898,7 +886,7 @@ router.get("/", async (req, res) => {
 
 
 
-            const {
+            const {
 
 
 
@@ -906,7 +894,7 @@ router.get("/", async (req, res) => {
 
 
 
-                data: entryRows,
+                data: entryRows,
 
 
 
@@ -914,7 +902,7 @@ router.get("/", async (req, res) => {
 
 
 
-                error: countError
+                error: countError
 
 
 
@@ -922,7 +910,7 @@ router.get("/", async (req, res) => {
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
@@ -930,7 +918,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
@@ -938,7 +926,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .select("tournament_id")
+                .select("tournament_id")
 
 
 
@@ -946,7 +934,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .in("tournament_id", tournamentIds)
+                .in("tournament_id", tournamentIds)
 
 
 
@@ -954,7 +942,7 @@ router.get("/", async (req, res) => {
 
 
 
-                .eq("cancelled", false);
+                .eq("cancelled", false);
 
 
 
@@ -970,7 +958,7 @@ router.get("/", async (req, res) => {
 
 
 
-            if (countError) {
+            if (countError) {
 
 
 
@@ -978,7 +966,7 @@ router.get("/", async (req, res) => {
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -986,7 +974,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    "COUNT ERROR:",
+                    "COUNT ERROR:",
 
 
 
@@ -994,7 +982,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    countError
+                    countError
 
 
 
@@ -1002,7 +990,7 @@ router.get("/", async (req, res) => {
 
 
 
-                );
+                );
 
 
 
@@ -1010,7 +998,7 @@ router.get("/", async (req, res) => {
 
 
 
-            } else {
+            } else {
 
 
 
@@ -1018,7 +1006,7 @@ router.get("/", async (req, res) => {
 
 
 
-                for (const row of entryRows || []) {
+                for (const row of entryRows || []) {
 
 
 
@@ -1026,7 +1014,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    const key = String(row.tournament_id);
+                    const key = String(row.tournament_id);
 
 
 
@@ -1034,7 +1022,7 @@ router.get("/", async (req, res) => {
 
 
 
-                    countMap[key] =
+                    countMap[key] =
 
 
 
@@ -1042,7 +1030,7 @@ router.get("/", async (req, res) => {
 
 
 
-                        (countMap[key] || 0) + 1;
+                        (countMap[key] || 0) + 1;
 
 
 
@@ -1050,7 +1038,7 @@ router.get("/", async (req, res) => {
 
 
 
-                }
+                }
 
 
 
@@ -1058,7 +1046,7 @@ router.get("/", async (req, res) => {
 
 
 
-            }
+            }
 
 
 
@@ -1066,7 +1054,7 @@ router.get("/", async (req, res) => {
 
 
 
-        }
+        }
 
 
 
@@ -1082,7 +1070,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const result = list.map((tournament) => ({
+        const result = list.map((tournament) => ({
 
 
 
@@ -1090,7 +1078,7 @@ router.get("/", async (req, res) => {
 
 
 
-            ...tournament,
+            ...tournament,
 
 
 
@@ -1098,7 +1086,7 @@ router.get("/", async (req, res) => {
 
 
 
-            joined_count:
+            joined_count:
 
 
 
@@ -1106,7 +1094,7 @@ router.get("/", async (req, res) => {
 
 
 
-                countMap[String(tournament.id)] || 0
+                countMap[String(tournament.id)] || 0
 
 
 
@@ -1114,7 +1102,7 @@ router.get("/", async (req, res) => {
 
 
 
-        }));
+        }));
 
 
 
@@ -1130,7 +1118,7 @@ router.get("/", async (req, res) => {
 
 
 
-        return res.status(200).json({
+        return res.status(200).json({
 
 
 
@@ -1138,7 +1126,7 @@ router.get("/", async (req, res) => {
 
 
 
-            success: true,
+            success: true,
 
 
 
@@ -1146,7 +1134,7 @@ router.get("/", async (req, res) => {
 
 
 
-            tournaments: result
+            tournaments: result
 
 
 
@@ -1154,7 +1142,7 @@ router.get("/", async (req, res) => {
 
 
 
-        });
+        });
 
 
 
@@ -1170,7 +1158,7 @@ router.get("/", async (req, res) => {
 
 
 
-    } catch (error) {
+    } catch (error) {
 
 
 
@@ -1186,7 +1174,7 @@ router.get("/", async (req, res) => {
 
 
 
-        console.error(
+        console.error(
 
 
 
@@ -1194,7 +1182,7 @@ router.get("/", async (req, res) => {
 
 
 
-            "GET TOURNAMENTS EXCEPTION:",
+            "GET TOURNAMENTS EXCEPTION:",
 
 
 
@@ -1202,7 +1190,7 @@ router.get("/", async (req, res) => {
 
 
 
-            error
+            error
 
 
 
@@ -1210,7 +1198,7 @@ router.get("/", async (req, res) => {
 
 
 
-        );
+        );
 
 
 
@@ -1226,7 +1214,7 @@ router.get("/", async (req, res) => {
 
 
 
-        return res.status(500).json({
+        return res.status(500).json({
 
 
 
@@ -1234,7 +1222,7 @@ router.get("/", async (req, res) => {
 
 
 
-            success: false,
+            success: false,
 
 
 
@@ -1242,7 +1230,7 @@ router.get("/", async (req, res) => {
 
 
 
-            error:
+            error:
 
 
 
@@ -1250,7 +1238,7 @@ router.get("/", async (req, res) => {
 
 
 
-                error?.message ||
+                error?.message ||
 
 
 
@@ -1258,7 +1246,7 @@ router.get("/", async (req, res) => {
 
 
 
-                "Internal server error"
+                "Internal server error"
 
 
 
@@ -1266,7 +1254,7 @@ router.get("/", async (req, res) => {
 
 
 
-        });
+        });
 
 
 
@@ -1274,7 +1262,7 @@ router.get("/", async (req, res) => {
 
 
 
-    }
+    }
 
 
 
@@ -1346,7 +1334,7 @@ router.get(
 
 
 
-    "/participants",
+    "/participants",
 
 
 
@@ -1354,7 +1342,7 @@ router.get(
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -1370,7 +1358,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -1386,7 +1374,7 @@ router.get(
 
 
 
-            const tournamentId =
+            const tournamentId =
 
 
 
@@ -1394,7 +1382,7 @@ router.get(
 
 
 
-                String(
+                String(
 
 
 
@@ -1402,7 +1390,7 @@ router.get(
 
 
 
-                    req.query.tournamentId ||
+                    req.query.tournamentId ||
 
 
 
@@ -1410,7 +1398,7 @@ router.get(
 
 
 
-                    ""
+                    ""
 
 
 
@@ -1418,7 +1406,7 @@ router.get(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -1434,7 +1422,7 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
@@ -1450,7 +1438,7 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -1458,7 +1446,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -1466,7 +1454,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -1474,7 +1462,7 @@ router.get(
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
@@ -1482,7 +1470,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -1490,7 +1478,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -1506,7 +1494,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -1514,7 +1502,7 @@ router.get(
 
 
 
-                data,
+                data,
 
 
 
@@ -1522,7 +1510,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -1530,7 +1518,7 @@ router.get(
 
 
 
-            } =
+            } =
 
 
 
@@ -1538,7 +1526,7 @@ router.get(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -1546,7 +1534,7 @@ router.get(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -1554,7 +1542,7 @@ router.get(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
@@ -1562,7 +1550,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -1570,7 +1558,7 @@ router.get(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -1578,7 +1566,7 @@ router.get(
 
 
 
-                        id,
+                        id,
 
 
 
@@ -1586,7 +1574,7 @@ router.get(
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
@@ -1594,7 +1582,7 @@ router.get(
 
 
 
-                        user_id,
+                        user_id,
 
 
 
@@ -1602,7 +1590,7 @@ router.get(
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
@@ -1610,7 +1598,7 @@ router.get(
 
 
 
-                        game_name,
+                        game_name,
 
 
 
@@ -1618,7 +1606,7 @@ router.get(
 
 
 
-                        level,
+                        level,
 
 
 
@@ -1626,7 +1614,7 @@ router.get(
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
@@ -1634,7 +1622,7 @@ router.get(
 
 
 
-                        created_at
+                        created_at
 
 
 
@@ -1642,7 +1630,7 @@ router.get(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -1650,7 +1638,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -1658,7 +1646,7 @@ router.get(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
@@ -1666,7 +1654,7 @@ router.get(
 
 
 
-                        tournamentId
+                        tournamentId
 
 
 
@@ -1674,7 +1662,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -1682,7 +1670,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -1690,7 +1678,7 @@ router.get(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
@@ -1698,7 +1686,7 @@ router.get(
 
 
 
-                        false
+                        false
 
 
 
@@ -1706,7 +1694,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -1714,7 +1702,7 @@ router.get(
 
 
 
-                    .order(
+                    .order(
 
 
 
@@ -1722,7 +1710,7 @@ router.get(
 
 
 
-                        "created_at",
+                        "created_at",
 
 
 
@@ -1730,7 +1718,7 @@ router.get(
 
 
 
-                        {
+                        {
 
 
 
@@ -1738,7 +1726,7 @@ router.get(
 
 
 
-                            ascending: true
+                            ascending: true
 
 
 
@@ -1746,7 +1734,7 @@ router.get(
 
 
 
-                        }
+                        }
 
 
 
@@ -1754,7 +1742,7 @@ router.get(
 
 
 
-                    );
+                    );
 
 
 
@@ -1770,7 +1758,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -1786,7 +1774,7 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -1794,7 +1782,7 @@ router.get(
 
 
 
-                    "PARTICIPANTS ERROR:",
+                    "PARTICIPANTS ERROR:",
 
 
 
@@ -1802,7 +1790,7 @@ router.get(
 
 
 
-                    error
+                    error
 
 
 
@@ -1810,7 +1798,7 @@ router.get(
 
 
 
-                );
+                );
 
 
 
@@ -1826,7 +1814,7 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -1834,7 +1822,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -1842,7 +1830,7 @@ router.get(
 
 
 
-                    error: error.message
+                    error: error.message
 
 
 
@@ -1850,7 +1838,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -1858,7 +1846,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -1874,7 +1862,7 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -1882,7 +1870,7 @@ router.get(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -1890,7 +1878,7 @@ router.get(
 
 
 
-                participants:
+                participants:
 
 
 
@@ -1898,7 +1886,7 @@ router.get(
 
 
 
-                    data || []
+                    data || []
 
 
 
@@ -1906,7 +1894,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -1922,7 +1910,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -1938,7 +1926,7 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
@@ -1946,7 +1934,7 @@ router.get(
 
 
 
-                "PARTICIPANTS EXCEPTION:",
+                "PARTICIPANTS EXCEPTION:",
 
 
 
@@ -1954,7 +1942,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -1962,7 +1950,7 @@ router.get(
 
 
 
-            );
+            );
 
 
 
@@ -1978,7 +1966,7 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -1986,7 +1974,7 @@ router.get(
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -1994,7 +1982,7 @@ router.get(
 
 
 
-                error:
+                error:
 
 
 
@@ -2002,7 +1990,7 @@ router.get(
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
@@ -2010,7 +1998,7 @@ router.get(
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
@@ -2018,7 +2006,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -2026,7 +2014,7 @@ router.get(
 
 
 
-        }
+        }
 
 
 
@@ -2034,7 +2022,7 @@ router.get(
 
 
 
-    }
+    }
 
 
 
@@ -2098,19 +2086,19 @@ router.get(
 
 
 
-    "/my-matches",
+    "/my-matches",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
-        try {
+        try {
 
 
 
-            const userId = getUserId(req);
+            const userId = getUserId(req);
 
 
 
@@ -2118,31 +2106,31 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
-                    error: "User session not found."
+                    error: "User session not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2150,15 +2138,15 @@ router.get(
 
 
 
-            const game = String(
+            const game = String(
 
 
 
-                req.query.game || ""
+                req.query.game || ""
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -2166,35 +2154,35 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: entries,
+                data: entries,
 
 
 
-                error: entryError
+                error: entryError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
-                .select("tournament_id")
+                .select("tournament_id")
 
 
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
 
 
-                .eq("cancelled", false);
+                .eq("cancelled", false);
 
 
 
@@ -2202,23 +2190,23 @@ router.get(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "MY MATCHES ENTRY ERROR:",
+                    "MY MATCHES ENTRY ERROR:",
 
 
 
-                    entryError
+                    entryError
 
 
 
-                );
+                );
 
 
 
@@ -2226,23 +2214,23 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: entryError.message
+                    error: entryError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2250,35 +2238,35 @@ router.get(
 
 
 
-            const tournamentIds = [
+            const tournamentIds = [
 
 
 
-                ...new Set(
+                ...new Set(
 
 
 
-                    (entries || [])
+                    (entries || [])
 
 
 
-                        .map((row) => row.tournament_id)
+                        .map((row) => row.tournament_id)
 
 
 
-                        .filter(Boolean)
+                        .filter(Boolean)
 
 
 
-                        .map(String)
+                        .map(String)
 
 
 
-                )
+                )
 
 
 
-            ];
+            ];
 
 
 
@@ -2286,27 +2274,27 @@ router.get(
 
 
 
-            if (!tournamentIds.length) {
+            if (!tournamentIds.length) {
 
 
 
-                return res.status(200).json({
+                return res.status(200).json({
 
 
 
-                    success: true,
+                    success: true,
 
 
 
-                    tournaments: []
+                    tournaments: []
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2314,79 +2302,79 @@ router.get(
 
 
 
-            let query = supabase
+            let query = supabase
 
 
 
-                .from("tournaments")
+                .from("tournaments")
 
 
 
-                .select(`
+                .select(`
 
 
 
-                    id,
+                    id,
 
 
 
-                    title,
+                    title,
 
 
 
-                    game,
+                    game,
 
 
 
-                    mode,
+                    mode,
 
 
 
-                    entry_fee,
+                    entry_fee,
 
 
 
-                    prize_pool,
+                    prize_pool,
 
 
 
-                    kill_reward,
+                    kill_reward,
 
 
 
-                    max_players,
+                    max_players,
 
 
 
-                    start_time,
+                    start_time,
 
 
 
-                    map,
+                    map,
 
 
 
-                    status,
+                    status,
 
 
 
-                    rules,
+                    rules,
 
 
 
-                    bonus_usable_percent
+                    bonus_usable_percent
 
 
 
-                `)
+                `)
 
 
 
-                .in("id", tournamentIds)
+                .in("id", tournamentIds)
 
 
 
-                .order("start_time", { ascending: true });
+                .order("start_time", { ascending: true });
 
 
 
@@ -2394,15 +2382,15 @@ router.get(
 
 
 
-            if (game) {
+            if (game) {
 
 
 
-                query = query.eq("game", game);
+                query = query.eq("game", game);
 
 
 
-            }
+            }
 
 
 
@@ -2410,19 +2398,19 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: tournaments,
+                data: tournaments,
 
 
 
-                error: tournamentError
+                error: tournamentError
 
 
 
-            } = await query;
+            } = await query;
 
 
 
@@ -2430,23 +2418,23 @@ router.get(
 
 
 
-            if (tournamentError) {
+            if (tournamentError) {
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "MY MATCHES TOURNAMENT ERROR:",
+                    "MY MATCHES TOURNAMENT ERROR:",
 
 
 
-                    tournamentError
+                    tournamentError
 
 
 
-                );
+                );
 
 
 
@@ -2454,23 +2442,23 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: tournamentError.message
+                    error: tournamentError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2478,15 +2466,15 @@ router.get(
 
 
 
-            const ids = (tournaments || [])
+            const ids = (tournaments || [])
 
 
 
-                .map((tournament) => tournament.id)
+                .map((tournament) => tournament.id)
 
 
 
-                .filter(Boolean);
+                .filter(Boolean);
 
 
 
@@ -2494,7 +2482,7 @@ router.get(
 
 
 
-            const countMap = {};
+            const countMap = {};
 
 
 
@@ -2502,39 +2490,39 @@ router.get(
 
 
 
-            if (ids.length) {
+            if (ids.length) {
 
 
 
-                const {
+                const {
 
 
 
-                    data: entryRows,
+                    data: entryRows,
 
 
 
-                    error: countError
+                    error: countError
 
 
 
-                } = await supabase
+                } = await supabase
 
 
 
-                    .from("tournament_entries")
+                    .from("tournament_entries")
 
 
 
-                    .select("tournament_id")
+                    .select("tournament_id")
 
 
 
-                    .in("tournament_id", ids)
+                    .in("tournament_id", ids)
 
 
 
-                    .eq("cancelled", false);
+                    .eq("cancelled", false);
 
 
 
@@ -2542,157 +2530,157 @@ router.get(
 
 
 
-                if (countError) {
+                if (countError) {
 
 
 
-                    console.error(
+                    console.error(
 
 
 
-                        "MY MATCHES COUNT ERROR:",
+                        "MY MATCHES COUNT ERROR:",
 
 
 
-                        countError
+                        countError
 
 
 
-                    );
+                    );
 
 
 
-                } else {
+                } else {
 
 
 
-                    for (const row of entryRows || []) {
+                    for (const row of entryRows || []) {
 
 
 
-                        const key = String(row.tournament_id);
+                        const key = String(row.tournament_id);
 
 
 
-                        countMap[key] =
+                        countMap[key] =
 
 
 
-                            (countMap[key] || 0) + 1;
+                            (countMap[key] || 0) + 1;
 
 
 
-                    }
+                    }
 
 
 
-                }
+                }
 
 
 
-            }
+            }
 
 
 
-            // ============================================================
+            // ============================================================
 
-            // LOAD RESULTS FOR CURRENT USER
+            // LOAD RESULTS FOR CURRENT USER
 
-            // ============================================================
+            // ============================================================
 
 
 
-            const resultMap = {};
+            const resultMap = {};
 
 
 
-            if (ids.length) {
+            if (ids.length) {
 
-                const {
+                const {
 
-                    data: resultRows,
+                    data: resultRows,
 
-                    error: resultError
+                    error: resultError
 
-                } = await supabase
+                } = await supabase
 
-                    .from("tournament_results")
+                    .from("tournament_results")
 
-                    .select(`
+                    .select(`
 
-                        id,
+                        id,
 
-                        tournament_id,
+                        tournament_id,
 
-                        match_id,
+                        match_id,
 
-                        user_id,
+                        user_id,
 
-                        rank,
+                        rank,
 
-                        kills,
+                        kills,
 
-                        winning_amount
+                        winning_amount
 
-                    `)
+                    `)
 
-                    .in("tournament_id", ids)
+                    .in("tournament_id", ids)
 
-                    .eq("user_id", userId);
+                    .eq("user_id", userId);
 
 
 
-                if (resultError) {
+                if (resultError) {
 
-                    console.error(
+                    console.error(
 
-                        "MY MATCHES RESULTS ERROR:",
+                        "MY MATCHES RESULTS ERROR:",
 
-                        resultError
+                        resultError
 
-                    );
+                    );
 
-                } else {
+                } else {
 
-                    for (const row of resultRows || []) {
+                    for (const row of resultRows || []) {
 
-                        resultMap[String(row.tournament_id)] = row;
+                        resultMap[String(row.tournament_id)] = row;
 
-                    }
+                    }
 
-                }
+                }
 
-            }
+            }
 
 
 
-            const result = (tournaments || []).map(
+            const result = (tournaments || []).map(
 
-                (tournament) => {
+                (tournament) => {
 
-                    const tournamentResult =
+                    const tournamentResult =
 
-                        resultMap[String(tournament.id)] || null;
+                        resultMap[String(tournament.id)] || null;
 
 
 
-                    return {
+                    return {
 
-                        ...tournament,
+                        ...tournament,
 
-                        joined_count:
+                        joined_count:
 
-                            countMap[String(tournament.id)] || 0,
+                            countMap[String(tournament.id)] || 0,
 
-                        result: tournamentResult,
+                        result: tournamentResult,
 
-                        has_result: !!tournamentResult
+                        has_result: !!tournamentResult
 
-                    };
+                    };
 
-                }
+                }
 
-            );
+            );
 
 
 
@@ -2700,39 +2688,39 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
-                success: true,
+                success: true,
 
 
 
-                tournaments: result
+                tournaments: result
 
 
 
-            });
+            });
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "MY MATCHES EXCEPTION:",
+                "MY MATCHES EXCEPTION:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -2740,35 +2728,35 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -2820,7 +2808,7 @@ router.get(
 
 
 
-    "/my-entry",
+    "/my-entry",
 
 
 
@@ -2828,7 +2816,7 @@ router.get(
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -2844,7 +2832,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -2860,7 +2848,7 @@ router.get(
 
 
 
-            const userId =
+            const userId =
 
 
 
@@ -2868,7 +2856,7 @@ router.get(
 
 
 
-                getUserId(req);
+                getUserId(req);
 
 
 
@@ -2884,7 +2872,7 @@ router.get(
 
 
 
-            const tournamentId =
+            const tournamentId =
 
 
 
@@ -2892,7 +2880,7 @@ router.get(
 
 
 
-                String(
+                String(
 
 
 
@@ -2900,7 +2888,7 @@ router.get(
 
 
 
-                    req.query.tournamentId ||
+                    req.query.tournamentId ||
 
 
 
@@ -2908,7 +2896,7 @@ router.get(
 
 
 
-                    ""
+                    ""
 
 
 
@@ -2916,7 +2904,7 @@ router.get(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -2932,7 +2920,7 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
@@ -2948,7 +2936,7 @@ router.get(
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
@@ -2956,7 +2944,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -2964,7 +2952,7 @@ router.get(
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
@@ -2972,7 +2960,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -2980,7 +2968,7 @@ router.get(
 
 
 
-                        "User session not found."
+                        "User session not found."
 
 
 
@@ -2988,7 +2976,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -2996,7 +2984,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -3012,7 +3000,7 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
@@ -3028,7 +3016,7 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -3036,7 +3024,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -3044,7 +3032,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -3052,7 +3040,7 @@ router.get(
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
@@ -3060,7 +3048,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -3068,7 +3056,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -3084,7 +3072,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -3092,7 +3080,7 @@ router.get(
 
 
 
-                data,
+                data,
 
 
 
@@ -3100,7 +3088,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -3108,7 +3096,7 @@ router.get(
 
 
 
-            } =
+            } =
 
 
 
@@ -3116,7 +3104,7 @@ router.get(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -3124,7 +3112,7 @@ router.get(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -3132,7 +3120,7 @@ router.get(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
@@ -3140,7 +3128,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -3148,7 +3136,7 @@ router.get(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -3156,7 +3144,7 @@ router.get(
 
 
 
-                        id,
+                        id,
 
 
 
@@ -3164,7 +3152,7 @@ router.get(
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
@@ -3172,7 +3160,7 @@ router.get(
 
 
 
-                        user_id,
+                        user_id,
 
 
 
@@ -3180,7 +3168,7 @@ router.get(
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
@@ -3188,7 +3176,7 @@ router.get(
 
 
 
-                        game_name,
+                        game_name,
 
 
 
@@ -3196,7 +3184,7 @@ router.get(
 
 
 
-                        level,
+                        level,
 
 
 
@@ -3204,7 +3192,7 @@ router.get(
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
@@ -3212,7 +3200,7 @@ router.get(
 
 
 
-                        created_at
+                        created_at
 
 
 
@@ -3220,7 +3208,7 @@ router.get(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -3228,7 +3216,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -3236,7 +3224,7 @@ router.get(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
@@ -3244,7 +3232,7 @@ router.get(
 
 
 
-                        tournamentId
+                        tournamentId
 
 
 
@@ -3252,7 +3240,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -3260,7 +3248,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -3268,7 +3256,7 @@ router.get(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
@@ -3276,7 +3264,7 @@ router.get(
 
 
 
-                        userId
+                        userId
 
 
 
@@ -3284,7 +3272,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -3292,7 +3280,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -3300,7 +3288,7 @@ router.get(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
@@ -3308,7 +3296,7 @@ router.get(
 
 
 
-                        false
+                        false
 
 
 
@@ -3316,7 +3304,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -3324,7 +3312,7 @@ router.get(
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -3340,7 +3328,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -3356,7 +3344,7 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -3364,7 +3352,7 @@ router.get(
 
 
 
-                    "MY ENTRY ERROR:",
+                    "MY ENTRY ERROR:",
 
 
 
@@ -3372,7 +3360,7 @@ router.get(
 
 
 
-                    error
+                    error
 
 
 
@@ -3380,7 +3368,7 @@ router.get(
 
 
 
-                );
+                );
 
 
 
@@ -3396,7 +3384,7 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -3404,7 +3392,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -3412,7 +3400,7 @@ router.get(
 
 
 
-                    error: error.message
+                    error: error.message
 
 
 
@@ -3420,7 +3408,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -3428,7 +3416,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -3444,7 +3432,7 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -3452,7 +3440,7 @@ router.get(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -3460,7 +3448,7 @@ router.get(
 
 
 
-                entry:
+                entry:
 
 
 
@@ -3468,7 +3456,7 @@ router.get(
 
 
 
-                    data || null,
+                    data || null,
 
 
 
@@ -3476,7 +3464,7 @@ router.get(
 
 
 
-                joined:
+                joined:
 
 
 
@@ -3484,7 +3472,7 @@ router.get(
 
 
 
-                    !!data
+                    !!data
 
 
 
@@ -3492,7 +3480,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -3508,7 +3496,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -3524,7 +3512,7 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
@@ -3532,7 +3520,7 @@ router.get(
 
 
 
-                "MY ENTRY EXCEPTION:",
+                "MY ENTRY EXCEPTION:",
 
 
 
@@ -3540,7 +3528,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -3548,7 +3536,7 @@ router.get(
 
 
 
-            );
+            );
 
 
 
@@ -3564,7 +3552,7 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -3572,7 +3560,7 @@ router.get(
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -3580,7 +3568,7 @@ router.get(
 
 
 
-                error:
+                error:
 
 
 
@@ -3588,7 +3576,7 @@ router.get(
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
@@ -3596,7 +3584,7 @@ router.get(
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
@@ -3604,7 +3592,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -3612,7 +3600,7 @@ router.get(
 
 
 
-        }
+        }
 
 
 
@@ -3620,7 +3608,7 @@ router.get(
 
 
 
-    }
+    }
 
 
 
@@ -3692,7 +3680,7 @@ router.get(
 
 
 
-    "/my-match",
+    "/my-match",
 
 
 
@@ -3700,7 +3688,7 @@ router.get(
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -3708,7 +3696,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -3716,7 +3704,7 @@ router.get(
 
 
 
-            const userId = getUserId(req);
+            const userId = getUserId(req);
 
 
 
@@ -3724,7 +3712,7 @@ router.get(
 
 
 
-            const tournamentId = String(
+            const tournamentId = String(
 
 
 
@@ -3732,7 +3720,7 @@ router.get(
 
 
 
-                req.query.tournamentId || ""
+                req.query.tournamentId || ""
 
 
 
@@ -3740,7 +3728,7 @@ router.get(
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -3756,7 +3744,7 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
@@ -3764,7 +3752,7 @@ router.get(
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
@@ -3772,7 +3760,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -3780,7 +3768,7 @@ router.get(
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
@@ -3788,7 +3776,7 @@ router.get(
 
 
 
-                    error: "User session not found."
+                    error: "User session not found."
 
 
 
@@ -3796,7 +3784,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -3804,7 +3792,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -3820,7 +3808,7 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
@@ -3828,7 +3816,7 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -3836,7 +3824,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -3844,7 +3832,7 @@ router.get(
 
 
 
-                    error: "Tournament ID is required."
+                    error: "Tournament ID is required."
 
 
 
@@ -3852,7 +3840,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -3860,7 +3848,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -3876,7 +3864,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -3884,7 +3872,7 @@ router.get(
 
 
 
-                data: entry,
+                data: entry,
 
 
 
@@ -3892,7 +3880,7 @@ router.get(
 
 
 
-                error: entryError
+                error: entryError
 
 
 
@@ -3900,7 +3888,7 @@ router.get(
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
@@ -3908,7 +3896,7 @@ router.get(
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
@@ -3916,7 +3904,7 @@ router.get(
 
 
 
-                .select("id")
+                .select("id")
 
 
 
@@ -3924,7 +3912,7 @@ router.get(
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
@@ -3932,7 +3920,7 @@ router.get(
 
 
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
 
 
@@ -3940,7 +3928,7 @@ router.get(
 
 
 
-                .eq("cancelled", false)
+                .eq("cancelled", false)
 
 
 
@@ -3948,7 +3936,7 @@ router.get(
 
 
 
-                .maybeSingle();
+                .maybeSingle();
 
 
 
@@ -3964,7 +3952,7 @@ router.get(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
@@ -3972,7 +3960,7 @@ router.get(
 
 
 
-                console.error("MY MATCH ENTRY ERROR:", entryError);
+                console.error("MY MATCH ENTRY ERROR:", entryError);
 
 
 
@@ -3980,7 +3968,7 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -3988,7 +3976,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -3996,7 +3984,7 @@ router.get(
 
 
 
-                    error: entryError.message
+                    error: entryError.message
 
 
 
@@ -4004,7 +3992,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -4012,7 +4000,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -4028,7 +4016,7 @@ router.get(
 
 
 
-            if (!entry) {
+            if (!entry) {
 
 
 
@@ -4036,7 +4024,7 @@ router.get(
 
 
 
-                return res.status(403).json({
+                return res.status(403).json({
 
 
 
@@ -4044,7 +4032,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -4052,7 +4040,7 @@ router.get(
 
 
 
-                    code: "NOT_JOINED",
+                    code: "NOT_JOINED",
 
 
 
@@ -4060,7 +4048,7 @@ router.get(
 
 
 
-                    error: "You have not joined this tournament."
+                    error: "You have not joined this tournament."
 
 
 
@@ -4068,7 +4056,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -4076,7 +4064,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -4092,7 +4080,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -4100,7 +4088,7 @@ router.get(
 
 
 
-                data: match,
+                data: match,
 
 
 
@@ -4108,7 +4096,7 @@ router.get(
 
 
 
-                error: matchError
+                error: matchError
 
 
 
@@ -4116,7 +4104,7 @@ router.get(
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
@@ -4124,7 +4112,7 @@ router.get(
 
 
 
-                .from("matches")
+                .from("matches")
 
 
 
@@ -4132,7 +4120,7 @@ router.get(
 
 
 
-                .select("id,tournament_id,room_id,room_password")
+                .select("id,tournament_id,room_id,room_password")
 
 
 
@@ -4140,7 +4128,7 @@ router.get(
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
@@ -4148,7 +4136,7 @@ router.get(
 
 
 
-                .order("id", { ascending: false })
+                .order("id", { ascending: false })
 
 
 
@@ -4156,7 +4144,7 @@ router.get(
 
 
 
-                .limit(1)
+                .limit(1)
 
 
 
@@ -4164,7 +4152,7 @@ router.get(
 
 
 
-                .maybeSingle();
+                .maybeSingle();
 
 
 
@@ -4180,7 +4168,7 @@ router.get(
 
 
 
-            if (matchError) {
+            if (matchError) {
 
 
 
@@ -4188,7 +4176,7 @@ router.get(
 
 
 
-                console.error("MY MATCH ERROR:", matchError);
+                console.error("MY MATCH ERROR:", matchError);
 
 
 
@@ -4196,7 +4184,7 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -4204,7 +4192,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -4212,7 +4200,7 @@ router.get(
 
 
 
-                    error: matchError.message
+                    error: matchError.message
 
 
 
@@ -4220,7 +4208,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -4228,7 +4216,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -4244,7 +4232,7 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -4252,7 +4240,7 @@ router.get(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -4260,7 +4248,7 @@ router.get(
 
 
 
-                match: match || null,
+                match: match || null,
 
 
 
@@ -4268,7 +4256,7 @@ router.get(
 
 
 
-                room_id: match?.room_id || null,
+                room_id: match?.room_id || null,
 
 
 
@@ -4276,7 +4264,7 @@ router.get(
 
 
 
-                room_password: match?.room_password || null
+                room_password: match?.room_password || null
 
 
 
@@ -4284,7 +4272,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -4292,7 +4280,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -4300,7 +4288,7 @@ router.get(
 
 
 
-            console.error("MY MATCH EXCEPTION:", error);
+            console.error("MY MATCH EXCEPTION:", error);
 
 
 
@@ -4308,7 +4296,7 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -4316,7 +4304,7 @@ router.get(
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -4324,7 +4312,7 @@ router.get(
 
 
 
-                error:
+                error:
 
 
 
@@ -4332,7 +4320,7 @@ router.get(
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
@@ -4340,7 +4328,7 @@ router.get(
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
@@ -4348,7 +4336,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -4356,7 +4344,7 @@ router.get(
 
 
 
-        }
+        }
 
 
 
@@ -4364,7 +4352,7 @@ router.get(
 
 
 
-    }
+    }
 
 
 
@@ -4429,712 +4417,194 @@ router.get(
 
 
 router.get(
-
-
-
-
-
-
-
-    "/my-results",
-
-
-
-
-
-
-
-    async (req, res) => {
-
-
-
-
-
-
-
-        try {
-
-
-
-
-
-
-
-            const userId = getUserId(req);
-
-
-
-
-
-
-
-            const tournamentId = String(
-
-
-
-
-
-
-
-                req.query.tournamentId || ""
-
-
-
-
-
-
-
-            ).trim();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if (!userId) {
-
-
-
-
-
-
-
-                return res.status(401).json({
-
-
-
-
-
-
-
-                    success: false,
-
-
-
-
-
-
-
-                    code: "AUTH_REQUIRED",
-
-
-
-
-
-
-
-                    error: "User session not found."
-
-
-
-
-
-
-
-                });
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if (!tournamentId) {
-
-
-
-
-
-
-
-                return res.status(400).json({
-
-
-
-
-
-
-
-                    success: false,
-
-
-
-
-
-
-
-                    error: "Tournament ID is required."
-
-
-
-
-
-
-
-                });
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            const {
-
-
-
-
-
-
-
-                data: entry,
-
-
-
-
-
-
-
-                error: entryError
-
-
-
-
-
-
-
-            } = await supabase
-
-
-
-
-
-
-
-                .from("tournament_entries")
-
-
-
-
-
-
-
-                .select("id")
-
-
-
-
-
-
-
-                .eq("tournament_id", tournamentId)
-
-
-
-
-
-
-
-                .eq("user_id", userId)
-
-
-
-
-
-
-
-                .eq("cancelled", false)
-
-
-
-
-
-
-
-                .maybeSingle();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if (entryError) {
-
-
-
-
-
-
-
-                console.error("MY RESULTS ENTRY ERROR:", entryError);
-
-
-
-
-
-
-
-                return res.status(500).json({
-
-
-
-
-
-
-
-                    success: false,
-
-
-
-
-
-
-
-                    error: entryError.message
-
-
-
-
-
-
-
-                });
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if (!entry) {
-
-
-
-
-
-
-
-                return res.status(403).json({
-
-
-
-
-
-
-
-                    success: false,
-
-
-
-
-
-
-
-                    code: "NOT_JOINED",
-
-
-
-
-
-
-
-                    error: "You have not joined this tournament."
-
-
-
-
-
-
-
-                });
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            const {
-
-
-
-
-
-
-
-                data: results,
-
-
-
-
-
-
-
-                error: resultsError
-
-
-
-
-
-
-
-            } = await supabase
-
-
-
-
-
-
-
-                .from("tournament_results")
-
-
-
-
-
-
-
-                .select(`
-
-                    id,
-
-                    tournament_id,
-
-                    match_id,
-
-                    user_id,
-
-                    rank,
-
-                    kills,
-
-                    winning_amount
-
-                `)
-
-
-
-
-
-
-
-                .eq("tournament_id", tournamentId)
-
-
-
-
-
-
-
-                .eq("user_id", userId)
-
-
-
-
-
-
-
-                .order("rank", { ascending: true });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            if (resultsError) {
-
-
-
-
-
-
-
-                console.error("MY RESULTS ERROR:", resultsError);
-
-
-
-
-
-
-
-                return res.status(500).json({
-
-
-
-
-
-
-
-                    success: false,
-
-
-
-
-
-
-
-                    error: resultsError.message
-
-
-
-
-
-
-
-                });
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            return res.status(200).json({
-
-
-
-
-
-
-
-                success: true,
-
-
-
-
-
-
-
-                tournamentId,
-
-
-
-                userId,
-
-
-
-                published: (results || []).length > 0,
-
-
-
-                results: results || []
-
-
-
-
-
-
-
-            });
-
-
-
-
-
-
-
-        } catch (error) {
-
-
-
-
-
-
-
-            console.error("MY RESULTS EXCEPTION:", error);
-
-
-
-
-
-
-
-            return res.status(500).json({
-
-
-
-
-
-
-
-                success: false,
-
-
-
-
-
-
-
-                error:
-
-
-
-
-
-
-
-                    error?.message ||
-
-
-
-
-
-
-
-                    "Internal server error"
-
-
-
-
-
-
-
-            });
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-    }
-
-
-
-
-
-
-
+    "/my-results",
+    async (req, res) => {
+        try {
+            const userId = getUserId(req);
+            const tournamentId = String(req.query.tournamentId || "").trim();
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    code: "AUTH_REQUIRED",
+                    error: "User session not found."
+                });
+            }
+
+            if (!tournamentId) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Tournament ID is required."
+                });
+            }
+
+            const { data: joinedEntry, error: entryError } = await supabase
+                .from("tournament_entries")
+                .select("id,user_id")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .eq("cancelled", false)
+                .maybeSingle();
+
+            if (entryError) {
+                console.error("MY RESULTS ENTRY ERROR:", entryError);
+                return res.status(500).json({
+                    success: false,
+                    error: entryError.message
+                });
+            }
+
+            if (!joinedEntry) {
+                return res.status(403).json({
+                    success: false,
+                    code: "NOT_JOINED",
+                    error: "You have not joined this tournament."
+                });
+            }
+
+            const { data: resultRows, error: resultsError } = await supabase
+                .from("tournament_results")
+                .select(`
+                    id,
+                    tournament_id,
+                    match_id,
+                    user_id,
+                    rank,
+                    kills,
+                    winning_amount
+                `)
+                .eq("tournament_id", tournamentId)
+                .order("rank", { ascending: true });
+
+            if (resultsError) {
+                console.error("MY RESULTS ERROR:", resultsError);
+                return res.status(500).json({
+                    success: false,
+                    error: resultsError.message
+                });
+            }
+
+            const results = resultRows || [];
+
+            if (!results.length) {
+                return res.status(200).json({
+                    success: true,
+                    tournamentId,
+                    userId,
+                    published: false,
+                    results: []
+                });
+            }
+
+            const userIds = [
+                ...new Set(
+                    results
+                        .map(row => row.user_id)
+                        .filter(Boolean)
+                        .map(String)
+                )
+            ];
+
+            // Same participant source used by /participants.
+            const { data: entries, error: participantsError } = await supabase
+                .from("tournament_entries")
+                .select(`
+                    id,
+                    tournament_id,
+                    user_id,
+                    free_fire_uid,
+                    game_name,
+                    level,
+                    cancelled,
+                    created_at
+                `)
+                .eq("tournament_id", tournamentId)
+                .eq("cancelled", false)
+                .in("user_id", userIds);
+
+            if (participantsError) {
+                console.error("MY RESULTS PARTICIPANTS ERROR:", participantsError);
+                return res.status(500).json({
+                    success: false,
+                    error: participantsError.message
+                });
+            }
+
+            const { data: users, error: usersError } = await supabase
+                .from("users")
+                .select(`
+                    id,
+                    full_name,
+                    level,
+                    bio,
+                    avatar_url
+                `)
+                .in("id", userIds);
+
+            if (usersError) {
+                console.error("MY RESULTS USERS ERROR:", usersError);
+                return res.status(500).json({
+                    success: false,
+                    error: usersError.message
+                });
+            }
+
+            const entryMap = new Map();
+            for (const entry of entries || []) {
+                entryMap.set(String(entry.user_id), entry);
+            }
+
+            const userMap = new Map();
+            for (const user of users || []) {
+                userMap.set(String(user.id), user);
+            }
+
+            const enrichedResults = results.map((result) => {
+                const key = String(result.user_id);
+                const entry = entryMap.get(key);
+                const user = userMap.get(key);
+
+                return {
+                    id: result.id,
+                    tournament_id: result.tournament_id,
+                    match_id: result.match_id,
+                    user_id: result.user_id,
+                    rank: result.rank ?? 0,
+                    kills: Number(result.kills || 0),
+                    winning_amount: Number(result.winning_amount || 0),
+
+                    // Participant/profile fields.
+                    real_name: String(user?.full_name || "").trim(),
+                    player_name: String(entry?.game_name || "").trim(),
+                    uid: String(entry?.free_fire_uid || "").trim(),
+                    level: Number(user?.level ?? entry?.level ?? 0),
+                    bio: String(user?.bio || "").trim(),
+                    profile_pic: String(user?.avatar_url || "").trim(),
+                    created_at: entry?.created_at || null,
+
+                    // Older APK compatibility.
+                    game_name: String(entry?.game_name || "").trim(),
+                    free_fire_uid: String(entry?.free_fire_uid || "").trim(),
+                    avatar_url: String(user?.avatar_url || "").trim()
+                };
+            });
+
+            return res.status(200).json({
+                success: true,
+                tournamentId,
+                userId,
+                published: enrichedResults.length > 0,
+                results: enrichedResults
+            });
+        } catch (error) {
+            console.error("MY RESULTS EXCEPTION:", error);
+            return res.status(500).json({
+                success: false,
+                error: error?.message || "Internal server error"
+            });
+        }
+    }
 );
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // ============================================================
 
@@ -5216,7 +4686,7 @@ router.post(
 
 
 
-    "/join",
+    "/join",
 
 
 
@@ -5224,7 +4694,7 @@ router.post(
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -5240,7 +4710,7 @@ router.post(
 
 
 
-        let originalDeposit = 0;
+        let originalDeposit = 0;
 
 
 
@@ -5248,7 +4718,7 @@ router.post(
 
 
 
-        let originalBonus = 0;
+        let originalBonus = 0;
 
 
 
@@ -5256,7 +4726,7 @@ router.post(
 
 
 
-        let originalWinning = 0;
+        let originalWinning = 0;
 
 
 
@@ -5264,7 +4734,7 @@ router.post(
 
 
 
-        let walletUpdated = false;
+        let walletUpdated = false;
 
 
 
@@ -5272,7 +4742,7 @@ router.post(
 
 
 
-        let userId = "";
+        let userId = "";
 
 
 
@@ -5288,7 +4758,7 @@ router.post(
 
 
 
-        try {
+        try {
 
 
 
@@ -5304,7 +4774,7 @@ router.post(
 
 
 
-            userId =
+            userId =
 
 
 
@@ -5312,7 +4782,7 @@ router.post(
 
 
 
-                getUserId(req);
+                getUserId(req);
 
 
 
@@ -5328,7 +4798,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -5336,7 +4806,7 @@ router.post(
 
 
 
-                tournamentId,
+                tournamentId,
 
 
 
@@ -5344,7 +4814,7 @@ router.post(
 
 
 
-                gameName,
+                gameName,
 
 
 
@@ -5352,7 +4822,7 @@ router.post(
 
 
 
-                uid,
+                uid,
 
 
 
@@ -5360,7 +4830,7 @@ router.post(
 
 
 
-                level
+                level
 
 
 
@@ -5368,7 +4838,7 @@ router.post(
 
 
 
-            } = req.body || {};
+            } = req.body || {};
 
 
 
@@ -5384,7 +4854,7 @@ router.post(
 
 
 
-            const cleanTournamentId =
+            const cleanTournamentId =
 
 
 
@@ -5392,7 +4862,7 @@ router.post(
 
 
 
-                String(
+                String(
 
 
 
@@ -5400,7 +4870,7 @@ router.post(
 
 
 
-                    tournamentId || ""
+                    tournamentId || ""
 
 
 
@@ -5408,7 +4878,7 @@ router.post(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -5424,7 +4894,7 @@ router.post(
 
 
 
-            const cleanGameName =
+            const cleanGameName =
 
 
 
@@ -5432,7 +4902,7 @@ router.post(
 
 
 
-                String(
+                String(
 
 
 
@@ -5440,7 +4910,7 @@ router.post(
 
 
 
-                    gameName || ""
+                    gameName || ""
 
 
 
@@ -5448,7 +4918,7 @@ router.post(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -5464,7 +4934,7 @@ router.post(
 
 
 
-            const cleanUid =
+            const cleanUid =
 
 
 
@@ -5472,7 +4942,7 @@ router.post(
 
 
 
-                String(
+                String(
 
 
 
@@ -5480,7 +4950,7 @@ router.post(
 
 
 
-                    uid || ""
+                    uid || ""
 
 
 
@@ -5488,7 +4958,7 @@ router.post(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -5504,7 +4974,7 @@ router.post(
 
 
 
-            const cleanLevel =
+            const cleanLevel =
 
 
 
@@ -5512,7 +4982,7 @@ router.post(
 
 
 
-                Number(level);
+                Number(level);
 
 
 
@@ -5528,7 +4998,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5536,7 +5006,7 @@ router.post(
 
 
 
-            // AUTH
+            // AUTH
 
 
 
@@ -5544,7 +5014,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5560,7 +5030,7 @@ router.post(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
@@ -5576,7 +5046,7 @@ router.post(
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
@@ -5584,7 +5054,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -5592,7 +5062,7 @@ router.post(
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
@@ -5600,7 +5070,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -5608,7 +5078,7 @@ router.post(
 
 
 
-                        "User session not found. Please login again."
+                        "User session not found. Please login again."
 
 
 
@@ -5616,7 +5086,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -5624,7 +5094,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -5640,7 +5110,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5648,7 +5118,7 @@ router.post(
 
 
 
-            // VALIDATION
+            // VALIDATION
 
 
 
@@ -5656,7 +5126,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5672,7 +5142,7 @@ router.post(
 
 
 
-            if (!cleanTournamentId) {
+            if (!cleanTournamentId) {
 
 
 
@@ -5688,7 +5158,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -5696,7 +5166,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -5704,7 +5174,7 @@ router.post(
 
 
 
-                    code: "INVALID_TOURNAMENT",
+                    code: "INVALID_TOURNAMENT",
 
 
 
@@ -5712,7 +5182,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -5720,7 +5190,7 @@ router.post(
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
@@ -5728,7 +5198,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -5736,7 +5206,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -5752,7 +5222,7 @@ router.post(
 
 
 
-            if (!cleanGameName) {
+            if (!cleanGameName) {
 
 
 
@@ -5768,7 +5238,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -5776,7 +5246,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -5784,7 +5254,7 @@ router.post(
 
 
 
-                    code: "INVALID_GAME_NAME",
+                    code: "INVALID_GAME_NAME",
 
 
 
@@ -5792,7 +5262,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -5800,7 +5270,7 @@ router.post(
 
 
 
-                        "In-Game Name is required."
+                        "In-Game Name is required."
 
 
 
@@ -5808,7 +5278,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -5816,7 +5286,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -5832,7 +5302,7 @@ router.post(
 
 
 
-            if (!cleanUid) {
+            if (!cleanUid) {
 
 
 
@@ -5848,7 +5318,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -5856,7 +5326,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -5864,7 +5334,7 @@ router.post(
 
 
 
-                    code: "INVALID_UID",
+                    code: "INVALID_UID",
 
 
 
@@ -5872,7 +5342,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -5880,7 +5350,7 @@ router.post(
 
 
 
-                        "Free Fire UID is required."
+                        "Free Fire UID is required."
 
 
 
@@ -5888,7 +5358,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -5896,7 +5366,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -5912,7 +5382,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -5920,7 +5390,7 @@ router.post(
 
 
 
-                !Number.isInteger(
+                !Number.isInteger(
 
 
 
@@ -5928,7 +5398,7 @@ router.post(
 
 
 
-                    cleanLevel
+                    cleanLevel
 
 
 
@@ -5936,7 +5406,7 @@ router.post(
 
 
 
-                ) ||
+                ) ||
 
 
 
@@ -5944,7 +5414,7 @@ router.post(
 
 
 
-                cleanLevel < 1 ||
+                cleanLevel < 1 ||
 
 
 
@@ -5952,7 +5422,7 @@ router.post(
 
 
 
-                cleanLevel > 100
+                cleanLevel > 100
 
 
 
@@ -5960,7 +5430,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -5976,7 +5446,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -5984,7 +5454,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -5992,7 +5462,7 @@ router.post(
 
 
 
-                    code: "INVALID_LEVEL",
+                    code: "INVALID_LEVEL",
 
 
 
@@ -6000,7 +5470,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -6008,7 +5478,7 @@ router.post(
 
 
 
-                        "Level must be between 1 and 100."
+                        "Level must be between 1 and 100."
 
 
 
@@ -6016,7 +5486,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -6024,7 +5494,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -6040,7 +5510,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6048,7 +5518,7 @@ router.post(
 
 
 
-            // TOURNAMENT
+            // TOURNAMENT
 
 
 
@@ -6056,7 +5526,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6072,7 +5542,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -6080,7 +5550,7 @@ router.post(
 
 
 
-                data: tournament,
+                data: tournament,
 
 
 
@@ -6088,7 +5558,7 @@ router.post(
 
 
 
-                error: tournamentError
+                error: tournamentError
 
 
 
@@ -6096,7 +5566,7 @@ router.post(
 
 
 
-            } =
+            } =
 
 
 
@@ -6104,7 +5574,7 @@ router.post(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -6112,7 +5582,7 @@ router.post(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -6120,7 +5590,7 @@ router.post(
 
 
 
-                        "tournaments"
+                        "tournaments"
 
 
 
@@ -6128,7 +5598,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -6136,7 +5606,7 @@ router.post(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -6144,7 +5614,7 @@ router.post(
 
 
 
-                        id,
+                        id,
 
 
 
@@ -6152,7 +5622,7 @@ router.post(
 
 
 
-                        title,
+                        title,
 
 
 
@@ -6160,7 +5630,7 @@ router.post(
 
 
 
-                        game,
+                        game,
 
 
 
@@ -6168,7 +5638,7 @@ router.post(
 
 
 
-                        mode,
+                        mode,
 
 
 
@@ -6176,7 +5646,7 @@ router.post(
 
 
 
-                        entry_fee,
+                        entry_fee,
 
 
 
@@ -6184,7 +5654,7 @@ router.post(
 
 
 
-                        prize_pool,
+                        prize_pool,
 
 
 
@@ -6192,7 +5662,7 @@ router.post(
 
 
 
-                        max_players,
+                        max_players,
 
 
 
@@ -6200,7 +5670,7 @@ router.post(
 
 
 
-                        status,
+                        status,
 
 
 
@@ -6208,7 +5678,7 @@ router.post(
 
 
 
-                        bonus_usable_percent
+                        bonus_usable_percent
 
 
 
@@ -6216,7 +5686,7 @@ router.post(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -6224,7 +5694,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -6232,7 +5702,7 @@ router.post(
 
 
 
-                        "id",
+                        "id",
 
 
 
@@ -6240,7 +5710,7 @@ router.post(
 
 
 
-                        cleanTournamentId
+                        cleanTournamentId
 
 
 
@@ -6248,7 +5718,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -6256,7 +5726,7 @@ router.post(
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -6272,7 +5742,7 @@ router.post(
 
 
 
-            if (tournamentError) {
+            if (tournamentError) {
 
 
 
@@ -6288,7 +5758,7 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -6296,7 +5766,7 @@ router.post(
 
 
 
-                    "TOURNAMENT FETCH ERROR:",
+                    "TOURNAMENT FETCH ERROR:",
 
 
 
@@ -6304,7 +5774,7 @@ router.post(
 
 
 
-                    tournamentError
+                    tournamentError
 
 
 
@@ -6312,7 +5782,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -6328,7 +5798,7 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -6336,7 +5806,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -6344,7 +5814,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -6352,7 +5822,7 @@ router.post(
 
 
 
-                        tournamentError.message
+                        tournamentError.message
 
 
 
@@ -6360,7 +5830,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -6368,7 +5838,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -6384,7 +5854,7 @@ router.post(
 
 
 
-            if (!tournament) {
+            if (!tournament) {
 
 
 
@@ -6400,7 +5870,7 @@ router.post(
 
 
 
-                return res.status(404).json({
+                return res.status(404).json({
 
 
 
@@ -6408,7 +5878,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -6416,7 +5886,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -6424,7 +5894,7 @@ router.post(
 
 
 
-                        "TOURNAMENT_NOT_FOUND",
+                        "TOURNAMENT_NOT_FOUND",
 
 
 
@@ -6432,7 +5902,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -6440,7 +5910,7 @@ router.post(
 
 
 
-                        "Tournament not found."
+                        "Tournament not found."
 
 
 
@@ -6448,7 +5918,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -6456,7 +5926,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -6472,7 +5942,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6480,7 +5950,7 @@ router.post(
 
 
 
-            // STATUS
+            // STATUS
 
 
 
@@ -6488,7 +5958,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6504,7 +5974,7 @@ router.post(
 
 
 
-            const status =
+            const status =
 
 
 
@@ -6512,7 +5982,7 @@ router.post(
 
 
 
-                String(
+                String(
 
 
 
@@ -6520,7 +5990,7 @@ router.post(
 
 
 
-                    tournament.status || ""
+                    tournament.status || ""
 
 
 
@@ -6528,7 +5998,7 @@ router.post(
 
 
 
-                )
+                )
 
 
 
@@ -6536,7 +6006,7 @@ router.post(
 
 
 
-                    .trim()
+                    .trim()
 
 
 
@@ -6544,7 +6014,7 @@ router.post(
 
 
 
-                    .toLowerCase();
+                    .toLowerCase();
 
 
 
@@ -6560,7 +6030,7 @@ router.post(
 
 
 
-            const allowedStatuses = [
+            const allowedStatuses = [
 
 
 
@@ -6568,7 +6038,7 @@ router.post(
 
 
 
-                "",
+                "",
 
 
 
@@ -6576,7 +6046,7 @@ router.post(
 
 
 
-                "upcoming",
+                "upcoming",
 
 
 
@@ -6584,7 +6054,7 @@ router.post(
 
 
 
-                "open",
+                "open",
 
 
 
@@ -6592,7 +6062,7 @@ router.post(
 
 
 
-                "active",
+                "active",
 
 
 
@@ -6600,7 +6070,7 @@ router.post(
 
 
 
-                "live",
+                "live",
 
 
 
@@ -6608,7 +6078,7 @@ router.post(
 
 
 
-                "scheduled"
+                "scheduled"
 
 
 
@@ -6616,7 +6086,7 @@ router.post(
 
 
 
-            ];
+            ];
 
 
 
@@ -6632,7 +6102,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -6640,7 +6110,7 @@ router.post(
 
 
 
-                !allowedStatuses.includes(
+                !allowedStatuses.includes(
 
 
 
@@ -6648,7 +6118,7 @@ router.post(
 
 
 
-                    status
+                    status
 
 
 
@@ -6656,7 +6126,7 @@ router.post(
 
 
 
-                )
+                )
 
 
 
@@ -6664,7 +6134,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -6680,7 +6150,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -6688,7 +6158,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -6696,7 +6166,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -6704,7 +6174,7 @@ router.post(
 
 
 
-                        "TOURNAMENT_CLOSED",
+                        "TOURNAMENT_CLOSED",
 
 
 
@@ -6712,7 +6182,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -6720,7 +6190,7 @@ router.post(
 
 
 
-                        "This tournament is not open for joining."
+                        "This tournament is not open for joining."
 
 
 
@@ -6728,7 +6198,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -6736,7 +6206,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -6752,7 +6222,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6760,7 +6230,7 @@ router.post(
 
 
 
-            // ENTRY FEE
+            // ENTRY FEE
 
 
 
@@ -6768,7 +6238,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6784,7 +6254,7 @@ router.post(
 
 
 
-            const entryFee =
+            const entryFee =
 
 
 
@@ -6792,7 +6262,7 @@ router.post(
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
@@ -6800,7 +6270,7 @@ router.post(
 
 
 
-                    tournament.entry_fee,
+                    tournament.entry_fee,
 
 
 
@@ -6808,7 +6278,7 @@ router.post(
 
 
 
-                    0
+                    0
 
 
 
@@ -6816,7 +6286,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -6832,7 +6302,7 @@ router.post(
 
 
 
-            if (entryFee < 0) {
+            if (entryFee < 0) {
 
 
 
@@ -6848,7 +6318,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -6856,7 +6326,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -6864,7 +6334,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -6872,7 +6342,7 @@ router.post(
 
 
 
-                        "Invalid tournament entry fee."
+                        "Invalid tournament entry fee."
 
 
 
@@ -6880,7 +6350,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -6888,7 +6358,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -6904,7 +6374,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6912,7 +6382,7 @@ router.post(
 
 
 
-            // PLAYER LIMIT
+            // PLAYER LIMIT
 
 
 
@@ -6920,7 +6390,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -6936,7 +6406,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -6944,7 +6414,7 @@ router.post(
 
 
 
-                tournament.max_players &&
+                tournament.max_players &&
 
 
 
@@ -6952,7 +6422,7 @@ router.post(
 
 
 
-                Number(
+                Number(
 
 
 
@@ -6960,7 +6430,7 @@ router.post(
 
 
 
-                    tournament.max_players
+                    tournament.max_players
 
 
 
@@ -6968,7 +6438,7 @@ router.post(
 
 
 
-                ) > 0
+                ) > 0
 
 
 
@@ -6976,7 +6446,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -6992,7 +6462,7 @@ router.post(
 
 
 
-                const {
+                const {
 
 
 
@@ -7000,7 +6470,7 @@ router.post(
 
 
 
-                    count,
+                    count,
 
 
 
@@ -7008,7 +6478,7 @@ router.post(
 
 
 
-                    error: countError
+                    error: countError
 
 
 
@@ -7016,7 +6486,7 @@ router.post(
 
 
 
-                } =
+                } =
 
 
 
@@ -7024,7 +6494,7 @@ router.post(
 
 
 
-                    await supabase
+                    await supabase
 
 
 
@@ -7032,7 +6502,7 @@ router.post(
 
 
 
-                        .from(
+                        .from(
 
 
 
@@ -7040,7 +6510,7 @@ router.post(
 
 
 
-                            "tournament_entries"
+                            "tournament_entries"
 
 
 
@@ -7048,7 +6518,7 @@ router.post(
 
 
 
-                        )
+                        )
 
 
 
@@ -7056,7 +6526,7 @@ router.post(
 
 
 
-                        .select(
+                        .select(
 
 
 
@@ -7064,7 +6534,7 @@ router.post(
 
 
 
-                            "id",
+                            "id",
 
 
 
@@ -7072,7 +6542,7 @@ router.post(
 
 
 
-                            {
+                            {
 
 
 
@@ -7080,7 +6550,7 @@ router.post(
 
 
 
-                                count: "exact",
+                                count: "exact",
 
 
 
@@ -7088,7 +6558,7 @@ router.post(
 
 
 
-                                head: true
+                                head: true
 
 
 
@@ -7096,7 +6566,7 @@ router.post(
 
 
 
-                            }
+                            }
 
 
 
@@ -7104,7 +6574,7 @@ router.post(
 
 
 
-                        )
+                        )
 
 
 
@@ -7112,7 +6582,7 @@ router.post(
 
 
 
-                        .eq(
+                        .eq(
 
 
 
@@ -7120,7 +6590,7 @@ router.post(
 
 
 
-                            "tournament_id",
+                            "tournament_id",
 
 
 
@@ -7128,7 +6598,7 @@ router.post(
 
 
 
-                            cleanTournamentId
+                            cleanTournamentId
 
 
 
@@ -7136,7 +6606,7 @@ router.post(
 
 
 
-                        )
+                        )
 
 
 
@@ -7144,7 +6614,7 @@ router.post(
 
 
 
-                        .eq(
+                        .eq(
 
 
 
@@ -7152,7 +6622,7 @@ router.post(
 
 
 
-                            "cancelled",
+                            "cancelled",
 
 
 
@@ -7160,7 +6630,7 @@ router.post(
 
 
 
-                            false
+                            false
 
 
 
@@ -7168,7 +6638,7 @@ router.post(
 
 
 
-                        );
+                        );
 
 
 
@@ -7184,7 +6654,7 @@ router.post(
 
 
 
-                if (countError) {
+                if (countError) {
 
 
 
@@ -7200,7 +6670,7 @@ router.post(
 
 
 
-                    console.error(
+                    console.error(
 
 
 
@@ -7208,7 +6678,7 @@ router.post(
 
 
 
-                        "PLAYER COUNT ERROR:",
+                        "PLAYER COUNT ERROR:",
 
 
 
@@ -7216,7 +6686,7 @@ router.post(
 
 
 
-                        countError
+                        countError
 
 
 
@@ -7224,7 +6694,7 @@ router.post(
 
 
 
-                    );
+                    );
 
 
 
@@ -7240,7 +6710,7 @@ router.post(
 
 
 
-                    return res.status(500).json({
+                    return res.status(500).json({
 
 
 
@@ -7248,7 +6718,7 @@ router.post(
 
 
 
-                        success: false,
+                        success: false,
 
 
 
@@ -7256,7 +6726,7 @@ router.post(
 
 
 
-                        error:
+                        error:
 
 
 
@@ -7264,7 +6734,7 @@ router.post(
 
 
 
-                            countError.message
+                            countError.message
 
 
 
@@ -7272,7 +6742,7 @@ router.post(
 
 
 
-                    });
+                    });
 
 
 
@@ -7280,7 +6750,7 @@ router.post(
 
 
 
-                }
+                }
 
 
 
@@ -7296,7 +6766,7 @@ router.post(
 
 
 
-                if (
+                if (
 
 
 
@@ -7304,7 +6774,7 @@ router.post(
 
 
 
-                    (count || 0) >=
+                    (count || 0) >=
 
 
 
@@ -7312,7 +6782,7 @@ router.post(
 
 
 
-                    Number(
+                    Number(
 
 
 
@@ -7320,7 +6790,7 @@ router.post(
 
 
 
-                        tournament.max_players
+                        tournament.max_players
 
 
 
@@ -7328,7 +6798,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -7336,7 +6806,7 @@ router.post(
 
 
 
-                ) {
+                ) {
 
 
 
@@ -7352,7 +6822,7 @@ router.post(
 
 
 
-                    return res.status(400).json({
+                    return res.status(400).json({
 
 
 
@@ -7360,7 +6830,7 @@ router.post(
 
 
 
-                        success: false,
+                        success: false,
 
 
 
@@ -7368,7 +6838,7 @@ router.post(
 
 
 
-                        code:
+                        code:
 
 
 
@@ -7376,7 +6846,7 @@ router.post(
 
 
 
-                            "TOURNAMENT_FULL",
+                            "TOURNAMENT_FULL",
 
 
 
@@ -7384,7 +6854,7 @@ router.post(
 
 
 
-                        error:
+                        error:
 
 
 
@@ -7392,7 +6862,7 @@ router.post(
 
 
 
-                            "Tournament is full."
+                            "Tournament is full."
 
 
 
@@ -7400,7 +6870,7 @@ router.post(
 
 
 
-                    });
+                    });
 
 
 
@@ -7408,7 +6878,7 @@ router.post(
 
 
 
-                }
+                }
 
 
 
@@ -7416,7 +6886,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -7432,7 +6902,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -7440,7 +6910,7 @@ router.post(
 
 
 
-            // DUPLICATE CHECK
+            // DUPLICATE CHECK
 
 
 
@@ -7448,7 +6918,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -7464,7 +6934,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -7472,7 +6942,7 @@ router.post(
 
 
 
-                data: existingEntry,
+                data: existingEntry,
 
 
 
@@ -7480,7 +6950,7 @@ router.post(
 
 
 
-                error: existingError
+                error: existingError
 
 
 
@@ -7488,7 +6958,7 @@ router.post(
 
 
 
-            } =
+            } =
 
 
 
@@ -7496,7 +6966,7 @@ router.post(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -7504,7 +6974,7 @@ router.post(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -7512,7 +6982,7 @@ router.post(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
@@ -7520,7 +6990,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -7528,7 +6998,7 @@ router.post(
 
 
 
-                    .select("id")
+                    .select("id")
 
 
 
@@ -7536,7 +7006,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -7544,7 +7014,7 @@ router.post(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
@@ -7552,7 +7022,7 @@ router.post(
 
 
 
-                        cleanTournamentId
+                        cleanTournamentId
 
 
 
@@ -7560,7 +7030,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -7568,7 +7038,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -7576,7 +7046,7 @@ router.post(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
@@ -7584,7 +7054,7 @@ router.post(
 
 
 
-                        userId
+                        userId
 
 
 
@@ -7592,7 +7062,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -7600,7 +7070,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -7608,7 +7078,7 @@ router.post(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
@@ -7616,7 +7086,7 @@ router.post(
 
 
 
-                        false
+                        false
 
 
 
@@ -7624,7 +7094,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -7632,7 +7102,7 @@ router.post(
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -7648,7 +7118,7 @@ router.post(
 
 
 
-            if (existingError) {
+            if (existingError) {
 
 
 
@@ -7664,7 +7134,7 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -7672,7 +7142,7 @@ router.post(
 
 
 
-                    "DUPLICATE CHECK ERROR:",
+                    "DUPLICATE CHECK ERROR:",
 
 
 
@@ -7680,7 +7150,7 @@ router.post(
 
 
 
-                    existingError
+                    existingError
 
 
 
@@ -7688,7 +7158,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -7704,7 +7174,7 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -7712,7 +7182,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -7720,7 +7190,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -7728,7 +7198,7 @@ router.post(
 
 
 
-                        existingError.message
+                        existingError.message
 
 
 
@@ -7736,7 +7206,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -7744,7 +7214,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -7760,7 +7230,7 @@ router.post(
 
 
 
-            if (existingEntry) {
+            if (existingEntry) {
 
 
 
@@ -7776,7 +7246,7 @@ router.post(
 
 
 
-                return res.status(409).json({
+                return res.status(409).json({
 
 
 
@@ -7784,7 +7254,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -7792,7 +7262,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -7800,7 +7270,7 @@ router.post(
 
 
 
-                        "ALREADY_JOINED",
+                        "ALREADY_JOINED",
 
 
 
@@ -7808,7 +7278,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -7816,7 +7286,7 @@ router.post(
 
 
 
-                        "You have already joined this tournament."
+                        "You have already joined this tournament."
 
 
 
@@ -7824,7 +7294,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -7832,7 +7302,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -7848,7 +7318,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -7856,7 +7326,7 @@ router.post(
 
 
 
-            // WALLET
+            // WALLET
 
 
 
@@ -7864,7 +7334,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -7880,7 +7350,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -7888,7 +7358,7 @@ router.post(
 
 
 
-                data: wallet,
+                data: wallet,
 
 
 
@@ -7896,7 +7366,7 @@ router.post(
 
 
 
-                error: walletError
+                error: walletError
 
 
 
@@ -7904,7 +7374,7 @@ router.post(
 
 
 
-            } =
+            } =
 
 
 
@@ -7912,7 +7382,7 @@ router.post(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -7920,7 +7390,7 @@ router.post(
 
 
 
-                    .from("wallet_balances")
+                    .from("wallet_balances")
 
 
 
@@ -7928,7 +7398,7 @@ router.post(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -7936,7 +7406,7 @@ router.post(
 
 
 
-                        user_id,
+                        user_id,
 
 
 
@@ -7944,7 +7414,7 @@ router.post(
 
 
 
-                        deposit_balance,
+                        deposit_balance,
 
 
 
@@ -7952,7 +7422,7 @@ router.post(
 
 
 
-                        bonus_balance,
+                        bonus_balance,
 
 
 
@@ -7960,7 +7430,7 @@ router.post(
 
 
 
-                        winning_balance
+                        winning_balance
 
 
 
@@ -7968,7 +7438,7 @@ router.post(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -7976,7 +7446,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -7984,7 +7454,7 @@ router.post(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
@@ -7992,7 +7462,7 @@ router.post(
 
 
 
-                        userId
+                        userId
 
 
 
@@ -8000,7 +7470,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -8008,7 +7478,7 @@ router.post(
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -8024,7 +7494,7 @@ router.post(
 
 
 
-            if (walletError) {
+            if (walletError) {
 
 
 
@@ -8040,7 +7510,7 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -8048,7 +7518,7 @@ router.post(
 
 
 
-                    "WALLET FETCH ERROR:",
+                    "WALLET FETCH ERROR:",
 
 
 
@@ -8056,7 +7526,7 @@ router.post(
 
 
 
-                    walletError
+                    walletError
 
 
 
@@ -8064,7 +7534,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8080,7 +7550,7 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -8088,7 +7558,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -8096,7 +7566,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -8104,7 +7574,7 @@ router.post(
 
 
 
-                        walletError.message
+                        walletError.message
 
 
 
@@ -8112,7 +7582,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -8120,7 +7590,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -8136,7 +7606,7 @@ router.post(
 
 
 
-            if (!wallet) {
+            if (!wallet) {
 
 
 
@@ -8152,7 +7622,7 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -8160,7 +7630,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -8168,7 +7638,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -8176,7 +7646,7 @@ router.post(
 
 
 
-                        "WALLET_NOT_FOUND",
+                        "WALLET_NOT_FOUND",
 
 
 
@@ -8184,7 +7654,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -8192,7 +7662,7 @@ router.post(
 
 
 
-                        "Wallet not found."
+                        "Wallet not found."
 
 
 
@@ -8200,7 +7670,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -8208,7 +7678,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -8224,7 +7694,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8232,7 +7702,7 @@ router.post(
 
 
 
-            // BALANCES
+            // BALANCES
 
 
 
@@ -8240,7 +7710,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8256,7 +7726,7 @@ router.post(
 
 
 
-            let deposit =
+            let deposit =
 
 
 
@@ -8264,7 +7734,7 @@ router.post(
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
@@ -8272,7 +7742,7 @@ router.post(
 
 
 
-                    wallet.deposit_balance
+                    wallet.deposit_balance
 
 
 
@@ -8280,7 +7750,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8296,7 +7766,7 @@ router.post(
 
 
 
-            let bonus =
+            let bonus =
 
 
 
@@ -8304,7 +7774,7 @@ router.post(
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
@@ -8312,7 +7782,7 @@ router.post(
 
 
 
-                    wallet.bonus_balance
+                    wallet.bonus_balance
 
 
 
@@ -8320,7 +7790,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8336,7 +7806,7 @@ router.post(
 
 
 
-            let winning =
+            let winning =
 
 
 
@@ -8344,7 +7814,7 @@ router.post(
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
@@ -8352,7 +7822,7 @@ router.post(
 
 
 
-                    wallet.winning_balance
+                    wallet.winning_balance
 
 
 
@@ -8360,7 +7830,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8376,7 +7846,7 @@ router.post(
 
 
 
-            originalDeposit =
+            originalDeposit =
 
 
 
@@ -8384,7 +7854,7 @@ router.post(
 
 
 
-                deposit;
+                deposit;
 
 
 
@@ -8400,7 +7870,7 @@ router.post(
 
 
 
-            originalBonus =
+            originalBonus =
 
 
 
@@ -8408,7 +7878,7 @@ router.post(
 
 
 
-                bonus;
+                bonus;
 
 
 
@@ -8424,7 +7894,7 @@ router.post(
 
 
 
-            originalWinning =
+            originalWinning =
 
 
 
@@ -8432,7 +7902,7 @@ router.post(
 
 
 
-                winning;
+                winning;
 
 
 
@@ -8448,7 +7918,7 @@ router.post(
 
 
 
-            const total =
+            const total =
 
 
 
@@ -8456,7 +7926,7 @@ router.post(
 
 
 
-                deposit +
+                deposit +
 
 
 
@@ -8464,7 +7934,7 @@ router.post(
 
 
 
-                bonus +
+                bonus +
 
 
 
@@ -8472,7 +7942,7 @@ router.post(
 
 
 
-                winning;
+                winning;
 
 
 
@@ -8488,7 +7958,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -8496,7 +7966,7 @@ router.post(
 
 
 
-                total <
+                total <
 
 
 
@@ -8504,7 +7974,7 @@ router.post(
 
 
 
-                entryFee
+                entryFee
 
 
 
@@ -8512,7 +7982,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -8528,7 +7998,7 @@ router.post(
 
 
 
-                return res.status(402).json({
+                return res.status(402).json({
 
 
 
@@ -8536,7 +8006,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -8544,7 +8014,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -8552,7 +8022,7 @@ router.post(
 
 
 
-                        "INSUFFICIENT_BALANCE",
+                        "INSUFFICIENT_BALANCE",
 
 
 
@@ -8560,7 +8030,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -8568,7 +8038,7 @@ router.post(
 
 
 
-                        "Insufficient wallet balance."
+                        "Insufficient wallet balance."
 
 
 
@@ -8576,7 +8046,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -8584,7 +8054,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -8600,7 +8070,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8608,7 +8078,7 @@ router.post(
 
 
 
-            // BONUS USABLE %
+            // BONUS USABLE %
 
 
 
@@ -8616,7 +8086,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8632,7 +8102,7 @@ router.post(
 
 
 
-            let bonusPercent =
+            let bonusPercent =
 
 
 
@@ -8640,7 +8110,7 @@ router.post(
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
@@ -8648,7 +8118,7 @@ router.post(
 
 
 
-                    tournament.bonus_usable_percent,
+                    tournament.bonus_usable_percent,
 
 
 
@@ -8656,7 +8126,7 @@ router.post(
 
 
 
-                    0
+                    0
 
 
 
@@ -8664,7 +8134,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8680,7 +8150,7 @@ router.post(
 
 
 
-            bonusPercent =
+            bonusPercent =
 
 
 
@@ -8688,7 +8158,7 @@ router.post(
 
 
 
-                Math.max(
+                Math.max(
 
 
 
@@ -8696,7 +8166,7 @@ router.post(
 
 
 
-                    0,
+                    0,
 
 
 
@@ -8704,7 +8174,7 @@ router.post(
 
 
 
-                    Math.min(
+                    Math.min(
 
 
 
@@ -8712,7 +8182,7 @@ router.post(
 
 
 
-                        100,
+                        100,
 
 
 
@@ -8720,7 +8190,7 @@ router.post(
 
 
 
-                        bonusPercent
+                        bonusPercent
 
 
 
@@ -8728,7 +8198,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -8736,7 +8206,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8752,7 +8222,7 @@ router.post(
 
 
 
-            const maxBonusUsable =
+            const maxBonusUsable =
 
 
 
@@ -8760,7 +8230,7 @@ router.post(
 
 
 
-                entryFee *
+                entryFee *
 
 
 
@@ -8768,7 +8238,7 @@ router.post(
 
 
 
-                (
+                (
 
 
 
@@ -8776,7 +8246,7 @@ router.post(
 
 
 
-                    bonusPercent /
+                    bonusPercent /
 
 
 
@@ -8784,7 +8254,7 @@ router.post(
 
 
 
-                    100
+                    100
 
 
 
@@ -8792,7 +8262,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8808,7 +8278,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8816,7 +8286,7 @@ router.post(
 
 
 
-            // DEDUCTION ORDER
+            // DEDUCTION ORDER
 
 
 
@@ -8824,7 +8294,7 @@ router.post(
 
 
 
-            //
+            //
 
 
 
@@ -8832,7 +8302,7 @@ router.post(
 
 
 
-            // BONUS
+            // BONUS
 
 
 
@@ -8840,7 +8310,7 @@ router.post(
 
 
 
-            // ↓
+            // ↓
 
 
 
@@ -8848,7 +8318,7 @@ router.post(
 
 
 
-            // DEPOSIT
+            // DEPOSIT
 
 
 
@@ -8856,7 +8326,7 @@ router.post(
 
 
 
-            // ↓
+            // ↓
 
 
 
@@ -8864,7 +8334,7 @@ router.post(
 
 
 
-            // WINNING
+            // WINNING
 
 
 
@@ -8872,7 +8342,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -8888,7 +8358,7 @@ router.post(
 
 
 
-            let remaining =
+            let remaining =
 
 
 
@@ -8896,7 +8366,7 @@ router.post(
 
 
 
-                entryFee;
+                entryFee;
 
 
 
@@ -8912,7 +8382,7 @@ router.post(
 
 
 
-            const bonusDeduction =
+            const bonusDeduction =
 
 
 
@@ -8920,7 +8390,7 @@ router.post(
 
 
 
-                Math.min(
+                Math.min(
 
 
 
@@ -8928,7 +8398,7 @@ router.post(
 
 
 
-                    bonus,
+                    bonus,
 
 
 
@@ -8936,7 +8406,7 @@ router.post(
 
 
 
-                    maxBonusUsable,
+                    maxBonusUsable,
 
 
 
@@ -8944,7 +8414,7 @@ router.post(
 
 
 
-                    remaining
+                    remaining
 
 
 
@@ -8952,7 +8422,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -8968,7 +8438,7 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
@@ -8976,7 +8446,7 @@ router.post(
 
 
 
-                bonusDeduction;
+                bonusDeduction;
 
 
 
@@ -8992,7 +8462,7 @@ router.post(
 
 
 
-            const depositDeduction =
+            const depositDeduction =
 
 
 
@@ -9000,7 +8470,7 @@ router.post(
 
 
 
-                Math.min(
+                Math.min(
 
 
 
@@ -9008,7 +8478,7 @@ router.post(
 
 
 
-                    deposit,
+                    deposit,
 
 
 
@@ -9016,7 +8486,7 @@ router.post(
 
 
 
-                    remaining
+                    remaining
 
 
 
@@ -9024,7 +8494,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9040,7 +8510,7 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
@@ -9048,7 +8518,7 @@ router.post(
 
 
 
-                depositDeduction;
+                depositDeduction;
 
 
 
@@ -9064,7 +8534,7 @@ router.post(
 
 
 
-            const winningDeduction =
+            const winningDeduction =
 
 
 
@@ -9072,7 +8542,7 @@ router.post(
 
 
 
-                Math.min(
+                Math.min(
 
 
 
@@ -9080,7 +8550,7 @@ router.post(
 
 
 
-                    winning,
+                    winning,
 
 
 
@@ -9088,7 +8558,7 @@ router.post(
 
 
 
-                    remaining
+                    remaining
 
 
 
@@ -9096,7 +8566,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9112,7 +8582,7 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
@@ -9120,7 +8590,7 @@ router.post(
 
 
 
-                winningDeduction;
+                winningDeduction;
 
 
 
@@ -9136,7 +8606,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -9144,7 +8614,7 @@ router.post(
 
 
 
-                remaining >
+                remaining >
 
 
 
@@ -9152,7 +8622,7 @@ router.post(
 
 
 
-                0.0001
+                0.0001
 
 
 
@@ -9160,7 +8630,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -9176,7 +8646,7 @@ router.post(
 
 
 
-                return res.status(402).json({
+                return res.status(402).json({
 
 
 
@@ -9184,7 +8654,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -9192,7 +8662,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -9200,7 +8670,7 @@ router.post(
 
 
 
-                        "INSUFFICIENT_BALANCE",
+                        "INSUFFICIENT_BALANCE",
 
 
 
@@ -9208,7 +8678,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -9216,7 +8686,7 @@ router.post(
 
 
 
-                        "Insufficient usable wallet balance."
+                        "Insufficient usable wallet balance."
 
 
 
@@ -9224,7 +8694,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -9232,7 +8702,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -9248,7 +8718,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9256,7 +8726,7 @@ router.post(
 
 
 
-            // NEW BALANCES
+            // NEW BALANCES
 
 
 
@@ -9264,7 +8734,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9280,7 +8750,7 @@ router.post(
 
 
 
-            const newDeposit =
+            const newDeposit =
 
 
 
@@ -9288,7 +8758,7 @@ router.post(
 
 
 
-                Number(
+                Number(
 
 
 
@@ -9296,7 +8766,7 @@ router.post(
 
 
 
-                    (
+                    (
 
 
 
@@ -9304,7 +8774,7 @@ router.post(
 
 
 
-                        deposit -
+                        deposit -
 
 
 
@@ -9312,7 +8782,7 @@ router.post(
 
 
 
-                        depositDeduction
+                        depositDeduction
 
 
 
@@ -9320,7 +8790,7 @@ router.post(
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
@@ -9328,7 +8798,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9344,7 +8814,7 @@ router.post(
 
 
 
-            const newBonus =
+            const newBonus =
 
 
 
@@ -9352,7 +8822,7 @@ router.post(
 
 
 
-                Number(
+                Number(
 
 
 
@@ -9360,7 +8830,7 @@ router.post(
 
 
 
-                    (
+                    (
 
 
 
@@ -9368,7 +8838,7 @@ router.post(
 
 
 
-                        bonus -
+                        bonus -
 
 
 
@@ -9376,7 +8846,7 @@ router.post(
 
 
 
-                        bonusDeduction
+                        bonusDeduction
 
 
 
@@ -9384,7 +8854,7 @@ router.post(
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
@@ -9392,7 +8862,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9408,7 +8878,7 @@ router.post(
 
 
 
-            const newWinning =
+            const newWinning =
 
 
 
@@ -9416,7 +8886,7 @@ router.post(
 
 
 
-                Number(
+                Number(
 
 
 
@@ -9424,7 +8894,7 @@ router.post(
 
 
 
-                    (
+                    (
 
 
 
@@ -9432,7 +8902,7 @@ router.post(
 
 
 
-                        winning -
+                        winning -
 
 
 
@@ -9440,7 +8910,7 @@ router.post(
 
 
 
-                        winningDeduction
+                        winningDeduction
 
 
 
@@ -9448,7 +8918,7 @@ router.post(
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
@@ -9456,7 +8926,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9472,7 +8942,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9480,7 +8950,7 @@ router.post(
 
 
 
-            // UPDATE WALLET
+            // UPDATE WALLET
 
 
 
@@ -9488,7 +8958,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9504,7 +8974,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -9512,7 +8982,7 @@ router.post(
 
 
 
-                error:
+                error:
 
 
 
@@ -9520,7 +8990,7 @@ router.post(
 
 
 
-                    updateWalletError
+                    updateWalletError
 
 
 
@@ -9528,7 +8998,7 @@ router.post(
 
 
 
-            } =
+            } =
 
 
 
@@ -9536,7 +9006,7 @@ router.post(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -9544,7 +9014,7 @@ router.post(
 
 
 
-                    .from("wallet_balances")
+                    .from("wallet_balances")
 
 
 
@@ -9552,7 +9022,7 @@ router.post(
 
 
 
-                    .update({
+                    .update({
 
 
 
@@ -9560,7 +9030,7 @@ router.post(
 
 
 
-                        deposit_balance:
+                        deposit_balance:
 
 
 
@@ -9568,7 +9038,7 @@ router.post(
 
 
 
-                            newDeposit,
+                            newDeposit,
 
 
 
@@ -9584,7 +9054,7 @@ router.post(
 
 
 
-                        bonus_balance:
+                        bonus_balance:
 
 
 
@@ -9592,7 +9062,7 @@ router.post(
 
 
 
-                            newBonus,
+                            newBonus,
 
 
 
@@ -9608,7 +9078,7 @@ router.post(
 
 
 
-                        winning_balance:
+                        winning_balance:
 
 
 
@@ -9616,7 +9086,7 @@ router.post(
 
 
 
-                            newWinning,
+                            newWinning,
 
 
 
@@ -9632,7 +9102,7 @@ router.post(
 
 
 
-                        updated_at:
+                        updated_at:
 
 
 
@@ -9640,7 +9110,7 @@ router.post(
 
 
 
-                            new Date()
+                            new Date()
 
 
 
@@ -9648,7 +9118,7 @@ router.post(
 
 
 
-                                .toISOString()
+                                .toISOString()
 
 
 
@@ -9656,7 +9126,7 @@ router.post(
 
 
 
-                    })
+                    })
 
 
 
@@ -9664,7 +9134,7 @@ router.post(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -9672,7 +9142,7 @@ router.post(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
@@ -9680,7 +9150,7 @@ router.post(
 
 
 
-                        userId
+                        userId
 
 
 
@@ -9688,7 +9158,7 @@ router.post(
 
 
 
-                    );
+                    );
 
 
 
@@ -9704,7 +9174,7 @@ router.post(
 
 
 
-            if (updateWalletError) {
+            if (updateWalletError) {
 
 
 
@@ -9720,7 +9190,7 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -9728,7 +9198,7 @@ router.post(
 
 
 
-                    "WALLET UPDATE ERROR:",
+                    "WALLET UPDATE ERROR:",
 
 
 
@@ -9736,7 +9206,7 @@ router.post(
 
 
 
-                    updateWalletError
+                    updateWalletError
 
 
 
@@ -9744,7 +9214,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -9760,7 +9230,7 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -9768,7 +9238,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -9776,7 +9246,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -9784,7 +9254,7 @@ router.post(
 
 
 
-                        "WALLET_UPDATE_FAILED",
+                        "WALLET_UPDATE_FAILED",
 
 
 
@@ -9792,7 +9262,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -9800,7 +9270,7 @@ router.post(
 
 
 
-                        updateWalletError.message
+                        updateWalletError.message
 
 
 
@@ -9808,7 +9278,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -9816,7 +9286,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -9832,7 +9302,7 @@ router.post(
 
 
 
-            walletUpdated = true;
+            walletUpdated = true;
 
 
 
@@ -9848,7 +9318,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9856,7 +9326,7 @@ router.post(
 
 
 
-            // CREATE ENTRY
+            // CREATE ENTRY
 
 
 
@@ -9864,7 +9334,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -9880,7 +9350,7 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
@@ -9888,7 +9358,7 @@ router.post(
 
 
 
-                data: entry,
+                data: entry,
 
 
 
@@ -9896,7 +9366,7 @@ router.post(
 
 
 
-                error: entryError
+                error: entryError
 
 
 
@@ -9904,7 +9374,7 @@ router.post(
 
 
 
-            } =
+            } =
 
 
 
@@ -9912,7 +9382,7 @@ router.post(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -9920,7 +9390,7 @@ router.post(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -9928,7 +9398,7 @@ router.post(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
@@ -9936,7 +9406,7 @@ router.post(
 
 
 
-                    )
+                    )
 
 
 
@@ -9944,7 +9414,7 @@ router.post(
 
 
 
-                    .insert({
+                    .insert({
 
 
 
@@ -9952,7 +9422,7 @@ router.post(
 
 
 
-                        tournament_id:
+                        tournament_id:
 
 
 
@@ -9960,7 +9430,7 @@ router.post(
 
 
 
-                            cleanTournamentId,
+                            cleanTournamentId,
 
 
 
@@ -9976,7 +9446,7 @@ router.post(
 
 
 
-                        user_id:
+                        user_id:
 
 
 
@@ -9984,7 +9454,7 @@ router.post(
 
 
 
-                            userId,
+                            userId,
 
 
 
@@ -10000,7 +9470,7 @@ router.post(
 
 
 
-                        free_fire_uid:
+                        free_fire_uid:
 
 
 
@@ -10008,7 +9478,7 @@ router.post(
 
 
 
-                            cleanUid,
+                            cleanUid,
 
 
 
@@ -10024,7 +9494,7 @@ router.post(
 
 
 
-                        game_name:
+                        game_name:
 
 
 
@@ -10032,7 +9502,7 @@ router.post(
 
 
 
-                            cleanGameName,
+                            cleanGameName,
 
 
 
@@ -10048,7 +9518,7 @@ router.post(
 
 
 
-                        level:
+                        level:
 
 
 
@@ -10056,7 +9526,7 @@ router.post(
 
 
 
-                            cleanLevel,
+                            cleanLevel,
 
 
 
@@ -10072,7 +9542,7 @@ router.post(
 
 
 
-                        cancelled:
+                        cancelled:
 
 
 
@@ -10080,7 +9550,7 @@ router.post(
 
 
 
-                            false
+                            false
 
 
 
@@ -10088,7 +9558,7 @@ router.post(
 
 
 
-                    })
+                    })
 
 
 
@@ -10096,7 +9566,7 @@ router.post(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -10104,7 +9574,7 @@ router.post(
 
 
 
-                        id,
+                        id,
 
 
 
@@ -10112,7 +9582,7 @@ router.post(
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
@@ -10120,7 +9590,7 @@ router.post(
 
 
 
-                        user_id,
+                        user_id,
 
 
 
@@ -10128,7 +9598,7 @@ router.post(
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
@@ -10136,7 +9606,7 @@ router.post(
 
 
 
-                        game_name,
+                        game_name,
 
 
 
@@ -10144,7 +9614,7 @@ router.post(
 
 
 
-                        level,
+                        level,
 
 
 
@@ -10152,7 +9622,7 @@ router.post(
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
@@ -10160,7 +9630,7 @@ router.post(
 
 
 
-                        created_at
+                        created_at
 
 
 
@@ -10168,7 +9638,7 @@ router.post(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -10176,7 +9646,7 @@ router.post(
 
 
 
-                    .single();
+                    .single();
 
 
 
@@ -10192,7 +9662,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -10200,7 +9670,7 @@ router.post(
 
 
 
-            // ENTRY FAILED → WALLET ROLLBACK
+            // ENTRY FAILED → WALLET ROLLBACK
 
 
 
@@ -10208,7 +9678,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -10224,7 +9694,7 @@ router.post(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
@@ -10240,7 +9710,7 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -10248,7 +9718,7 @@ router.post(
 
 
 
-                    "TOURNAMENT ENTRY ERROR:",
+                    "TOURNAMENT ENTRY ERROR:",
 
 
 
@@ -10256,7 +9726,7 @@ router.post(
 
 
 
-                    entryError
+                    entryError
 
 
 
@@ -10264,7 +9734,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -10280,7 +9750,7 @@ router.post(
 
 
 
-                if (walletUpdated) {
+                if (walletUpdated) {
 
 
 
@@ -10296,7 +9766,7 @@ router.post(
 
 
 
-                    const {
+                    const {
 
 
 
@@ -10304,7 +9774,7 @@ router.post(
 
 
 
-                        error:
+                        error:
 
 
 
@@ -10312,7 +9782,7 @@ router.post(
 
 
 
-                            rollbackError
+                            rollbackError
 
 
 
@@ -10320,7 +9790,7 @@ router.post(
 
 
 
-                    } =
+                    } =
 
 
 
@@ -10328,7 +9798,7 @@ router.post(
 
 
 
-                        await supabase
+                        await supabase
 
 
 
@@ -10336,7 +9806,7 @@ router.post(
 
 
 
-                            .from("wallet_balances")
+                            .from("wallet_balances")
 
 
 
@@ -10344,7 +9814,7 @@ router.post(
 
 
 
-                            .update({
+                            .update({
 
 
 
@@ -10352,7 +9822,7 @@ router.post(
 
 
 
-                                deposit_balance:
+                                deposit_balance:
 
 
 
@@ -10360,7 +9830,7 @@ router.post(
 
 
 
-                                    originalDeposit,
+                                    originalDeposit,
 
 
 
@@ -10376,7 +9846,7 @@ router.post(
 
 
 
-                                bonus_balance:
+                                bonus_balance:
 
 
 
@@ -10384,7 +9854,7 @@ router.post(
 
 
 
-                                    originalBonus,
+                                    originalBonus,
 
 
 
@@ -10400,7 +9870,7 @@ router.post(
 
 
 
-                                winning_balance:
+                                winning_balance:
 
 
 
@@ -10408,7 +9878,7 @@ router.post(
 
 
 
-                                    originalWinning,
+                                    originalWinning,
 
 
 
@@ -10424,7 +9894,7 @@ router.post(
 
 
 
-                                updated_at:
+                                updated_at:
 
 
 
@@ -10432,7 +9902,7 @@ router.post(
 
 
 
-                                    new Date()
+                                    new Date()
 
 
 
@@ -10440,7 +9910,7 @@ router.post(
 
 
 
-                                        .toISOString()
+                                        .toISOString()
 
 
 
@@ -10448,7 +9918,7 @@ router.post(
 
 
 
-                            })
+                            })
 
 
 
@@ -10456,7 +9926,7 @@ router.post(
 
 
 
-                            .eq(
+                            .eq(
 
 
 
@@ -10464,7 +9934,7 @@ router.post(
 
 
 
-                                "user_id",
+                                "user_id",
 
 
 
@@ -10472,7 +9942,7 @@ router.post(
 
 
 
-                                userId
+                                userId
 
 
 
@@ -10480,7 +9950,7 @@ router.post(
 
 
 
-                            );
+                            );
 
 
 
@@ -10496,7 +9966,7 @@ router.post(
 
 
 
-                    if (rollbackError) {
+                    if (rollbackError) {
 
 
 
@@ -10512,7 +9982,7 @@ router.post(
 
 
 
-                        console.error(
+                        console.error(
 
 
 
@@ -10520,7 +9990,7 @@ router.post(
 
 
 
-                            "WALLET ROLLBACK ERROR:",
+                            "WALLET ROLLBACK ERROR:",
 
 
 
@@ -10528,7 +9998,7 @@ router.post(
 
 
 
-                            rollbackError
+                            rollbackError
 
 
 
@@ -10536,7 +10006,7 @@ router.post(
 
 
 
-                        );
+                        );
 
 
 
@@ -10544,7 +10014,7 @@ router.post(
 
 
 
-                    }
+                    }
 
 
 
@@ -10552,7 +10022,7 @@ router.post(
 
 
 
-                }
+                }
 
 
 
@@ -10568,7 +10038,7 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -10576,7 +10046,7 @@ router.post(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -10584,7 +10054,7 @@ router.post(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -10592,7 +10062,7 @@ router.post(
 
 
 
-                        "JOIN_FAILED",
+                        "JOIN_FAILED",
 
 
 
@@ -10600,7 +10070,7 @@ router.post(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -10608,7 +10078,7 @@ router.post(
 
 
 
-                        entryError.message ||
+                        entryError.message ||
 
 
 
@@ -10616,7 +10086,7 @@ router.post(
 
 
 
-                        "Unable to join tournament."
+                        "Unable to join tournament."
 
 
 
@@ -10624,7 +10094,7 @@ router.post(
 
 
 
-                });
+                });
 
 
 
@@ -10632,7 +10102,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -10648,7 +10118,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -10656,7 +10126,7 @@ router.post(
 
 
 
-            // SUCCESS
+            // SUCCESS
 
 
 
@@ -10664,7 +10134,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -10680,7 +10150,7 @@ router.post(
 
 
 
-            const remainingBalance =
+            const remainingBalance =
 
 
 
@@ -10688,7 +10158,7 @@ router.post(
 
 
 
-                Number(
+                Number(
 
 
 
@@ -10696,7 +10166,7 @@ router.post(
 
 
 
-                    (
+                    (
 
 
 
@@ -10704,7 +10174,7 @@ router.post(
 
 
 
-                        newDeposit +
+                        newDeposit +
 
 
 
@@ -10712,7 +10182,7 @@ router.post(
 
 
 
-                        newBonus +
+                        newBonus +
 
 
 
@@ -10720,7 +10190,7 @@ router.post(
 
 
 
-                        newWinning
+                        newWinning
 
 
 
@@ -10728,7 +10198,7 @@ router.post(
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
@@ -10736,7 +10206,7 @@ router.post(
 
 
 
-                );
+                );
 
 
 
@@ -10752,7 +10222,7 @@ router.post(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -10768,7 +10238,7 @@ router.post(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -10784,7 +10254,7 @@ router.post(
 
 
 
-                code:
+                code:
 
 
 
@@ -10792,7 +10262,7 @@ router.post(
 
 
 
-                    "TOURNAMENT_JOINED",
+                    "TOURNAMENT_JOINED",
 
 
 
@@ -10808,7 +10278,7 @@ router.post(
 
 
 
-                message:
+                message:
 
 
 
@@ -10816,7 +10286,7 @@ router.post(
 
 
 
-                    "Tournament joined successfully!",
+                    "Tournament joined successfully!",
 
 
 
@@ -10832,7 +10302,7 @@ router.post(
 
 
 
-                entryId:
+                entryId:
 
 
 
@@ -10840,7 +10310,7 @@ router.post(
 
 
 
-                    entry?.id || null,
+                    entry?.id || null,
 
 
 
@@ -10856,7 +10326,7 @@ router.post(
 
 
 
-                tournamentId:
+                tournamentId:
 
 
 
@@ -10864,7 +10334,7 @@ router.post(
 
 
 
-                    cleanTournamentId,
+                    cleanTournamentId,
 
 
 
@@ -10880,7 +10350,7 @@ router.post(
 
 
 
-                wallet: {
+                wallet: {
 
 
 
@@ -10896,7 +10366,7 @@ router.post(
 
 
 
-                    depositBalance:
+                    depositBalance:
 
 
 
@@ -10904,7 +10374,7 @@ router.post(
 
 
 
-                        newDeposit,
+                        newDeposit,
 
 
 
@@ -10920,7 +10390,7 @@ router.post(
 
 
 
-                    bonusBalance:
+                    bonusBalance:
 
 
 
@@ -10928,7 +10398,7 @@ router.post(
 
 
 
-                        newBonus,
+                        newBonus,
 
 
 
@@ -10944,7 +10414,7 @@ router.post(
 
 
 
-                    winningBalance:
+                    winningBalance:
 
 
 
@@ -10952,7 +10422,7 @@ router.post(
 
 
 
-                        newWinning,
+                        newWinning,
 
 
 
@@ -10968,7 +10438,7 @@ router.post(
 
 
 
-                    totalBalance:
+                    totalBalance:
 
 
 
@@ -10976,7 +10446,7 @@ router.post(
 
 
 
-                        remainingBalance
+                        remainingBalance
 
 
 
@@ -10984,7 +10454,7 @@ router.post(
 
 
 
-                },
+                },
 
 
 
@@ -11000,7 +10470,7 @@ router.post(
 
 
 
-                deduction: {
+                deduction: {
 
 
 
@@ -11016,7 +10486,7 @@ router.post(
 
 
 
-                    entryFee:
+                    entryFee:
 
 
 
@@ -11024,7 +10494,7 @@ router.post(
 
 
 
-                        entryFee,
+                        entryFee,
 
 
 
@@ -11040,7 +10510,7 @@ router.post(
 
 
 
-                    bonus:
+                    bonus:
 
 
 
@@ -11048,7 +10518,7 @@ router.post(
 
 
 
-                        Number(
+                        Number(
 
 
 
@@ -11056,7 +10526,7 @@ router.post(
 
 
 
-                            bonusDeduction
+                            bonusDeduction
 
 
 
@@ -11064,7 +10534,7 @@ router.post(
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
@@ -11072,7 +10542,7 @@ router.post(
 
 
 
-                        ),
+                        ),
 
 
 
@@ -11088,7 +10558,7 @@ router.post(
 
 
 
-                    deposit:
+                    deposit:
 
 
 
@@ -11096,7 +10566,7 @@ router.post(
 
 
 
-                        Number(
+                        Number(
 
 
 
@@ -11104,7 +10574,7 @@ router.post(
 
 
 
-                            depositDeduction
+                            depositDeduction
 
 
 
@@ -11112,7 +10582,7 @@ router.post(
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
@@ -11120,7 +10590,7 @@ router.post(
 
 
 
-                        ),
+                        ),
 
 
 
@@ -11136,7 +10606,7 @@ router.post(
 
 
 
-                    winning:
+                    winning:
 
 
 
@@ -11144,7 +10614,7 @@ router.post(
 
 
 
-                        Number(
+                        Number(
 
 
 
@@ -11152,7 +10622,7 @@ router.post(
 
 
 
-                            winningDeduction
+                            winningDeduction
 
 
 
@@ -11160,7 +10630,7 @@ router.post(
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
@@ -11168,7 +10638,7 @@ router.post(
 
 
 
-                        )
+                        )
 
 
 
@@ -11176,7 +10646,7 @@ router.post(
 
 
 
-                }
+                }
 
 
 
@@ -11184,7 +10654,7 @@ router.post(
 
 
 
-            });
+            });
 
 
 
@@ -11200,7 +10670,7 @@ router.post(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -11216,7 +10686,7 @@ router.post(
 
 
 
-            console.error(
+            console.error(
 
 
 
@@ -11224,7 +10694,7 @@ router.post(
 
 
 
-                "JOIN TOURNAMENT EXCEPTION:",
+                "JOIN TOURNAMENT EXCEPTION:",
 
 
 
@@ -11232,7 +10702,7 @@ router.post(
 
 
 
-                error
+                error
 
 
 
@@ -11240,7 +10710,7 @@ router.post(
 
 
 
-            );
+            );
 
 
 
@@ -11256,7 +10726,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -11264,7 +10734,7 @@ router.post(
 
 
 
-            // SAFETY ROLLBACK
+            // SAFETY ROLLBACK
 
 
 
@@ -11272,7 +10742,7 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -11288,7 +10758,7 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
@@ -11296,7 +10766,7 @@ router.post(
 
 
 
-                walletUpdated &&
+                walletUpdated &&
 
 
 
@@ -11304,7 +10774,7 @@ router.post(
 
 
 
-                userId
+                userId
 
 
 
@@ -11312,7 +10782,7 @@ router.post(
 
 
 
-            ) {
+            ) {
 
 
 
@@ -11328,7 +10798,7 @@ router.post(
 
 
 
-                try {
+                try {
 
 
 
@@ -11344,7 +10814,7 @@ router.post(
 
 
 
-                    await supabase
+                    await supabase
 
 
 
@@ -11352,7 +10822,7 @@ router.post(
 
 
 
-                        .from("wallet_balances")
+                        .from("wallet_balances")
 
 
 
@@ -11360,7 +10830,7 @@ router.post(
 
 
 
-                        .update({
+                        .update({
 
 
 
@@ -11368,7 +10838,7 @@ router.post(
 
 
 
-                            deposit_balance:
+                            deposit_balance:
 
 
 
@@ -11376,7 +10846,7 @@ router.post(
 
 
 
-                                originalDeposit,
+                                originalDeposit,
 
 
 
@@ -11392,7 +10862,7 @@ router.post(
 
 
 
-                            bonus_balance:
+                            bonus_balance:
 
 
 
@@ -11400,7 +10870,7 @@ router.post(
 
 
 
-                                originalBonus,
+                                originalBonus,
 
 
 
@@ -11416,7 +10886,7 @@ router.post(
 
 
 
-                            winning_balance:
+                            winning_balance:
 
 
 
@@ -11424,7 +10894,7 @@ router.post(
 
 
 
-                                originalWinning,
+                                originalWinning,
 
 
 
@@ -11440,7 +10910,7 @@ router.post(
 
 
 
-                            updated_at:
+                            updated_at:
 
 
 
@@ -11448,7 +10918,7 @@ router.post(
 
 
 
-                                new Date()
+                                new Date()
 
 
 
@@ -11456,7 +10926,7 @@ router.post(
 
 
 
-                                    .toISOString()
+                                    .toISOString()
 
 
 
@@ -11464,7 +10934,7 @@ router.post(
 
 
 
-                        })
+                        })
 
 
 
@@ -11472,7 +10942,7 @@ router.post(
 
 
 
-                        .eq(
+                        .eq(
 
 
 
@@ -11480,7 +10950,7 @@ router.post(
 
 
 
-                            "user_id",
+                            "user_id",
 
 
 
@@ -11488,7 +10958,7 @@ router.post(
 
 
 
-                            userId
+                            userId
 
 
 
@@ -11496,7 +10966,7 @@ router.post(
 
 
 
-                        );
+                        );
 
 
 
@@ -11512,7 +10982,7 @@ router.post(
 
 
 
-                } catch (
+                } catch (
 
 
 
@@ -11520,7 +10990,7 @@ router.post(
 
 
 
-                    rollbackException
+                    rollbackException
 
 
 
@@ -11528,7 +10998,7 @@ router.post(
 
 
 
-                ) {
+                ) {
 
 
 
@@ -11544,7 +11014,7 @@ router.post(
 
 
 
-                    console.error(
+                    console.error(
 
 
 
@@ -11552,7 +11022,7 @@ router.post(
 
 
 
-                        "EXCEPTION ROLLBACK ERROR:",
+                        "EXCEPTION ROLLBACK ERROR:",
 
 
 
@@ -11560,7 +11030,7 @@ router.post(
 
 
 
-                        rollbackException
+                        rollbackException
 
 
 
@@ -11568,7 +11038,7 @@ router.post(
 
 
 
-                    );
+                    );
 
 
 
@@ -11576,7 +11046,7 @@ router.post(
 
 
 
-                }
+                }
 
 
 
@@ -11584,7 +11054,7 @@ router.post(
 
 
 
-            }
+            }
 
 
 
@@ -11600,7 +11070,7 @@ router.post(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -11608,7 +11078,7 @@ router.post(
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -11616,7 +11086,7 @@ router.post(
 
 
 
-                code:
+                code:
 
 
 
@@ -11624,7 +11094,7 @@ router.post(
 
 
 
-                    "SERVER_ERROR",
+                    "SERVER_ERROR",
 
 
 
@@ -11632,7 +11102,7 @@ router.post(
 
 
 
-                error:
+                error:
 
 
 
@@ -11640,7 +11110,7 @@ router.post(
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
@@ -11648,7 +11118,7 @@ router.post(
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
@@ -11656,7 +11126,7 @@ router.post(
 
 
 
-            });
+            });
 
 
 
@@ -11664,7 +11134,7 @@ router.post(
 
 
 
-        }
+        }
 
 
 
@@ -11672,7 +11142,7 @@ router.post(
 
 
 
-    }
+    }
 
 
 
@@ -11792,7 +11262,7 @@ router.get(
 
 
 
-    "/:id",
+    "/:id",
 
 
 
@@ -11800,7 +11270,7 @@ router.get(
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -11816,7 +11286,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -11832,7 +11302,7 @@ router.get(
 
 
 
-            const id =
+            const id =
 
 
 
@@ -11840,7 +11310,7 @@ router.get(
 
 
 
-                String(
+                String(
 
 
 
@@ -11848,7 +11318,7 @@ router.get(
 
 
 
-                    req.params.id || ""
+                    req.params.id || ""
 
 
 
@@ -11856,7 +11326,7 @@ router.get(
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -11872,7 +11342,7 @@ router.get(
 
 
 
-            if (!id) {
+            if (!id) {
 
 
 
@@ -11888,7 +11358,7 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
@@ -11896,7 +11366,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -11904,7 +11374,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -11912,7 +11382,7 @@ router.get(
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
@@ -11920,7 +11390,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -11928,7 +11398,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -11944,7 +11414,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -11952,7 +11422,7 @@ router.get(
 
 
 
-                data: tournament,
+                data: tournament,
 
 
 
@@ -11960,7 +11430,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -11968,7 +11438,7 @@ router.get(
 
 
 
-            } =
+            } =
 
 
 
@@ -11976,7 +11446,7 @@ router.get(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -11984,7 +11454,7 @@ router.get(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -11992,7 +11462,7 @@ router.get(
 
 
 
-                        "tournaments"
+                        "tournaments"
 
 
 
@@ -12000,7 +11470,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -12008,7 +11478,7 @@ router.get(
 
 
 
-                    .select(`
+                    .select(`
 
 
 
@@ -12016,7 +11486,7 @@ router.get(
 
 
 
-                        id,
+                        id,
 
 
 
@@ -12024,7 +11494,7 @@ router.get(
 
 
 
-                        title,
+                        title,
 
 
 
@@ -12032,7 +11502,7 @@ router.get(
 
 
 
-                        game,
+                        game,
 
 
 
@@ -12040,7 +11510,7 @@ router.get(
 
 
 
-                        mode,
+                        mode,
 
 
 
@@ -12048,7 +11518,7 @@ router.get(
 
 
 
-                        entry_fee,
+                        entry_fee,
 
 
 
@@ -12056,7 +11526,7 @@ router.get(
 
 
 
-                        prize_pool,
+                        prize_pool,
 
 
 
@@ -12064,7 +11534,7 @@ router.get(
 
 
 
-                        kill_reward,
+                        kill_reward,
 
 
 
@@ -12072,7 +11542,7 @@ router.get(
 
 
 
-                        max_players,
+                        max_players,
 
 
 
@@ -12080,7 +11550,7 @@ router.get(
 
 
 
-                        start_time,
+                        start_time,
 
 
 
@@ -12088,7 +11558,7 @@ router.get(
 
 
 
-                        map,
+                        map,
 
 
 
@@ -12096,7 +11566,7 @@ router.get(
 
 
 
-                        status,
+                        status,
 
 
 
@@ -12104,7 +11574,7 @@ router.get(
 
 
 
-                        rules,
+                        rules,
 
 
 
@@ -12112,7 +11582,7 @@ router.get(
 
 
 
-                        bonus_usable_percent
+                        bonus_usable_percent
 
 
 
@@ -12120,7 +11590,7 @@ router.get(
 
 
 
-                    `)
+                    `)
 
 
 
@@ -12128,7 +11598,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -12136,7 +11606,7 @@ router.get(
 
 
 
-                        "id",
+                        "id",
 
 
 
@@ -12144,7 +11614,7 @@ router.get(
 
 
 
-                        id
+                        id
 
 
 
@@ -12152,7 +11622,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -12160,7 +11630,7 @@ router.get(
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -12176,7 +11646,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -12192,7 +11662,7 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -12200,7 +11670,7 @@ router.get(
 
 
 
-                    "GET TOURNAMENT ERROR:",
+                    "GET TOURNAMENT ERROR:",
 
 
 
@@ -12208,7 +11678,7 @@ router.get(
 
 
 
-                    error
+                    error
 
 
 
@@ -12216,7 +11686,7 @@ router.get(
 
 
 
-                );
+                );
 
 
 
@@ -12232,7 +11702,7 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
@@ -12240,7 +11710,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -12248,7 +11718,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -12256,7 +11726,7 @@ router.get(
 
 
 
-                        error.message
+                        error.message
 
 
 
@@ -12264,7 +11734,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -12272,7 +11742,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -12288,7 +11758,7 @@ router.get(
 
 
 
-            if (!tournament) {
+            if (!tournament) {
 
 
 
@@ -12304,7 +11774,7 @@ router.get(
 
 
 
-                return res.status(404).json({
+                return res.status(404).json({
 
 
 
@@ -12312,7 +11782,7 @@ router.get(
 
 
 
-                    success: false,
+                    success: false,
 
 
 
@@ -12320,7 +11790,7 @@ router.get(
 
 
 
-                    code:
+                    code:
 
 
 
@@ -12328,7 +11798,7 @@ router.get(
 
 
 
-                        "TOURNAMENT_NOT_FOUND",
+                        "TOURNAMENT_NOT_FOUND",
 
 
 
@@ -12336,7 +11806,7 @@ router.get(
 
 
 
-                    error:
+                    error:
 
 
 
@@ -12344,7 +11814,7 @@ router.get(
 
 
 
-                        "Tournament not found."
+                        "Tournament not found."
 
 
 
@@ -12352,7 +11822,7 @@ router.get(
 
 
 
-                });
+                });
 
 
 
@@ -12360,7 +11830,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -12376,7 +11846,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -12384,7 +11854,7 @@ router.get(
 
 
 
-                count,
+                count,
 
 
 
@@ -12392,7 +11862,7 @@ router.get(
 
 
 
-                error: countError
+                error: countError
 
 
 
@@ -12400,7 +11870,7 @@ router.get(
 
 
 
-            } =
+            } =
 
 
 
@@ -12408,7 +11878,7 @@ router.get(
 
 
 
-                await supabase
+                await supabase
 
 
 
@@ -12416,7 +11886,7 @@ router.get(
 
 
 
-                    .from(
+                    .from(
 
 
 
@@ -12424,7 +11894,7 @@ router.get(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
@@ -12432,7 +11902,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -12440,7 +11910,7 @@ router.get(
 
 
 
-                    .select(
+                    .select(
 
 
 
@@ -12448,7 +11918,7 @@ router.get(
 
 
 
-                        "id",
+                        "id",
 
 
 
@@ -12456,7 +11926,7 @@ router.get(
 
 
 
-                        {
+                        {
 
 
 
@@ -12464,7 +11934,7 @@ router.get(
 
 
 
-                            count: "exact",
+                            count: "exact",
 
 
 
@@ -12472,7 +11942,7 @@ router.get(
 
 
 
-                            head: true
+                            head: true
 
 
 
@@ -12480,7 +11950,7 @@ router.get(
 
 
 
-                        }
+                        }
 
 
 
@@ -12488,7 +11958,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -12496,7 +11966,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -12504,7 +11974,7 @@ router.get(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
@@ -12512,7 +11982,7 @@ router.get(
 
 
 
-                        id
+                        id
 
 
 
@@ -12520,7 +11990,7 @@ router.get(
 
 
 
-                    )
+                    )
 
 
 
@@ -12528,7 +11998,7 @@ router.get(
 
 
 
-                    .eq(
+                    .eq(
 
 
 
@@ -12536,7 +12006,7 @@ router.get(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
@@ -12544,7 +12014,7 @@ router.get(
 
 
 
-                        false
+                        false
 
 
 
@@ -12552,7 +12022,7 @@ router.get(
 
 
 
-                    );
+                    );
 
 
 
@@ -12568,7 +12038,7 @@ router.get(
 
 
 
-            if (countError) {
+            if (countError) {
 
 
 
@@ -12584,7 +12054,7 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -12592,7 +12062,7 @@ router.get(
 
 
 
-                    "SINGLE TOURNAMENT COUNT ERROR:",
+                    "SINGLE TOURNAMENT COUNT ERROR:",
 
 
 
@@ -12600,7 +12070,7 @@ router.get(
 
 
 
-                    countError
+                    countError
 
 
 
@@ -12608,7 +12078,7 @@ router.get(
 
 
 
-                );
+                );
 
 
 
@@ -12616,7 +12086,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -12632,7 +12102,7 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
@@ -12640,7 +12110,7 @@ router.get(
 
 
 
-                data: prizes,
+                data: prizes,
 
 
 
@@ -12648,7 +12118,7 @@ router.get(
 
 
 
-                error: prizeError
+                error: prizeError
 
 
 
@@ -12656,7 +12126,7 @@ router.get(
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
@@ -12664,7 +12134,7 @@ router.get(
 
 
 
-                .from("tournament_prizes")
+                .from("tournament_prizes")
 
 
 
@@ -12672,7 +12142,7 @@ router.get(
 
 
 
-                .select("rank,label,amount")
+                .select("rank,label,amount")
 
 
 
@@ -12680,7 +12150,7 @@ router.get(
 
 
 
-                .eq("tournament_id", id)
+                .eq("tournament_id", id)
 
 
 
@@ -12688,7 +12158,7 @@ router.get(
 
 
 
-                .order("rank", { ascending: true });
+                .order("rank", { ascending: true });
 
 
 
@@ -12704,7 +12174,7 @@ router.get(
 
 
 
-            if (prizeError) {
+            if (prizeError) {
 
 
 
@@ -12712,7 +12182,7 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
@@ -12720,7 +12190,7 @@ router.get(
 
 
 
-                    "PRIZE FETCH ERROR:",
+                    "PRIZE FETCH ERROR:",
 
 
 
@@ -12728,7 +12198,7 @@ router.get(
 
 
 
-                    prizeError
+                    prizeError
 
 
 
@@ -12736,7 +12206,7 @@ router.get(
 
 
 
-                );
+                );
 
 
 
@@ -12744,7 +12214,7 @@ router.get(
 
 
 
-            }
+            }
 
 
 
@@ -12760,7 +12230,7 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -12776,7 +12246,7 @@ router.get(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -12792,7 +12262,7 @@ router.get(
 
 
 
-                tournament: {
+                tournament: {
 
 
 
@@ -12800,7 +12270,7 @@ router.get(
 
 
 
-                    ...tournament,
+                    ...tournament,
 
 
 
@@ -12816,7 +12286,7 @@ router.get(
 
 
 
-                    joined_count:
+                    joined_count:
 
 
 
@@ -12824,7 +12294,7 @@ router.get(
 
 
 
-                        count || 0,
+                        count || 0,
 
 
 
@@ -12840,7 +12310,7 @@ router.get(
 
 
 
-                    prizes:
+                    prizes:
 
 
 
@@ -12848,7 +12318,7 @@ router.get(
 
 
 
-                        prizes || []
+                        prizes || []
 
 
 
@@ -12856,7 +12326,7 @@ router.get(
 
 
 
-                }
+                }
 
 
 
@@ -12864,7 +12334,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -12880,7 +12350,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -12896,7 +12366,7 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
@@ -12904,7 +12374,7 @@ router.get(
 
 
 
-                "GET SINGLE TOURNAMENT EXCEPTION:",
+                "GET SINGLE TOURNAMENT EXCEPTION:",
 
 
 
@@ -12912,7 +12382,7 @@ router.get(
 
 
 
-                error
+                error
 
 
 
@@ -12920,7 +12390,7 @@ router.get(
 
 
 
-            );
+            );
 
 
 
@@ -12936,7 +12406,7 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
@@ -12944,7 +12414,7 @@ router.get(
 
 
 
-                success: false,
+                success: false,
 
 
 
@@ -12952,7 +12422,7 @@ router.get(
 
 
 
-                error:
+                error:
 
 
 
@@ -12960,7 +12430,7 @@ router.get(
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
@@ -12968,7 +12438,7 @@ router.get(
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
@@ -12976,7 +12446,7 @@ router.get(
 
 
 
-            });
+            });
 
 
 
@@ -12984,7 +12454,7 @@ router.get(
 
 
 
-        }
+        }
 
 
 
@@ -12992,7 +12462,7 @@ router.get(
 
 
 
-    }
+    }
 
 
 
