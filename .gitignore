@@ -13,3 +13,5 @@ yarn-error.log*
 
 .next/
 gamerzadda-admin/.next/
+
+gamerzadda-admin/firebase-service-account.json
