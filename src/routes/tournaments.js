@@ -2210,8 +2210,7 @@ router.post(
                     type: "ENTRY_FEE",
                     description:
                         `Tournament entry fee (bonus) - ${cleanTournamentId}`,
-                    reference_id: entry?.id || cleanTournamentId,
-                    status: "COMPLETED"
+                    reference_id: entry?.id || cleanTournamentId
                 });
             }
 
@@ -2222,8 +2221,7 @@ router.post(
                     type: "ENTRY_FEE",
                     description:
                         `Tournament entry fee (deposit) - ${cleanTournamentId}`,
-                    reference_id: entry?.id || cleanTournamentId,
-                    status: "COMPLETED"
+                    reference_id: entry?.id || cleanTournamentId
                 });
             }
 
@@ -2234,8 +2232,7 @@ router.post(
                     type: "ENTRY_FEE",
                     description:
                         `Tournament entry fee (winning) - ${cleanTournamentId}`,
-                    reference_id: entry?.id || cleanTournamentId,
-                    status: "COMPLETED"
+                    reference_id: entry?.id || cleanTournamentId
                 });
             }
 
