@@ -25,16 +25,14 @@ router.get("/:userId", async (req, res) => {
             error
         } = await supabase
             .from("wallet_balances")
-            .select(
-                `
+            .select(`
                 user_id,
                 deposit_balance,
                 bonus_balance,
                 winning_balance,
                 created_at,
                 updated_at
-                `
-            )
+            `)
             .eq("user_id", userId)
             .maybeSingle();
 
@@ -116,12 +114,23 @@ router.get("/:userId", async (req, res) => {
 
 /*
 ======================================================
-GET TRANSACTION HISTORY
+GET ALL WALLET TRANSACTIONS
 GET /api/wallet/:userId/transactions
 ======================================================
 
-Uses deposit_orders as the transaction history.
-No separate transactions table is required.
+Reads ALL wallet activity from wallet_transactions.
+
+Examples:
+- Add Money
+- Deposit
+- Withdrawal
+- Tournament Entry
+- Tournament Refund
+- Winning / Prize
+- Referral Reward
+- Signup Bonus
+- Spin Reward
+- Other wallet activities
 ======================================================
 */
 router.get(
@@ -137,37 +146,25 @@ router.get(
                 });
             }
 
+            /*
+            ------------------------------------------
+            Get ALL wallet transactions
+            ------------------------------------------
+            */
             const {
                 data,
                 error
             } = await supabase
-                .from("deposit_orders")
-                .select(
-                    `
-                    id,
-                    user_id,
-                    order_id,
-                    amount,
-                    status,
-                    utr,
-                    created_at,
-                    paid_at,
-                    processed_at,
-                    bonus_percent,
-                    bonus_amount
-                    `
-                )
+                .from("wallet_transactions")
+                .select("*")
                 .eq("user_id", userId)
-                .order(
-                    "created_at",
-                    {
-                        ascending: false
-                    }
-                );
+                .order("created_at", {
+                    ascending: false
+                });
 
             if (error) {
                 console.error(
-                    "TRANSACTION HISTORY SUPABASE ERROR:",
+                    "WALLET TRANSACTIONS SUPABASE ERROR:",
                     error
                 );
 
@@ -180,60 +177,112 @@ router.get(
                 });
             }
 
+            /*
+            ------------------------------------------
+            Normalize transactions
+            ------------------------------------------
+            */
             const transactions =
                 (data || []).map((item) => {
 
-                    const amount =
-                        Number(
-                            item.amount || 0
-                        );
+                    const amount = Number(
+                        item.amount || 0
+                    );
 
-                    const bonusAmount =
-                        Number(
-                            item.bonus_amount || 0
-                        );
+                    const bonusAmount = Number(
+                        item.bonus_amount || 0
+                    );
+
+                    const bonusPercent = Number(
+                        item.bonus_percent || 0
+                    );
+
+                    /*
+                    Find transaction type
+                    */
+                    const type = String(
+                        item.type ||
+                        item.transaction_type ||
+                        "WALLET"
+                    ).toUpperCase();
+
+                    /*
+                    Find title
+                    */
+                    const title =
+                        item.title ||
+                        item.description ||
+                        item.transaction_type ||
+                        item.type ||
+                        "Wallet Transaction";
+
+                    /*
+                    Find status
+                    */
+                    const status = String(
+                        item.status ||
+                        "COMPLETED"
+                    ).toUpperCase();
+
+                    /*
+                    Find reference ID
+                    */
+                    const referenceId =
+                        item.reference_id ||
+                        item.order_id ||
+                        item.orderId ||
+                        null;
 
                     return {
-                        id: item.id,
+                        id:
+                            item.id ||
+                            referenceId ||
+                            `${userId}-${item.created_at}`,
 
-                        type: "DEPOSIT",
+                        type: type,
 
-                        title: "Add Money",
+                        title: title,
 
                         amount: amount,
 
-                        status:
-                            String(
-                                item.status ||
-                                "PENDING"
-                            ).toUpperCase(),
+                        status: status,
 
                         order_id:
-                            item.order_id,
+                            item.order_id ||
+                            null,
 
                         utr:
-                            item.utr || null,
+                            item.utr ||
+                            null,
 
                         bonus_percent:
-                            Number(
-                                item.bonus_percent ||
-                                0
-                            ),
+                            bonusPercent,
 
                         bonus_amount:
                             bonusAmount,
 
                         created_at:
-                            item.created_at,
+                            item.created_at ||
+                            null,
 
                         paid_at:
-                            item.paid_at,
+                            item.paid_at ||
+                            null,
 
                         processed_at:
-                            item.processed_at
+                            item.processed_at ||
+                            null,
+
+                        reference_id:
+                            referenceId
                     };
                 });
 
+            /*
+            ------------------------------------------
+            Response
+            ------------------------------------------
+            */
             return res.status(200).json({
                 success: true,
 
@@ -246,7 +295,7 @@ router.get(
 
         } catch (error) {
             console.error(
-                "TRANSACTION HISTORY API ERROR:",
+                "WALLET TRANSACTIONS API ERROR:",
                 error
             );
 
