@@ -1,311 +1,451 @@
 const express = require("express");
-const crypto = require("crypto");
-const { createClient } = require("@supabase/supabase-js");
-
 const router = express.Router();
 
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+const supabase = require("../config/supabase");
 
-function hashToken(token) {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
+/*
+======================================================
+GET MY STATS
+======================================================
 
-async function getAuthenticatedUserId(req) {
-  const cookieHeader = String(req.headers.cookie || "");
-  const match = cookieHeader.match(
-    /(?:^|;\s*)gamerzadda_session=([^;]+)/
-  );
+GET /api/stats/:userId
 
-  if (!match) return null;
-
-  let token = match[1];
-
-  try {
-    token = decodeURIComponent(token);
-  } catch (_) {}
-
-  const tokenHash = hashToken(token);
-
-  const { data: session, error } = await supabaseAdmin
-    .from("user_sessions")
-    .select("user_id, expires_at")
-    .eq("token_hash", tokenHash)
-    .maybeSingle();
-
-  if (error || !session?.user_id) return null;
-
-  if (
-    session.expires_at &&
-    new Date(session.expires_at).getTime() <= Date.now()
-  ) {
-    await supabaseAdmin
-      .from("user_sessions")
-      .delete()
-      .eq("token_hash", tokenHash);
-
-    return null;
-  }
-
-  return String(session.user_id);
-}
-
-function gameCategory(game, mode) {
-  const value = `${game || ""} ${mode || ""}`.toLowerCase();
-
-  if (
-    value.includes("free fire max") ||
-    value.includes("freefire max") ||
-    value.includes("ff max")
-  ) return "freeFireMax";
-
-  if (value.includes("clash squad") || value.includes("clashsquad"))
-    return "clashSquad";
-
-  if (value.includes("lone wolf") || value.includes("lonewolf"))
-    return "loneWolf";
-
-  if (value.includes("free fire") || value.includes("freefire"))
-    return "freeFire";
-
-  return "other";
-}
+This version matches the current GAMERZADDA auth system.
+The current auth API returns userId after login rather than
+creating a gamerzadda_session cookie.
+======================================================
+*/
 
 router.get("/stats/:userId", async (req, res) => {
-  try {
-    const requestedUserId = String(req.params.userId || "").trim();
+    try {
+        const userId = String(req.params.userId || "").trim();
 
-    if (!requestedUserId) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID is required.",
-      });
-    }
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: "User ID is required."
+            });
+        }
 
-    /*
-     * Security:
-     * The ID in the URL is NOT trusted.
-     * It must match the authenticated GamerzAdda session.
-     */
-    const sessionUserId = await getAuthenticatedUserId(req);
+        /*
+        ==================================================
+        VERIFY USER
+        ==================================================
+        */
 
-    if (!sessionUserId) {
-      return res.status(401).json({
-        success: false,
-        error: "Unauthorized. Please login again.",
-      });
-    }
+        const {
+            data: user,
+            error: userError
+        } = await supabase
+            .from("users")
+            .select("id, status")
+            .eq("id", userId)
+            .maybeSingle();
 
-    if (sessionUserId !== requestedUserId) {
-      return res.status(403).json({
-        success: false,
-        error: "You can only view your own stats.",
-      });
-    }
+        if (userError) {
+            console.error(
+                "STATS USER ERROR:",
+                userError
+            );
 
-    const { data: entries, error: entriesError } = await supabaseAdmin
-      .from("tournament_entries")
-      .select("id,tournament_id,cancelled")
-      .eq("user_id", sessionUserId)
-      .eq("cancelled", false);
+            return res.status(500).json({
+                success: false,
+                error: "Unable to verify user."
+            });
+        }
 
-    if (entriesError) {
-      console.error("STATS entries error:", entriesError);
-      return res.status(500).json({
-        success: false,
-        error: "Unable to load games played.",
-      });
-    }
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: "User not found."
+            });
+        }
 
-    const entryRows = entries || [];
+        if (
+            user.status &&
+            String(user.status).toLowerCase() !== "active"
+        ) {
+            return res.status(403).json({
+                success: false,
+                error: "Your account is currently disabled."
+            });
+        }
 
-    const tournamentIds = [
-      ...new Set(
-        entryRows
-          .map((row) => row.tournament_id)
-          .filter(Boolean)
-          .map(String)
-      ),
-    ];
+        /*
+        ==================================================
+        TOURNAMENT ENTRIES
+        ==================================================
+        */
 
-    let tournaments = [];
+        const {
+            data: entries,
+            error: entriesError
+        } = await supabase
+            .from("tournament_entries")
+            .select("id, tournament_id, cancelled")
+            .eq("user_id", userId)
+            .eq("cancelled", false);
 
-    if (tournamentIds.length) {
-      const { data, error } = await supabaseAdmin
-        .from("tournaments")
-        .select("id,title,game,mode,status")
-        .in("id", tournamentIds);
+        if (entriesError) {
+            console.error(
+                "STATS ENTRIES ERROR:",
+                entriesError
+            );
 
-      if (error) {
-        console.error("STATS tournaments error:", error);
-        return res.status(500).json({
-          success: false,
-          error: "Unable to load tournament statistics.",
+            return res.status(500).json({
+                success: false,
+                error: "Unable to load tournament history."
+            });
+        }
+
+        const tournamentIds = [
+            ...new Set(
+                (entries || [])
+                    .map(row => row.tournament_id)
+                    .filter(Boolean)
+            )
+        ];
+
+        /*
+        ==================================================
+        TOURNAMENT INFORMATION
+        ==================================================
+        */
+
+        let tournaments = [];
+
+        if (tournamentIds.length > 0) {
+            const {
+                data,
+                error
+            } = await supabase
+                .from("tournaments")
+                .select(
+                    "id, title, game, mode"
+                )
+                .in("id", tournamentIds);
+
+            if (error) {
+                console.error(
+                    "STATS TOURNAMENT ERROR:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: "Unable to load tournament information."
+                });
+            }
+
+            tournaments = data || [];
+        }
+
+        const tournamentMap = new Map();
+
+        tournaments.forEach(tournament => {
+            tournamentMap.set(
+                String(tournament.id),
+                tournament
+            );
         });
-      }
 
-      tournaments = data || [];
+        /*
+        ==================================================
+        RESULTS
+        ==================================================
+        */
+
+        const {
+            data: results,
+            error: resultsError
+        } = await supabase
+            .from("tournament_results")
+            .select(
+                [
+                    "id",
+                    "tournament_id",
+                    "rank",
+                    "kills",
+                    "winning_amount",
+                    "match_id",
+                    "created_at",
+                    "updated_at"
+                ].join(", ")
+            )
+            .eq("user_id", userId);
+
+        if (resultsError) {
+            console.error(
+                "STATS RESULTS ERROR:",
+                resultsError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error: "Unable to load tournament results."
+            });
+        }
+
+        const resultRows = results || [];
+
+        /*
+        ==================================================
+        BASIC STATS
+        ==================================================
+        */
+
+        const totalGames = (entries || []).length;
+
+        const completedGames =
+            resultRows.length;
+
+        let wins = 0;
+        let podiumFinishes = 0;
+        let totalKills = 0;
+        let totalWinnings = 0;
+
+        let bestKills = 0;
+        let bestRank = null;
+        let bestTournamentTitle = null;
+
+        resultRows.forEach(result => {
+
+            const rank =
+                Number(result.rank || 0);
+
+            const kills =
+                Number(result.kills || 0);
+
+            const winnings =
+                Number(result.winning_amount || 0);
+
+            totalKills += kills;
+            totalWinnings += winnings;
+
+            if (rank === 1) {
+                wins++;
+            }
+
+            if (
+                rank >= 1 &&
+                rank <= 3
+            ) {
+                podiumFinishes++;
+            }
+
+            if (kills > bestKills) {
+                bestKills = kills;
+            }
+
+            /*
+            Best result:
+            1. Higher kills
+            2. Better rank
+            */
+
+            const shouldReplace =
+                bestRank === null ||
+                kills > bestKills ||
+                (
+                    kills === bestKills &&
+                    rank > 0 &&
+                    rank < bestRank
+                );
+
+            if (shouldReplace) {
+                bestRank =
+                    rank > 0 ? rank : bestRank;
+
+                const tournament =
+                    tournamentMap.get(
+                        String(result.tournament_id)
+                    );
+
+                bestTournamentTitle =
+                    tournament?.title || null;
+            }
+        });
+
+        /*
+        ==================================================
+        WIN RATE
+        ==================================================
+        */
+
+        const winRate =
+            completedGames > 0
+                ? Number(
+                    (
+                        (wins / completedGames) *
+                        100
+                    ).toFixed(1)
+                )
+                : 0;
+
+        /*
+        ==================================================
+        GAME CATEGORIES
+        ==================================================
+        */
+
+        const categories = {
+            freeFire: 0,
+            freeFireMax: 0,
+            clashSquad: 0,
+            loneWolf: 0,
+            other: 0
+        };
+
+        (entries || []).forEach(entry => {
+
+            const tournament =
+                tournamentMap.get(
+                    String(entry.tournament_id)
+                );
+
+            if (!tournament) {
+                categories.other++;
+                return;
+            }
+
+            const game =
+                String(
+                    tournament.game || ""
+                ).toLowerCase();
+
+            const mode =
+                String(
+                    tournament.mode || ""
+                ).toLowerCase();
+
+            const combined =
+                `${game} ${mode}`;
+
+            if (
+                combined.includes("free fire max") ||
+                combined.includes("freefire max") ||
+                combined.includes("ff max")
+            ) {
+                categories.freeFireMax++;
+            } else if (
+                combined.includes("clash squad") ||
+                combined.includes("clashsquad")
+            ) {
+                categories.clashSquad++;
+            } else if (
+                combined.includes("lone wolf") ||
+                combined.includes("lonewolf")
+            ) {
+                categories.loneWolf++;
+            } else if (
+                combined.includes("free fire") ||
+                combined.includes("freefire")
+            ) {
+                categories.freeFire++;
+            } else {
+                categories.other++;
+            }
+        });
+
+        /*
+        ==================================================
+        WITHDRAWALS
+        ==================================================
+        */
+
+        const {
+            data: withdrawals,
+            error: withdrawalsError
+        } = await supabase
+            .from("withdraw_requests")
+            .select(
+                "id, amount, net_amount, status"
+            )
+            .eq("user_id", userId)
+            .eq("status", "approved");
+
+        if (withdrawalsError) {
+            console.error(
+                "STATS WITHDRAW ERROR:",
+                withdrawalsError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error: "Unable to load withdrawal history."
+            });
+        }
+
+        const withdrawalRows =
+            withdrawals || [];
+
+        const totalWithdrawn =
+            withdrawalRows.reduce(
+                (sum, row) =>
+                    sum +
+                    Number(
+                        row.net_amount ??
+                        row.amount ??
+                        0
+                    ),
+                0
+            );
+
+        /*
+        ==================================================
+        RESPONSE
+        ==================================================
+        */
+
+        return res.status(200).json({
+            success: true,
+
+            stats: {
+                totalGames,
+                completedGames,
+                wins,
+                podiumFinishes,
+                totalKills,
+
+                totalWinnings:
+                    Number(
+                        totalWinnings.toFixed(2)
+                    ),
+
+                winRate,
+
+                totalWithdrawn:
+                    Number(
+                        totalWithdrawn.toFixed(2)
+                    ),
+
+                withdrawalCount:
+                    withdrawalRows.length,
+
+                bestKills,
+
+                bestRank,
+
+                bestTournamentTitle,
+
+                categories
+            }
+        });
+
+    } catch (error) {
+
+        console.error(
+            "STATS API ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error.message ||
+                "Internal server error."
+        });
     }
-
-    const tournamentMap = new Map(
-      tournaments.map((tournament) => [
-        String(tournament.id),
-        tournament,
-      ])
-    );
-
-    const categories = {
-      freeFire: 0,
-      freeFireMax: 0,
-      clashSquad: 0,
-      loneWolf: 0,
-      other: 0,
-    };
-
-    for (const entry of entryRows) {
-      const tournament = tournamentMap.get(
-        String(entry.tournament_id)
-      );
-
-      const category = gameCategory(
-        tournament?.game,
-        tournament?.mode
-      );
-
-      categories[category] += 1;
-    }
-
-    const { data: results, error: resultsError } = await supabaseAdmin
-      .from("tournament_results")
-      .select(
-        "id,tournament_id,rank,kills,winning_amount,match_id,created_at,updated_at"
-      )
-      .eq("user_id", sessionUserId);
-
-    if (resultsError) {
-      console.error("STATS results error:", resultsError);
-      return res.status(500).json({
-        success: false,
-        error: "Unable to load game results.",
-      });
-    }
-
-    const resultRows = results || [];
-
-    const totalKills = resultRows.reduce(
-      (sum, row) =>
-        sum + Math.max(0, Number(row.kills || 0)),
-      0
-    );
-
-    const totalWinnings = resultRows.reduce(
-      (sum, row) =>
-        sum + Math.max(0, Number(row.winning_amount || 0)),
-      0
-    );
-
-    const wins = resultRows.filter(
-      (row) =>
-        Number(row.rank) === 1 ||
-        Number(row.winning_amount || 0) > 0
-    ).length;
-
-    const podiumFinishes = resultRows.filter((row) => {
-      const rank = Number(row.rank);
-      return rank >= 1 && rank <= 3;
-    }).length;
-
-    const completedGames = resultRows.length;
-
-    const winRate = completedGames
-      ? Number(((wins / completedGames) * 100).toFixed(1))
-      : 0;
-
-    const { data: withdrawals, error: withdrawalsError } =
-      await supabaseAdmin
-        .from("withdraw_requests")
-        .select(
-          "id,amount,net_amount,status,created_at,processed_at"
-        )
-        .eq("user_id", sessionUserId)
-        .eq("status", "approved");
-
-    if (withdrawalsError) {
-      console.error("STATS withdrawals error:", withdrawalsError);
-      return res.status(500).json({
-        success: false,
-        error: "Unable to load withdrawal statistics.",
-      });
-    }
-
-    const withdrawalRows = withdrawals || [];
-
-    const totalWithdrawn = withdrawalRows.reduce(
-      (sum, row) =>
-        sum +
-        Math.max(
-          0,
-          Number(row.net_amount ?? row.amount ?? 0)
-        ),
-      0
-    );
-
-    const bestResult = resultRows.reduce((best, row) => {
-      if (!best) return row;
-
-      const bestKills = Number(best.kills || 0);
-      const currentKills = Number(row.kills || 0);
-
-      if (currentKills > bestKills) return row;
-
-      const bestRank = Number(best.rank || 999999);
-      const currentRank = Number(row.rank || 999999);
-
-      return currentRank < bestRank ? row : best;
-    }, null);
-
-    const bestTournament = bestResult
-      ? tournamentMap.get(String(bestResult.tournament_id))
-      : null;
-
-    return res.json({
-      success: true,
-      stats: {
-        totalGames: entryRows.length,
-        completedGames,
-        wins,
-        podiumFinishes,
-        totalKills,
-        totalWinnings,
-        winRate,
-        totalWithdrawn,
-        withdrawalCount: withdrawalRows.length,
-        bestKills: Number(bestResult?.kills || 0),
-        bestRank:
-          bestResult?.rank == null
-            ? null
-            : Number(bestResult.rank),
-        bestTournamentTitle:
-          bestTournament?.title || null,
-        categories,
-      },
-    });
-  } catch (error) {
-    console.error("MY STATS ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      error: "Internal server error.",
-    });
-  }
 });
 
 module.exports = router;
