@@ -9,6 +9,7 @@ const tournamentsRoutes = require("../src/routes/tournaments");
 const profileRoutes = require("../src/routes/profile");
 const referralsRoutes = require("../src/routes/referrals");
 const statsRoutes = require("../src/routes/stats");
+const leaderboardRoutes = require("../src/routes/leaderboard");
 
 const app = express();
 
@@ -154,6 +155,15 @@ app.use(
 app.use(
     "/api",
     statsRoutes
+);
+
+// Leaderboard
+// GET /api/leaderboard?period=weekly&game=ALL
+// GET /api/leaderboard?period=monthly&game=ALL
+// GET /api/leaderboard?period=all&game=ALL
+app.use(
+    "/api",
+    leaderboardRoutes
 );
 
 /*
