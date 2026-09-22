@@ -8,6 +8,7 @@ const walletRoutes = require("../src/routes/wallet");
 const tournamentsRoutes = require("../src/routes/tournaments");
 const profileRoutes = require("../src/routes/profile");
 const referralsRoutes = require("../src/routes/referrals");
+const statsRoutes = require("../src/routes/stats");
 
 const app = express();
 
@@ -146,6 +147,13 @@ app.use(
 app.use(
     "/api/referrals",
     referralsRoutes
+);
+
+// My Stats
+// GET /api/stats/:userId
+app.use(
+    "/api",
+    statsRoutes
 );
 
 /*
