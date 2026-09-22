@@ -7,6 +7,7 @@ const depositRoutes = require("../src/routes/deposit");
 const walletRoutes = require("../src/routes/wallet");
 const tournamentsRoutes = require("../src/routes/tournaments");
 const profileRoutes = require("../src/routes/profile");
+const referralsRoutes = require("../src/routes/referrals");
 
 const app = express();
 
@@ -42,7 +43,6 @@ BODY PARSER
 ======================================================
 */
 
-// Avatar upload Base64 ke liye 10 MB request limit
 app.use(
     express.json({
         limit: "10mb"
@@ -139,6 +139,13 @@ app.use(
 app.use(
     "/api/profile",
     profileRoutes
+);
+
+// Referrals
+// GET /api/referrals/:userId
+app.use(
+    "/api/referrals",
+    referralsRoutes
 );
 
 /*
