@@ -13,6 +13,7 @@ const profileRoutes = require("../src/routes/profile");
 const referralsRoutes = require("../src/routes/referrals");
 const statsRoutes = require("../src/routes/stats");
 const leaderboardRoutes = require("../src/routes/leaderboard");
+const scratchCardRoutes = require("../src/routes/scratchCard");
 
 const app = express();
 
@@ -99,99 +100,23 @@ app.get("/health", (req, res) => {
 // API ROUTES
 // ======================================================
 
-// ------------------------------------------------------
-// AUTHENTICATION
-// POST /api/auth/otp
-// ------------------------------------------------------
+app.use("/api/auth", authRoutes);
+app.use("/api/tournaments", tournamentsRoutes);
+app.use("/api/deposit", depositRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/referrals", referralsRoutes);
+app.use("/api", statsRoutes);
+app.use("/api", leaderboardRoutes);
 
-app.use(
-    "/api/auth",
-    authRoutes
-);
-
-// ------------------------------------------------------
-// TOURNAMENTS
-// /api/tournaments/*
-// ------------------------------------------------------
-
-app.use(
-    "/api/tournaments",
-    tournamentsRoutes
-);
-
-// ------------------------------------------------------
-// DEPOSIT
-// /api/deposit/*
-// ------------------------------------------------------
-
-app.use(
-    "/api/deposit",
-    depositRoutes
-);
-
-// ------------------------------------------------------
-// WALLET
-// /api/wallet/*
-// ------------------------------------------------------
-
-app.use(
-    "/api/wallet",
-    walletRoutes
-);
-
-// ------------------------------------------------------
-// PROFILE
+// ======================================================
+// SCRATCH CARD
 //
-// GET    /api/profile/:userId
-// PATCH  /api/profile/:userId
-// POST   /api/profile/:userId/avatar
-// ------------------------------------------------------
+// GET  /api/scratch-card/:userId
+// POST /api/scratch-card/:userId/claim
+// ======================================================
 
-app.use(
-    "/api/profile",
-    profileRoutes
-);
-
-// ------------------------------------------------------
-// REFERRALS
-//
-// GET /api/referrals/:userId
-// ------------------------------------------------------
-
-app.use(
-    "/api/referrals",
-    referralsRoutes
-);
-
-// ------------------------------------------------------
-// MY STATS
-//
-// GET /api/stats/:userId
-// ------------------------------------------------------
-
-app.use(
-    "/api",
-    statsRoutes
-);
-
-// ------------------------------------------------------
-// LEADERBOARD
-//
-// GET /api/leaderboard?period=all&game=ALL
-// GET /api/leaderboard?period=weekly&game=ALL
-// GET /api/leaderboard?period=monthly&game=ALL
-//
-// Future game filters:
-// ?game=FREE%20FIRE
-// ?game=FREE%20FIRE%20MAX
-// ?game=CLASH%20SQUAD
-// ?game=LONE%20WOLF
-// ------------------------------------------------------
-
-app.use(
-    "/api",
-    leaderboardRoutes
-);
+app.use("/api", scratchCardRoutes);
 
 // ======================================================
 // 404 HANDLER
