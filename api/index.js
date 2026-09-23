@@ -1,10 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 
-// ======================================================
-// ROUTES
-// ======================================================
-
 const authRoutes = require("../src/routes/auth");
 const depositRoutes = require("../src/routes/deposit");
 const walletRoutes = require("../src/routes/wallet");
@@ -14,153 +10,169 @@ const referralsRoutes = require("../src/routes/referrals");
 const statsRoutes = require("../src/routes/stats");
 const leaderboardRoutes = require("../src/routes/leaderboard");
 const scratchCardRoutes = require("../src/routes/scratchCard");
+const spinRoutes = require("../src/routes/spin");
 
 const app = express();
 
-// ======================================================
-// CORS
-// ======================================================
+/* =========================================================
+   CORS
+========================================================= */
 
 app.use(
-    cors({
-        origin: true,
-        credentials: true,
-
-        methods: [
-            "GET",
-            "POST",
-            "PUT",
-            "PATCH",
-            "DELETE",
-            "OPTIONS"
-        ],
-
-        allowedHeaders: [
-            "Content-Type",
-            "Authorization",
-            "X-Requested-With"
-        ]
-    })
+  cors({
+    origin: true,
+    credentials: true,
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS"
+    ],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With"
+    ]
+  })
 );
 
-// ======================================================
-// BODY PARSER
-// ======================================================
+/* =========================================================
+   BODY PARSER
+========================================================= */
 
 app.use(
-    express.json({
-        limit: "10mb"
-    })
+  express.json({
+    limit: "10mb"
+  })
 );
 
 app.use(
-    express.urlencoded({
-        extended: true,
-        limit: "10mb"
-    })
+  express.urlencoded({
+    extended: true,
+    limit: "10mb"
+  })
 );
 
-// ======================================================
-// ROOT
-// ======================================================
+/* =========================================================
+   BASIC HEALTH ROUTES
+========================================================= */
 
 app.get("/", (req, res) => {
-    return res.status(200).json({
-        success: true,
-        message: "GAMERZADDA API is running",
-        status: "online"
-    });
+  res.status(200).json({
+    success: true,
+    message: "GAMERZADDA API is running",
+    status: "online"
+  });
 });
-
-// ======================================================
-// API ROOT
-// ======================================================
 
 app.get("/api", (req, res) => {
-    return res.status(200).json({
-        success: true,
-        message: "GAMERZADDA API",
-        status: "online"
-    });
+  res.status(200).json({
+    success: true,
+    message: "GAMERZADDA API",
+    status: "online"
+  });
 });
-
-// ======================================================
-// HEALTH CHECK
-// ======================================================
 
 app.get("/health", (req, res) => {
-    return res.status(200).json({
-        success: true,
-        message: "GAMERZADDA API healthy",
-        status: "online"
-    });
+  res.status(200).json({
+    success: true,
+    message: "GAMERZADDA API healthy",
+    status: "online"
+  });
 });
 
-// ======================================================
-// API ROUTES
-// ======================================================
+/* =========================================================
+   AUTH
+========================================================= */
 
 app.use("/api/auth", authRoutes);
+
+/* =========================================================
+   TOURNAMENTS
+========================================================= */
+
 app.use("/api/tournaments", tournamentsRoutes);
+
+/* =========================================================
+   DEPOSIT / PAYMENT
+========================================================= */
+
 app.use("/api/deposit", depositRoutes);
+
+/* =========================================================
+   WALLET
+========================================================= */
+
 app.use("/api/wallet", walletRoutes);
+
+/* =========================================================
+   PROFILE
+========================================================= */
+
 app.use("/api/profile", profileRoutes);
+
+/* =========================================================
+   REFERRALS
+========================================================= */
+
 app.use("/api/referrals", referralsRoutes);
+
+/* =========================================================
+   USER STATS
+========================================================= */
+
 app.use("/api", statsRoutes);
+
+/* =========================================================
+   LEADERBOARD
+========================================================= */
+
 app.use("/api", leaderboardRoutes);
 
-// ======================================================
-// SCRATCH CARD
-//
-// GET  /api/scratch-card/:userId
-// POST /api/scratch-card/:userId/claim
-// ======================================================
+/* =========================================================
+   SCRATCH CARD
+========================================================= */
 
 app.use("/api", scratchCardRoutes);
 
-// ======================================================
-// 404 HANDLER
-// ======================================================
+/* =========================================================
+   LUCKY SPIN
+   GET  /api/spin/:userId
+   POST /api/spin/:userId
+========================================================= */
+
+app.use("/api", spinRoutes);
+
+/* =========================================================
+   404
+========================================================= */
 
 app.use((req, res) => {
-
-    console.log(
-        "404 API ROUTE:",
-        req.method,
-        req.originalUrl
-    );
-
-    return res.status(404).json({
-        success: false,
-        message: "API endpoint not found",
-        path: req.originalUrl,
-        method: req.method
-    });
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found",
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
-// ======================================================
-// GLOBAL ERROR HANDLER
-// ======================================================
+/* =========================================================
+   GLOBAL ERROR HANDLER
+========================================================= */
 
 app.use((err, req, res, next) => {
+  console.error("GLOBAL API ERROR:", err);
 
-    console.error(
-        "GLOBAL API ERROR:",
-        err
-    );
-
-    return res.status(
-        err.status || 500
-    ).json({
-        success: false,
-        message:
-            err.message ||
-            "Internal server error"
-    });
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal server error"
+  });
 });
 
-// ======================================================
-// VERCEL EXPORT
-// ======================================================
+/* =========================================================
+   EXPORT
+========================================================= */
 
 module.exports = app;
