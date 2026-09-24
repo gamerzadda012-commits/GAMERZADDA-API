@@ -658,269 +658,158 @@ router.post("/otp", async (req, res) => {
 
             // SMS PROVIDER
 
-            // ----------------------------------------------
-
             const smsBaseUrl =
-
                 process.env.SMS_BASE_URL ||
-
                 "http://sms.hspmedianetwork.com/sendSMS";
 
-            const smsUsername =
-
-                process.env.SMS_USERNAME;
-
-            const smsApiKey =
-
-                process.env.SMS_API_KEY;
+            const smsUsername = process.env.SMS_USERNAME;
+            const smsApiKey = process.env.SMS_API_KEY;
 
             const smsSenderName =
-
-                process.env.SMS_SENDER_NAME ||
-
-                "FYDBZR";
+                process.env.SMS_SENDER_NAME || "FYDBZR";
 
             const smsType =
-
-                process.env.SMS_TYPE ||
-
-                "TRANS";
+                process.env.SMS_TYPE || "TRANS";
 
             const smsTemplate =
-
                 process.env.SMS_OTP_MESSAGE ||
-
                 "Dear {#var#}, your One Time Password for Registration is {#var#}. Thanks and Regards Fayda Bazar.";
 
-            if (
-
-                !smsUsername ||
-
-                !smsApiKey
-
-            ) {
+            if (!smsUsername || !smsApiKey) {
+                await supabase
+                    .from("otp_codes")
+                    .update({ verified: true })
+                    .eq("phone", cleanPhone)
+                    .eq("flow", flow)
+                    .eq("otp_hash", otpHash);
 
                 return res.status(500).json({
-
                     success: false,
-
                     code: "SMS_CONFIG_ERROR",
-
-                    message:
-
-                        "OTP service is not configured."
-
+                    message: "OTP service is not configured."
                 });
-
             }
 
-            const smsMessage = smsTemplate
-                .replace("{#var#}", "Gamerzadda")
-                .replace("{#var#}", generatedOtp);
+            let smsMessage = smsTemplate;
+
+            if (smsMessage.includes("{#var#}")) {
+                smsMessage = smsMessage.replace("{#var#}", "Gamerzadda");
+                smsMessage = smsMessage.replace("{#var#}", generatedOtp);
+            } else if (smsMessage.includes("{otp}")) {
+                smsMessage = smsMessage.replace("{otp}", generatedOtp);
+            } else {
+                smsMessage =
+                    `Dear Gamerzadda, your One Time Password for Registration is ${generatedOtp}. Thanks and Regards Fayda Bazar.`;
+            }
 
             const smsUrl =
-
                 `${smsBaseUrl}?` +
-
                 new URLSearchParams({
-
-                    username:
-
-                        smsUsername,
-
-                    message:
-
-                        smsMessage,
-
-                    sendername:
-
-                        smsSenderName,
-
-                    smstype:
-
-                        smsType,
-
-                    numbers:
-
-                        cleanPhone,
-
-                    apikey:
-
-                        smsApiKey
-
+                    username: smsUsername,
+                    message: smsMessage,
+                    sendername: smsSenderName,
+                    smstype: smsType,
+                    numbers: cleanPhone,
+                    apikey: smsApiKey
                 }).toString();
 
+            console.log(
+                "SMS PROVIDER REQUEST:",
+                JSON.stringify({
+                    baseUrl: smsBaseUrl,
+                    sendername: smsSenderName,
+                    smstype: smsType,
+                    number: cleanPhone
+                })
+            );
+
             try {
-
-                const smsResponse =
-
-                    await fetch(
-
-                        smsUrl,
-
-                        {
-
-                            method: "GET"
-
-                        }
-
-                    );
+                const smsResponse = await fetch(smsUrl, {
+                    method: "GET"
+                });
 
                 const smsResponseText =
-
                     await smsResponse.text();
 
                 console.log(
-
                     "SMS PROVIDER RESPONSE:",
-
                     smsResponse.status,
-
                     smsResponseText
-
                 );
 
-                let providerAccepted = smsResponse.ok;
-                try {
-                    const providerJson = JSON.parse(smsResponseText);
-                    const rows = Array.isArray(providerJson) ? providerJson : [providerJson];
-                    const responseCode = rows.map((row) => String(row?.responseCode || "").toLowerCase()).join(" ");
-                    const msgId = rows.find((row) => row?.msgid)?.msgid || null;
-                    console.log("SMS PROVIDER MSGID:", msgId || "NONE");
-                    providerAccepted = smsResponse.ok && responseCode.includes("message successfully submitted");
-                } catch (parseError) {
-                    console.error("SMS PROVIDER RESPONSE PARSE ERROR:", parseError);
-                    providerAccepted = false;
-                }
-
-                if (!providerAccepted) {
-
+                if (!smsResponse.ok) {
                     await supabase
-
                         .from("otp_codes")
-
-                        .update({
-
-                            verified: true
-
-                        })
-
-                        .eq(
-
-                            "phone",
-
-                            cleanPhone
-
-                        )
-
-                        .eq(
-
-                            "flow",
-
-                            flow
-
-                        )
-
-                        .eq(
-
-                            "otp_hash",
-
-                            otpHash
-
-                        );
+                        .update({ verified: true })
+                        .eq("phone", cleanPhone)
+                        .eq("flow", flow)
+                        .eq("otp_hash", otpHash);
 
                     return res.status(502).json({
-
                         success: false,
-
                         code: "SMS_SEND_FAILED",
-
-                        message:
-
-                            "Unable to send OTP."
-
+                        message: "Unable to send OTP."
                     });
-
                 }
 
+                let providerMessageId = null;
+
+                try {
+                    const parsed = JSON.parse(smsResponseText);
+                    const rows = Array.isArray(parsed)
+                        ? parsed
+                        : [parsed];
+
+                    const msgRow = rows.find(
+                        (row) => row && row.msgid
+                    );
+
+                    providerMessageId = msgRow?.msgid
+                        ? String(msgRow.msgid)
+                        : null;
+                } catch (parseError) {
+                    console.log(
+                        "SMS PROVIDER RESPONSE IS NOT JSON:",
+                        String(
+                            parseError?.message || parseError
+                        )
+                    );
+                }
+
+                console.log(
+                    "SMS PROVIDER MSGID:",
+                    providerMessageId || "NOT_RETURNED"
+                );
+
             } catch (smsError) {
-
                 console.error(
-
                     "SMS PROVIDER ERROR:",
-
                     smsError
-
                 );
 
                 await supabase
-
                     .from("otp_codes")
-
-                    .update({
-
-                        verified: true
-
-                    })
-
-                    .eq(
-
-                        "phone",
-
-                        cleanPhone
-
-                    )
-
-                    .eq(
-
-                        "flow",
-
-                        flow
-
-                    )
-
-                    .eq(
-
-                        "otp_hash",
-
-                        otpHash
-
-                    );
+                    .update({ verified: true })
+                    .eq("phone", cleanPhone)
+                    .eq("flow", flow)
+                    .eq("otp_hash", otpHash);
 
                 return res.status(502).json({
-
                     success: false,
-
                     code: "SMS_SEND_FAILED",
-
-                    message:
-
-                        "Unable to send OTP."
-
+                    message: "Unable to send OTP."
                 });
-
             }
 
             console.log(
-
                 `OTP sent successfully to ${cleanPhone}`
-
             );
 
             return res.json({
-
                 success: true,
-
                 code: "OTP_SENT",
-
-                message:
-
-                    "OTP sent successfully.",
-
-                expiresInSeconds:
-
-                    OTP_EXPIRY_SECONDS
-
+                message: "OTP sent successfully.",
+                expiresInSeconds: OTP_EXPIRY_SECONDS
             });
 
         }
