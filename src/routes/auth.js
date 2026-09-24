@@ -664,7 +664,7 @@ router.post("/otp", async (req, res) => {
 
                 process.env.SMS_BASE_URL ||
 
-                "http\\://sms.hspsms.com/sendSMS";
+                "https://sms.hspsms.com/sendSMS";
 
             const smsUsername =
 
@@ -690,7 +690,7 @@ router.post("/otp", async (req, res) => {
 
                 process.env.SMS_OTP_MESSAGE ||
 
-                "{otp} is the OTP for Gamerzadda. Please do not share this OTP with anyone. This SMS has been sent from GuestRAR.";
+                "{otp} is the OTP for Gamerzadda. Please do not share this OTP with anyone.";
 
             if (
 
