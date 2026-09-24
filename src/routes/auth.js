@@ -664,7 +664,7 @@ router.post("/otp", async (req, res) => {
 
                 process.env.SMS_BASE_URL ||
 
-                "https://sms.hspsms.com/sendSMS";
+                "http://sms.hspmedianetwork.com/sendSMS";
 
             const smsUsername =
 
@@ -678,7 +678,7 @@ router.post("/otp", async (req, res) => {
 
                 process.env.SMS_SENDER_NAME ||
 
-                "GUERAR";
+                "FYDBZR";
 
             const smsType =
 
@@ -690,7 +690,7 @@ router.post("/otp", async (req, res) => {
 
                 process.env.SMS_OTP_MESSAGE ||
 
-                "{otp} is the OTP for Gamerzadda. Please do not share this OTP with anyone.";
+                "Dear {#var#}, your One Time Password for Registration is {#var#}. Thanks and Regards Fayda Bazar.";
 
             if (
 
@@ -714,15 +714,9 @@ router.post("/otp", async (req, res) => {
 
             }
 
-            const smsMessage =
-
-                smsTemplate.replace(
-
-                    "{otp}",
-
-                    generatedOtp
-
-                );
+            const smsMessage = smsTemplate
+                .replace("{#var#}", "Gamerzadda")
+                .replace("{#var#}", generatedOtp);
 
             const smsUrl =
 
@@ -786,7 +780,20 @@ router.post("/otp", async (req, res) => {
 
                 );
 
-                if (!smsResponse.ok) {
+                let providerAccepted = smsResponse.ok;
+                try {
+                    const providerJson = JSON.parse(smsResponseText);
+                    const rows = Array.isArray(providerJson) ? providerJson : [providerJson];
+                    const responseCode = rows.map((row) => String(row?.responseCode || "").toLowerCase()).join(" ");
+                    const msgId = rows.find((row) => row?.msgid)?.msgid || null;
+                    console.log("SMS PROVIDER MSGID:", msgId || "NONE");
+                    providerAccepted = smsResponse.ok && responseCode.includes("message successfully submitted");
+                } catch (parseError) {
+                    console.error("SMS PROVIDER RESPONSE PARSE ERROR:", parseError);
+                    providerAccepted = false;
+                }
+
+                if (!providerAccepted) {
 
                     await supabase
 
