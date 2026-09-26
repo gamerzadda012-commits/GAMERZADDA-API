@@ -112,7 +112,7 @@ router.post("/create", async (req, res) => {
 
         const appUrl =
             process.env.APP_URL ||
-            "https://gamerzadda-api.vercel.app";
+            "https://api.gamerzadda.in";
 
         // ==============================================
         // ORDER

@@ -122,6 +122,8 @@ export default function BannersPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const [form, setForm] = useState({
     title: "",
@@ -152,7 +154,7 @@ export default function BannersPage() {
     const { data, error } = await supabase
       .from("banners")
       .select(
-        "id,image_url,click_url,title,is_active,sort_order,created_at,game_type"
+        "id,image_url,storage_path,click_url,title,is_active,sort_order,created_at,game_type"
       )
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
@@ -168,52 +170,141 @@ export default function BannersPage() {
     setLoading(false);
   }
 
+  function handleImageFile(e) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setToast("Please select an image file");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setToast("Image must be 10 MB or smaller");
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedFile(file);
+    setSelectedFileName(file.name);
+
+    // Uploaded file takes priority over manual URL.
+    setForm((prev) => ({
+      ...prev,
+      image_url: "",
+    }));
+  }
+
   async function createBanner(e) {
     e.preventDefault();
 
-    if (!form.image_url.trim()) {
-      setToast("Image URL is required");
+    if (!selectedFile && !form.image_url.trim()) {
+      setToast("Upload an image or enter an image URL");
       return;
     }
 
     setSaving(true);
 
-    const { data, error } = await supabase
-      .from("banners")
-      .insert({
-        title: form.title.trim() || "Untitled Banner",
-        image_url: form.image_url.trim(),
-        click_url: form.click_url.trim() || null,
-        game_type: form.game_type,
-        sort_order: Number(form.sort_order) || 1,
-        is_active: form.is_active,
-      })
-      .select(
-        "id,image_url,click_url,title,is_active,sort_order,created_at,game_type"
-      )
-      .single();
+    let storagePath = null;
 
-    if (error) {
-      console.error("Create banner error:", error);
-      setToast(error.message || "Failed to create banner");
+    try {
+      let finalImageUrl = form.image_url.trim();
+
+      // Upload selected image to Supabase Storage.
+      if (selectedFile) {
+        const safeName = selectedFile.name
+          .toLowerCase()
+          .replace(/[^a-z0-9._-]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        storagePath =
+          `banners/${Date.now()}-${crypto.randomUUID()}-${safeName || "banner"}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("banners")
+          .upload(storagePath, selectedFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: selectedFile.type,
+          });
+
+        if (uploadError) {
+          throw new Error(`Image upload failed: ${uploadError.message}`);
+        }
+
+        const { data: publicData } = supabase.storage
+          .from("banners")
+          .getPublicUrl(storagePath);
+
+        finalImageUrl = publicData.publicUrl;
+      } else {
+        // External URL mode.
+        try {
+          const parsed = new URL(finalImageUrl);
+
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            throw new Error("Invalid protocol");
+          }
+        } catch {
+          throw new Error("Please enter a valid image URL");
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("banners")
+        .insert({
+          title: form.title.trim() || "Untitled Banner",
+          image_url: finalImageUrl,
+          storage_path: storagePath,
+          click_url: form.click_url.trim() || null,
+          game_type: form.game_type,
+          sort_order: Number(form.sort_order) || 1,
+          is_active: form.is_active,
+        })
+        .select(
+          "id,image_url,storage_path,click_url,title,is_active,sort_order,created_at,game_type"
+        )
+        .single();
+
+      if (error) {
+        // If DB insert fails after upload, remove the uploaded file.
+        if (storagePath) {
+          await supabase.storage.from("banners").remove([storagePath]);
+        }
+
+        throw new Error(error.message || "Failed to create banner");
+      }
+
+      setBanners((prev) => [...prev, data]);
+
+      setForm({
+        title: "",
+        image_url: "",
+        click_url: "",
+        game_type: "home",
+        sort_order: 1,
+        is_active: true,
+      });
+
+      setSelectedFile(null);
+      setSelectedFileName("");
+      setShowModal(false);
       setSaving(false);
-      return;
+      setToast("Banner uploaded successfully");
+    } catch (error) {
+      console.error("Create banner error:", error);
+
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to create banner"
+      );
+
+      setSaving(false);
     }
-
-    setBanners((prev) => [...prev, data]);
-
-    setForm({
-      title: "",
-      image_url: "",
-      click_url: "",
-      game_type: "home",
-      sort_order: 1,
-      is_active: true,
-    });
-
-    setShowModal(false);
-    setSaving(false);
-    setToast("Banner created successfully");
   }
 
   async function toggleBanner(id, currentStatus) {
@@ -248,6 +339,21 @@ export default function BannersPage() {
     );
 
     if (!confirmed) return;
+
+    const banner = banners.find((item) => item.id === id);
+
+    // Delete Storage image first when this banner owns one.
+    if (banner?.storage_path) {
+      const { error: storageError } = await supabase.storage
+        .from("banners")
+        .remove([banner.storage_path]);
+
+      if (storageError) {
+        console.error("Storage delete error:", storageError);
+        // Continue with DB deletion so a broken Storage object
+        // does not leave the banner stuck in the admin panel.
+      }
+    }
 
     const { error } = await supabase
       .from("banners")
@@ -720,6 +826,24 @@ export default function BannersPage() {
                           >
                             {banner.image_url}
                           </div>
+
+                          <div
+                            style={{
+                              marginTop: 3,
+                              fontSize: 9,
+                              color: banner.storage_path
+                                ? "#16a34a"
+                                : "#c28a00",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 210,
+                            }}
+                          >
+                            {banner.storage_path
+                              ? `Storage: ${banner.storage_path}`
+                              : "External image / no storage path"}
+                          </div>
                         </td>
 
                         {/* ROUTING */}
@@ -990,9 +1114,11 @@ export default function BannersPage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  setShowModal(false)
-                }
+                onClick={() => {
+                  setShowModal(false);
+                  setSelectedFile(null);
+                  setSelectedFileName("");
+                }}
                 style={{
                   border: 0,
                   background:
@@ -1032,11 +1158,55 @@ export default function BannersPage() {
 
                 <div style={{ marginBottom: 13 }}>
                   <label style={labelStyle}>
-                    Image URL *
+                    Upload Banner Image
                   </label>
 
                   <input
-                    required
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageFile}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      border: "1px dashed #d7d7d7",
+                      borderRadius: 5,
+                      background: "#fafafa",
+                      padding: "9px 10px",
+                      fontSize: 10,
+                      color: "#666",
+                    }}
+                  />
+
+                  {selectedFileName && (
+                    <div
+                      style={{
+                        marginTop: 5,
+                        fontSize: 9,
+                        color: "#16a34a",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Selected: {selectedFileName}
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 9,
+                      color: "#aaa",
+                    }}
+                  >
+                    JPG, PNG, WEBP • Max 10 MB • Saves to Supabase Storage
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 13 }}>
+                  <label style={labelStyle}>
+                    Image URL (Optional)
+                  </label>
+
+                  <input
                     value={form.image_url}
                     onChange={(e) =>
                       setForm({
@@ -1128,7 +1298,7 @@ export default function BannersPage() {
                   </div>
                 </div>
 
-                {form.image_url && (
+                {form.image_url && !selectedFile && (
                   <div
                     style={{
                       marginTop: 14,
@@ -1251,7 +1421,7 @@ export default function BannersPage() {
                   }}
                 >
                   {saving
-                    ? "Creating..."
+                    ? "Uploading..."
                     : "Create Banner"}
                 </button>
               </div>
