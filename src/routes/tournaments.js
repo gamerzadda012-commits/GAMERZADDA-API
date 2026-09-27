@@ -159,258 +159,160 @@ router.get("/banners", async (req, res) => {
 
 
 router.get("/", async (req, res) => {
+    const requestStartedAt = Date.now();
 
     try {
+        const game = String(req.query.game || "").trim();
 
-        const game =
-
-            String(
-
-                req.query.game || ""
-
-            ).trim();
-
-
-
-        let query =
-
-            supabase
-
-                .from("tournaments")
-
-                .select(`
-
-                    id,
-
-                    title,
-
-                    game,
-
-                    mode,
-
-                    entry_fee,
-
-                    prize_pool,
-
-                    kill_reward,
-
-                    max_players,
-
-                    start_time,
-
-                    map,
-
-                    status,
-
-                    rules,
-
-                    bonus_usable_percent
-
-                `)
-
-                .order(
-
-                    "start_time",
-
-                    {
-
-                        ascending: true
-
-                    }
-
-                );
-
-
-
-        if (game) {
-
-            query =
-
-                query.eq(
-
-                    "game",
-
-                    game
-
-                );
-
-        }
-
-
-
-        const {
-
-            data: tournaments,
-
-            error
-
-        } = await query;
-
-
-
-        if (error) {
-
-
-
-            console.error(
-
-                "GET TOURNAMENTS ERROR:",
-
-                error
-
-            );
-
-
-
-            return res.status(500).json({
-
-                success: false,
-
-                error: error.message
-
-            });
-
-        }
-
-
-
-        const list =
-
-            tournaments || [];
-
-
-
-        const result = [];
-
-
-
-        for (const tournament of list) {
-
-
-
-            const {
-
-                count,
-
-                error: countError
-
-            } =
-
-                await supabase
-
-                    .from(
-
-                        "tournament_entries"
-
-                    )
-
-                    .select(
-
-                        "id",
-
-                        {
-
-                            count: "exact",
-
-                            head: true
-
-                        }
-
-                    )
-
-                    .eq(
-
-                        "tournament_id",
-
-                        tournament.id
-
-                    )
-
-                    .eq(
-
-                        "cancelled",
-
-                        false
-
-                    );
-
-
-
-            if (countError) {
-
-
-
-                console.error(
-
-                    "COUNT ERROR:",
-
-                    countError
-
-                );
-
-            }
-
-
-
-            result.push({
-
-                ...tournament,
-
-                joined_count:
-
-                    count || 0
-
-            });
-
-        }
-
-
-
-        return res.status(200).json({
-
-            success: true,
-
-            tournaments: result
-
-        });
-
-
-
-    } catch (error) {
-
-
-
-        console.error(
-
-            "GET TOURNAMENTS EXCEPTION:",
-
-            error
-
+        console.log(
+            `[TOURNAMENTS] Request started${game ? ` | game=${game}` : ""}`
         );
 
+        // --------------------------------------------------------
+        // MAIN TOURNAMENT QUERY
+        // --------------------------------------------------------
 
+        let query = supabase
+            .from("tournaments")
+            .select(`
+                id,
+                title,
+                game,
+                mode,
+                entry_fee,
+                prize_pool,
+                kill_reward,
+                max_players,
+                start_time,
+                map,
+                status,
+                rules,
+                bonus_usable_percent
+            `)
+            .order("start_time", {
+                ascending: true
+            });
 
-        return res.status(500).json({
+        if (game) {
+            query = query.eq("game", game);
+        }
 
-            success: false,
+        const {
+            data: tournaments,
+            error
+        } = await query;
 
-            error:
+        if (error) {
+            console.error(
+                "[TOURNAMENTS] Main query error:",
+                error
+            );
 
-                error?.message ||
+            return res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
 
-                "Internal server error"
+        const list = tournaments || [];
 
+        console.log(
+            `[TOURNAMENTS] Main query returned ${list.length} tournaments`
+        );
+
+        // --------------------------------------------------------
+        // JOINED COUNT
+        // Run all entry-count requests in parallel instead of
+        // waiting for every tournament one by one.
+        // --------------------------------------------------------
+
+        const result = await Promise.all(
+            list.map(async (tournament) => {
+                try {
+                    const {
+                        count,
+                        error: countError
+                    } = await supabase
+                        .from("tournament_entries")
+                        .select("id", {
+                            count: "exact",
+                            head: true
+                        })
+                        .eq(
+                            "tournament_id",
+                            tournament.id
+                        )
+                        .eq(
+                            "cancelled",
+                            false
+                        );
+
+                    if (countError) {
+                        console.error(
+                            `[TOURNAMENTS] Count error | tournament=${tournament.id}`,
+                            countError
+                        );
+
+                        return {
+                            ...tournament,
+                            joined_count: 0
+                        };
+                    }
+
+                    return {
+                        ...tournament,
+                        joined_count: count || 0
+                    };
+
+                } catch (countException) {
+                    console.error(
+                        `[TOURNAMENTS] Count exception | tournament=${tournament.id}`,
+                        countException
+                    );
+
+                    return {
+                        ...tournament,
+                        joined_count: 0
+                    };
+                }
+            })
+        );
+
+        const elapsed =
+            Date.now() - requestStartedAt;
+
+        console.log(
+            `[TOURNAMENTS] Completed | game=${game || "ALL"} | count=${result.length} | time=${elapsed}ms`
+        );
+
+        return res.status(200).json({
+            success: true,
+            tournaments: result
         });
 
+    } catch (error) {
+        const elapsed =
+            Date.now() - requestStartedAt;
+
+        console.error(
+            `[TOURNAMENTS] Exception | time=${elapsed}ms`,
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error"
+        });
     }
-
 });
-
 
 
 // ============================================================
 
 // GET PARTICIPANTS
+
 
 // GET /api/tournaments/participants?tournamentId=UUID
 
