@@ -8,11 +8,18 @@ const adminRouter = require("./routes/admin");
 const tournamentsRouter = require("./routes/tournaments");
 const walletRouter = require("./routes/wallet");
 const depositRouter = require("./routes/deposit");
+const leaderboardRouter = require("./routes/leaderboard");
 
 const app = express();
 
 const ADMIN_FRONTEND_URL =
     process.env.ADMIN_FRONTEND_URL || "http://localhost:3000";
+
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+*/
 
 app.use(
     cors({
@@ -20,6 +27,12 @@ app.use(
         credentials: true
     })
 );
+
+/*
+|--------------------------------------------------------------------------
+| BODY PARSERS
+|--------------------------------------------------------------------------
+*/
 
 app.use(
     express.json({
@@ -48,7 +61,10 @@ app.get("/api/health", async (req, res) => {
             database: "connected"
         });
     } catch (error) {
-        console.error("HEALTH CHECK ERROR:", error);
+        console.error(
+            "HEALTH CHECK ERROR:",
+            error
+        );
 
         res.status(500).json({
             success: false,
@@ -111,6 +127,27 @@ app.use(
 app.use(
     "/api/deposit",
     depositRouter
+);
+
+/*
+|--------------------------------------------------------------------------
+| LEADERBOARD ROUTES
+|--------------------------------------------------------------------------
+|
+| Main Android endpoint:
+|
+| /api/leaderboard?period=all&game=ALL
+|
+| Also supports:
+|
+| /api/leaderboard/leaderboard
+|
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+    "/api/leaderboard",
+    leaderboardRouter
 );
 
 /*

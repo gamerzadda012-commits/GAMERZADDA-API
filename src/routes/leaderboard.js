@@ -65,26 +65,46 @@ function matchesGame(gameValue, filter) {
         return (
             game === "free fire" ||
             game === "freefire" ||
-            game.includes("free fire") && !game.includes("max")
+            (game.includes("free fire") && !game.includes("max"))
         );
     }
 
     if (wanted === "clash squad") {
-        return game.includes("clash squad") || game.includes("clashsquad");
+        return (
+            game.includes("clash squad") ||
+            game.includes("clashsquad")
+        );
     }
 
     if (wanted === "lone wolf") {
-        return game.includes("lone wolf") || game.includes("lonewolf");
+        return (
+            game.includes("lone wolf") ||
+            game.includes("lonewolf")
+        );
     }
 
     return game === wanted;
 }
 
-router.get("/leaderboard", async (req, res) => {
+
+/*
+ * =========================================================
+ * LEADERBOARD
+ *
+ * Supports BOTH:
+ *
+ * /api/leaderboard
+ * /api/leaderboard/leaderboard
+ *
+ * =========================================================
+ */
+router.get(["/", "/leaderboard"], async (req, res) => {
     try {
         const period = String(
             req.query.period || "all"
-        ).trim().toLowerCase();
+        )
+            .trim()
+            .toLowerCase();
 
         const game = String(
             req.query.game || "ALL"
@@ -149,7 +169,9 @@ router.get("/leaderboard", async (req, res) => {
         const tournamentIds = [
             ...new Set(
                 safeResults
-                    .map((row) => String(row.tournament_id || "").trim())
+                    .map((row) =>
+                        String(row.tournament_id || "").trim()
+                    )
                     .filter(Boolean)
             )
         ];
@@ -193,7 +215,9 @@ router.get("/leaderboard", async (req, res) => {
             );
 
             return matchesGame(
-                tournament?.game || tournament?.mode || "",
+                tournament?.game ||
+                    tournament?.mode ||
+                    "",
                 game
             );
         });
@@ -211,7 +235,9 @@ router.get("/leaderboard", async (req, res) => {
         const userIds = [
             ...new Set(
                 filteredResults
-                    .map((row) => String(row.user_id || "").trim())
+                    .map((row) =>
+                        String(row.user_id || "").trim()
+                    )
                     .filter(Boolean)
             )
         ];
@@ -221,7 +247,9 @@ router.get("/leaderboard", async (req, res) => {
             error: usersError
         } = await supabaseAdmin
             .from("users")
-            .select("id,full_name,bio,avatar_url")
+            .select(
+                "id,full_name,bio,avatar_url"
+            )
             .in("id", userIds);
 
         if (usersError) {
@@ -246,9 +274,13 @@ router.get("/leaderboard", async (req, res) => {
         const totals = new Map();
 
         for (const row of filteredResults) {
-            const userId = String(row.user_id || "").trim();
+            const userId = String(
+                row.user_id || ""
+            ).trim();
 
-            if (!userId) continue;
+            if (!userId) {
+                continue;
+            }
 
             const amount = Number(
                 row.winning_amount || 0
@@ -260,7 +292,9 @@ router.get("/leaderboard", async (req, res) => {
             );
         }
 
-        const players = [...totals.entries()]
+        const players = [
+            ...totals.entries()
+        ]
             .map(([userId, winningAmount]) => {
                 const user = userMap.get(userId);
 
@@ -280,16 +314,27 @@ router.get("/leaderboard", async (req, res) => {
                     )
                 };
             })
-            .filter((player) => player.name.length > 0)
+            .filter(
+                (player) =>
+                    player.name.length > 0
+            )
             .sort((a, b) => {
-                if (b.winningAmount !== a.winningAmount) {
-                    return b.winningAmount - a.winningAmount;
+                if (
+                    b.winningAmount !==
+                    a.winningAmount
+                ) {
+                    return (
+                        b.winningAmount -
+                        a.winningAmount
+                    );
                 }
 
                 return a.name.localeCompare(
                     b.name,
                     "en",
-                    { sensitivity: "base" }
+                    {
+                        sensitivity: "base"
+                    }
                 );
             })
             .slice(0, 100)
@@ -299,7 +344,8 @@ router.get("/leaderboard", async (req, res) => {
                 name: player.name,
                 bio: player.bio,
                 avatarUrl: player.avatarUrl,
-                winningAmount: player.winningAmount
+                winningAmount:
+                    player.winningAmount
             }));
 
         return res.status(200).json({
@@ -318,7 +364,9 @@ router.get("/leaderboard", async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            error: error?.message || "Internal server error"
+            error:
+                error?.message ||
+                "Internal server error"
         });
     }
 });
