@@ -10,6 +10,7 @@ const walletRouter = require("./routes/wallet");
 const depositRouter = require("./routes/deposit");
 const leaderboardRouter = require("./routes/leaderboard");
 const referralsRouter = require("./routes/referrals");
+const statsRouter = require("./routes/stats");
 
 const app = express();
 
@@ -62,10 +63,7 @@ app.get("/api/health", async (req, res) => {
             database: "connected"
         });
     } catch (error) {
-        console.error(
-            "HEALTH CHECK ERROR:",
-            error
-        );
+        console.error("HEALTH CHECK ERROR:", error);
 
         res.status(500).json({
             success: false,
@@ -81,10 +79,7 @@ app.get("/api/health", async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/auth",
-    authRouter
-);
+app.use("/api/auth", authRouter);
 
 /*
 |--------------------------------------------------------------------------
@@ -92,10 +87,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/admin",
-    adminRouter
-);
+app.use("/api/admin", adminRouter);
 
 /*
 |--------------------------------------------------------------------------
@@ -103,10 +95,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/tournaments",
-    tournamentsRouter
-);
+app.use("/api/tournaments", tournamentsRouter);
 
 /*
 |--------------------------------------------------------------------------
@@ -114,10 +103,7 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/wallet",
-    walletRouter
-);
+app.use("/api/wallet", walletRouter);
 
 /*
 |--------------------------------------------------------------------------
@@ -125,48 +111,39 @@ app.use(
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/deposit",
-    depositRouter
-);
+app.use("/api/deposit", depositRouter);
 
 /*
 |--------------------------------------------------------------------------
 | LEADERBOARD ROUTES
 |--------------------------------------------------------------------------
-|
-| Main Android endpoint:
-|
-| /api/leaderboard?period=all&game=ALL
-|
-| Also supports:
-|
-| /api/leaderboard/leaderboard
-|
-|--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/leaderboard",
-    leaderboardRouter
-);
+app.use("/api/leaderboard", leaderboardRouter);
 
 /*
 |--------------------------------------------------------------------------
 | REFERRAL ROUTES
 |--------------------------------------------------------------------------
 |
-| Android endpoint:
-|
 | /api/referrals/:userId
 |
 |--------------------------------------------------------------------------
 */
 
-app.use(
-    "/api/referrals",
-    referralsRouter
-);
+app.use("/api/referrals", referralsRouter);
+
+/*
+|--------------------------------------------------------------------------
+| MY STATS ROUTES
+|--------------------------------------------------------------------------
+|
+| /api/stats/:userId
+|
+|--------------------------------------------------------------------------
+*/
+
+app.use("/api", statsRouter);
 
 /*
 |--------------------------------------------------------------------------
@@ -188,11 +165,7 @@ app.get("/", (req, res) => {
 */
 
 app.use((req, res) => {
-    console.log(
-        "404 ROUTE:",
-        req.method,
-        req.originalUrl
-    );
+    console.log("404 ROUTE:", req.method, req.originalUrl);
 
     res.status(404).json({
         success: false,
@@ -208,16 +181,11 @@ app.use((req, res) => {
 */
 
 app.use((error, req, res, next) => {
-    console.error(
-        "GLOBAL SERVER ERROR:",
-        error
-    );
+    console.error("GLOBAL SERVER ERROR:", error);
 
-    res.status(500).json({
+    res.status(error?.status || 500).json({
         success: false,
-        error:
-            error?.message ||
-            "Internal server error"
+        error: error?.message || "Internal server error"
     });
 });
 
@@ -227,19 +195,14 @@ app.use((error, req, res, next) => {
 |--------------------------------------------------------------------------
 */
 
-const PORT =
-    process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 if (require.main === module) {
-    app.listen(
-        PORT,
-        "0.0.0.0",
-        () => {
-            console.log(
-                `GAMERZADDA API running on port ${PORT}`
-            );
-        }
-    );
+    app.listen(PORT, "0.0.0.0", () => {
+        console.log(
+            `GAMERZADDA API running on port ${PORT}`
+        );
+    });
 }
 
 module.exports = app;
