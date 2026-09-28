@@ -375,17 +375,6 @@ router.get(["/:userId", "/stats/:userId"], async (req, res) => {
             withdrawals = [];
         }
 
-        if (withdrawalsError) {
-            console.error(
-                "STATS WITHDRAW ERROR:",
-                withdrawalsError
-            );
-
-            return res.status(500).json({
-                success: false,
-                error: "Unable to load withdrawal history."
-            });
-        }
 
         const withdrawalRows =
             withdrawals || [];
