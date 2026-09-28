@@ -320,184 +320,210 @@ router.get("/", async (req, res) => {
 
 
 
-router.get(
-
-    "/participants",
-
-    async (req, res) => {
-
-
-
-        try {
-
-
-
-            const tournamentId =
-
-                String(
-
-                    req.query.tournamentId ||
-
-                    ""
-
-                ).trim();
-
-
-
-            if (!tournamentId) {
-
-
-
-                return res.status(400).json({
-
-                    success: false,
-
-                    error:
-
-                        "Tournament ID is required."
-
-                });
-
-            }
-
-
-
-            const {
-
-                data,
-
-                error
-
-            } =
-
-                await supabase
-
-                    .from(
-
-                        "tournament_entries"
-
-                    )
-
-                    .select(`
-
-                        id,
-
-                        tournament_id,
-
-                        user_id,
-
-                        free_fire_uid,
-
-                        game_name,
-
-                        level,
-
-                        cancelled,
-
-                        created_at
-
-                    `)
-
-                    .eq(
-
-                        "tournament_id",
-
-                        tournamentId
-
-                    )
-
-                    .eq(
-
-                        "cancelled",
-
-                        false
-
-                    )
-
-                    .order(
-
-                        "created_at",
-
-                        {
-
-                            ascending: true
-
-                        }
-
-                    );
-
-
-
-            if (error) {
-
-
-
-                console.error(
-
-                    "PARTICIPANTS ERROR:",
-
-                    error
-
-                );
-
-
-
-                return res.status(500).json({
-
-                    success: false,
-
-                    error: error.message
-
-                });
-
-            }
-
-
-
-            return res.status(200).json({
-
-                success: true,
-
-                participants:
-
-                    data || []
-
-            });
-
-
-
-        } catch (error) {
-
-
-
-            console.error(
-
-                "PARTICIPANTS EXCEPTION:",
-
-                error
-
-            );
-
-
-
-            return res.status(500).json({
-
+router.get("/participants", async (req, res) => {
+    try {
+        const tournamentId = String(
+            req.query.tournamentId || ""
+        ).trim();
+
+        if (!tournamentId) {
+            return res.status(400).json({
                 success: false,
-
-                error:
-
-                    error?.message ||
-
-                    "Internal server error"
-
+                error: "Tournament ID is required."
             });
-
         }
 
+        // --------------------------------------------------------
+        // 1. GET TOURNAMENT ENTRIES
+        // --------------------------------------------------------
+
+        const {
+            data: entries,
+            error: entriesError
+        } = await supabase
+            .from("tournament_entries")
+            .select(`
+                id,
+                tournament_id,
+                user_id,
+                free_fire_uid,
+                game_name,
+                level,
+                cancelled,
+                created_at
+            `)
+            .eq("tournament_id", tournamentId)
+            .eq("cancelled", false)
+            .order("created_at", {
+                ascending: true
+            });
+
+        if (entriesError) {
+            console.error(
+                "PARTICIPANTS ENTRIES ERROR:",
+                entriesError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error: entriesError.message
+            });
+        }
+
+        const safeEntries = entries || [];
+
+        // --------------------------------------------------------
+        // 2. GET UNIQUE USER IDS
+        // --------------------------------------------------------
+
+        const userIds = [
+            ...new Set(
+                safeEntries
+                    .map((entry) =>
+                        String(entry.user_id || "").trim()
+                    )
+                    .filter(Boolean)
+            )
+        ];
+
+        // --------------------------------------------------------
+        // 3. GET USER PROFILE DATA
+        // --------------------------------------------------------
+
+        let users = [];
+
+        if (userIds.length > 0) {
+            const {
+                data,
+                error: usersError
+            } = await supabase
+                .from("users")
+                .select(`
+                    id,
+                    full_name,
+                    bio,
+                    avatar_url
+                `)
+                .in("id", userIds);
+
+            if (usersError) {
+                console.error(
+                    "PARTICIPANTS USERS ERROR:",
+                    usersError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: usersError.message
+                });
+            }
+
+            users = data || [];
+        }
+
+        // --------------------------------------------------------
+        // 4. MAP USERS BY USER ID
+        // --------------------------------------------------------
+
+        const userMap = new Map(
+            users.map((user) => [
+                String(user.id),
+                user
+            ])
+        );
+
+        // --------------------------------------------------------
+        // 5. MERGE ENTRY + PROFILE
+        // --------------------------------------------------------
+
+        const participants = safeEntries.map(
+            (entry, index) => {
+                const user = userMap.get(
+                    String(entry.user_id || "")
+                );
+
+                return {
+                    id: entry.id,
+                    entry_id: entry.id,
+
+                    tournament_id:
+                        entry.tournament_id,
+
+                    user_id:
+                        entry.user_id,
+
+                    // PROFILE
+                    real_name:
+                        String(
+                            user?.full_name || ""
+                        ).trim(),
+
+                    bio:
+                        String(
+                            user?.bio || ""
+                        ).trim(),
+
+                    profile_pic:
+                        String(
+                            user?.avatar_url || ""
+                        ).trim(),
+
+                    // GAME DETAILS
+                    player_name:
+                        String(
+                            entry.game_name || ""
+                        ).trim(),
+
+                    uid:
+                        String(
+                            entry.free_fire_uid || ""
+                        ).trim(),
+
+                    free_fire_uid:
+                        String(
+                            entry.free_fire_uid || ""
+                        ).trim(),
+
+                    level:
+                        Number(entry.level || 0),
+
+                    participant_number:
+                        index + 1,
+
+                    cancelled:
+                        Boolean(entry.cancelled),
+
+                    created_at:
+                        entry.created_at
+                };
+            }
+        );
+
+        // --------------------------------------------------------
+        // 6. RESPONSE
+        // --------------------------------------------------------
+
+        return res.status(200).json({
+            success: true,
+            players_joined: participants.length,
+            max_players: null,
+            participants
+        });
+
+    } catch (error) {
+        console.error(
+            "PARTICIPANTS EXCEPTION:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error"
+        });
     }
-
-);
-
+});
 
 
 // ============================================================
