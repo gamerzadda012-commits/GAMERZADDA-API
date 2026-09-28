@@ -16,7 +16,7 @@ creating a gamerzadda_session cookie.
 ======================================================
 */
 
-router.get("/stats/:userId", async (req, res) => {
+router.get(["/:userId", "/stats/:userId"], async (req, res) => {
     try {
         const userId = String(req.params.userId || "").trim();
 
@@ -168,8 +168,7 @@ router.get("/stats/:userId", async (req, res) => {
                     "kills",
                     "winning_amount",
                     "match_id",
-                    "created_at",
-                    "updated_at"
+                    "created_at"
                 ].join(", ")
             )
             .eq("user_id", userId);
@@ -353,16 +352,28 @@ router.get("/stats/:userId", async (req, res) => {
         ==================================================
         */
 
-        const {
-            data: withdrawals,
-            error: withdrawalsError
-        } = await supabase
-            .from("withdraw_requests")
-            .select(
-                "id, amount, net_amount, status"
-            )
-            .eq("user_id", userId)
-            .eq("status", "approved");
+        let withdrawals = [];
+
+        try {
+            const {
+                data,
+                error: withdrawalsError
+            } = await supabase
+                .from("withdraw_requests")
+                .select("id, amount, net_amount, status")
+                .eq("user_id", userId)
+                .eq("status", "approved");
+
+            if (withdrawalsError) {
+                console.error("STATS WITHDRAW WARNING:", withdrawalsError);
+                withdrawals = [];
+            } else {
+                withdrawals = data || [];
+            }
+        } catch (withdrawError) {
+            console.error("STATS WITHDRAW WARNING:", withdrawError);
+            withdrawals = [];
+        }
 
         if (withdrawalsError) {
             console.error(
