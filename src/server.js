@@ -3,6 +3,10 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
+// ===============================
+// ROUTES
+// ===============================
+
 const authRouter = require("./routes/auth");
 const adminRouter = require("./routes/admin");
 const tournamentsRouter = require("./routes/tournaments");
@@ -12,30 +16,40 @@ const leaderboardRouter = require("./routes/leaderboard");
 const referralsRouter = require("./routes/referrals");
 const statsRouter = require("./routes/stats");
 const profileRouter = require("./routes/profile");
+const spinRouter = require("./routes/spin");
 
 const app = express();
+
+// ===============================
+// CORS
+// ===============================
 
 const ADMIN_FRONTEND_URL =
     process.env.ADMIN_FRONTEND_URL || "http://localhost:3000";
 
-/*
-======================================================
-CORS
-======================================================
-*/
-
 app.use(
     cors({
         origin: ADMIN_FRONTEND_URL,
-        credentials: true
+        credentials: true,
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
+        ],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "X-Requested-With"
+        ]
     })
 );
 
-/*
-======================================================
-BODY PARSER
-======================================================
-*/
+// ===============================
+// BODY PARSER
+// ===============================
 
 app.use(
     express.json({
@@ -50,11 +64,9 @@ app.use(
     })
 );
 
-/*
-======================================================
-HEALTH CHECK
-======================================================
-*/
+// ===============================
+// HEALTH
+// ===============================
 
 app.get("/api/health", async (req, res) => {
     try {
@@ -74,57 +86,109 @@ app.get("/api/health", async (req, res) => {
     }
 });
 
-/*
-======================================================
-API ROUTES
-======================================================
-*/
+// ===============================
+// AUTH
+// ===============================
 
-app.use("/api/auth", authRouter);
+app.use(
+    "/api/auth",
+    authRouter
+);
 
-app.use("/api/admin", adminRouter);
+// ===============================
+// ADMIN
+// ===============================
 
-app.use("/api/tournaments", tournamentsRouter);
+app.use(
+    "/api/admin",
+    adminRouter
+);
 
-app.use("/api/wallet", walletRouter);
+// ===============================
+// TOURNAMENTS
+// ===============================
 
-app.use("/api/deposit", depositRouter);
+app.use(
+    "/api/tournaments",
+    tournamentsRouter
+);
 
-app.use("/api/leaderboard", leaderboardRouter);
+// ===============================
+// WALLET
+// ===============================
 
-app.use("/api/referrals", referralsRouter);
+app.use(
+    "/api/wallet",
+    walletRouter
+);
 
-/*
-======================================================
-PROFILE
-======================================================
+// ===============================
+// DEPOSIT
+// ===============================
 
-GET:
- /api/profile/:userId
+app.use(
+    "/api/deposit",
+    depositRouter
+);
 
-POST:
- /api/profile/:userId/avatar
+// ===============================
+// LEADERBOARD
+// ===============================
 
-PATCH:
- /api/profile/:userId
-======================================================
-*/
+app.use(
+    "/api/leaderboard",
+    leaderboardRouter
+);
 
-app.use("/api/profile", profileRouter);
+// ===============================
+// REFERRALS
+// ===============================
 
-/*
-======================================================
-STATS
-======================================================
-*/
+app.use(
+    "/api/referrals",
+    referralsRouter
+);
 
-app.use("/api", statsRouter);
+// ===============================
+// PROFILE
+// ===============================
 
-/*
-======================================================
-ROOT
-======================================================
-*/
+app.use(
+    "/api/profile",
+    profileRouter
+);
+
+// ===============================
+// SPIN
+//
+// spin.js contains:
+//
+// GET  /spin/:userId
+// POST /spin/:userId
+//
+// Mounting at /api makes:
+//
+// GET  /api/spin/:userId
+// POST /api/spin/:userId
+// ===============================
+
+app.use(
+    "/api",
+    spinRouter
+);
+
+// ===============================
+// STATS
+// ===============================
+
+app.use(
+    "/api",
+    statsRouter
+);
+
+// ===============================
+// ROOT
+// ===============================
 
 app.get("/", (req, res) => {
     return res.status(200).json({
@@ -133,11 +197,9 @@ app.get("/", (req, res) => {
     });
 });
 
-/*
-======================================================
-404 HANDLER
-======================================================
-*/
+// ===============================
+// 404
+// ===============================
 
 app.use((req, res) => {
     console.log(
@@ -153,11 +215,9 @@ app.use((req, res) => {
     });
 });
 
-/*
-======================================================
-GLOBAL ERROR HANDLER
-======================================================
-*/
+// ===============================
+// GLOBAL ERROR
+// ===============================
 
 app.use((error, req, res, next) => {
     console.error(
@@ -173,20 +233,23 @@ app.use((error, req, res, next) => {
     });
 });
 
-/*
-======================================================
-SERVER
-======================================================
-*/
+// ===============================
+// SERVER
+// ===============================
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+    process.env.PORT || 5000;
 
 if (require.main === module) {
-    app.listen(PORT, "0.0.0.0", () => {
-        console.log(
-            `GAMERZADDA API running on port ${PORT}`
-        );
-    });
+    app.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
+            console.log(
+                `GAMERZADDA API running on port ${PORT}`
+            );
+        }
+    );
 }
 
 module.exports = app;
