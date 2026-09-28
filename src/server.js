@@ -9,6 +9,7 @@ const tournamentsRouter = require("./routes/tournaments");
 const walletRouter = require("./routes/wallet");
 const depositRouter = require("./routes/deposit");
 const leaderboardRouter = require("./routes/leaderboard");
+const referralsRouter = require("./routes/referrals");
 
 const app = express();
 
@@ -152,6 +153,23 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
+| REFERRAL ROUTES
+|--------------------------------------------------------------------------
+|
+| Android endpoint:
+|
+| /api/referrals/:userId
+|
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+    "/api/referrals",
+    referralsRouter
+);
+
+/*
+|--------------------------------------------------------------------------
 | ROOT
 |--------------------------------------------------------------------------
 */
@@ -170,6 +188,12 @@ app.get("/", (req, res) => {
 */
 
 app.use((req, res) => {
+    console.log(
+        "404 ROUTE:",
+        req.method,
+        req.originalUrl
+    );
+
     res.status(404).json({
         success: false,
         error: "Route not found",
