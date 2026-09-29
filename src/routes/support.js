@@ -747,7 +747,7 @@ router.post(
 
             // IMPORTANT:
             // Database message column is NOT NULL.
-            // Empty string is used instead of null.
+            // A valid placeholder is used when there is no text message.
             const message =
                 String(
                     req.body?.message || ""
@@ -790,7 +790,7 @@ router.post(
 
                     // NEVER NULL
                     message:
-                        message || "",
+                        message || "[Attachment]",
 
                     attachment_url:
                         attachmentUrl,
