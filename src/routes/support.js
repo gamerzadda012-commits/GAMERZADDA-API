@@ -34,7 +34,10 @@ const ALLOWED_MIME_TYPES = new Set([
     "application/pdf"
 ]);
 
-// Make sure upload directory exists
+// ======================================================
+// CREATE UPLOAD DIRECTORY
+// ======================================================
+
 fs.mkdirSync(UPLOAD_DIR, {
     recursive: true
 });
@@ -44,16 +47,21 @@ fs.mkdirSync(UPLOAD_DIR, {
 // ======================================================
 
 const storage = multer.diskStorage({
+
     destination: function (req, file, cb) {
         cb(null, UPLOAD_DIR);
     },
 
     filename: function (req, file, cb) {
-        const ext = path.extname(file.originalname || "").toLowerCase();
 
-        const safeExt = ext && ext.length <= 10
-            ? ext
-            : "";
+        const ext = path
+            .extname(file.originalname || "")
+            .toLowerCase();
+
+        const safeExt =
+            ext && ext.length <= 10
+                ? ext
+                : "";
 
         const uniqueName =
             `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${safeExt}`;
@@ -63,6 +71,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
+
     storage,
 
     limits: {
@@ -71,7 +80,9 @@ const upload = multer({
     },
 
     fileFilter: function (req, file, cb) {
+
         if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+
             return cb(
                 new Error(
                     "Unsupported file type. Allowed: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV and PDF."
@@ -88,28 +99,26 @@ const upload = multer({
 // ======================================================
 
 function getAttachmentUrl(req, filename) {
-    const protocol =
-        req.headers["x-forwarded-proto"] ||
-        req.protocol ||
-        "https";
 
-    const host =
-        req.get("host") ||
-        "api.gamerzadda.in";
-
-    return `${protocol}://${host}/uploads/support/${encodeURIComponent(
+    return `https://api.gamerzadda.in/uploads/support/${encodeURIComponent(
         filename
     )}`;
 }
 
 function deleteUploadedFile(file) {
-    if (!file?.path) return;
+
+    if (!file?.path) {
+        return;
+    }
 
     try {
+
         if (fs.existsSync(file.path)) {
             fs.unlinkSync(file.path);
         }
+
     } catch (error) {
+
         console.error(
             "UPLOAD CLEANUP ERROR:",
             error
@@ -118,13 +127,14 @@ function deleteUploadedFile(file) {
 }
 
 // ======================================================
-// VERIFY USER CONVERSATION
+// VERIFY OPEN CONVERSATION
 // ======================================================
 
 async function verifyOpenConversation(
     userId,
     conversationId
 ) {
+
     const {
         data: conversation,
         error
@@ -142,6 +152,7 @@ async function verifyOpenConversation(
     }
 
     if (!conversation) {
+
         return {
             ok: false,
             status: 404,
@@ -150,6 +161,7 @@ async function verifyOpenConversation(
     }
 
     if (conversation.status !== "open") {
+
         return {
             ok: false,
             status: 400,
@@ -169,12 +181,16 @@ async function verifyOpenConversation(
 // ======================================================
 
 router.get("/:userId", async (req, res) => {
+
     try {
-        const userId = String(
-            req.params.userId || ""
-        ).trim();
+
+        const userId =
+            String(
+                req.params.userId || ""
+            ).trim();
 
         if (!userId) {
+
             return res.status(400).json({
                 success: false,
                 error: "User ID is required."
@@ -193,6 +209,7 @@ router.get("/:userId", async (req, res) => {
             });
 
         if (error) {
+
             console.error(
                 "SUPPORT CONVERSATIONS ERROR:",
                 error
@@ -210,6 +227,7 @@ router.get("/:userId", async (req, res) => {
         });
 
     } catch (error) {
+
         console.error(
             "SUPPORT GET ERROR:",
             error
@@ -232,16 +250,21 @@ router.get("/:userId", async (req, res) => {
 router.get(
     "/:userId/:conversationId",
     async (req, res) => {
-        try {
-            const userId = String(
-                req.params.userId || ""
-            ).trim();
 
-            const conversationId = String(
-                req.params.conversationId || ""
-            ).trim();
+        try {
+
+            const userId =
+                String(
+                    req.params.userId || ""
+                ).trim();
+
+            const conversationId =
+                String(
+                    req.params.conversationId || ""
+                ).trim();
 
             if (!userId || !conversationId) {
+
                 return res.status(400).json({
                     success: false,
                     error:
@@ -262,6 +285,7 @@ router.get(
                 .maybeSingle();
 
             if (conversationError) {
+
                 console.error(
                     "SUPPORT CONVERSATION CHECK ERROR:",
                     conversationError
@@ -274,6 +298,7 @@ router.get(
             }
 
             if (!conversation) {
+
                 return res.status(404).json({
                     success: false,
                     error:
@@ -287,12 +312,16 @@ router.get(
             } = await supabase
                 .from("support_messages")
                 .select("*")
-                .eq("conversation_id", conversationId)
+                .eq(
+                    "conversation_id",
+                    conversationId
+                )
                 .order("created_at", {
                     ascending: true
                 });
 
             if (messagesError) {
+
                 console.error(
                     "SUPPORT MESSAGES ERROR:",
                     messagesError
@@ -311,6 +340,7 @@ router.get(
             });
 
         } catch (error) {
+
             console.error(
                 "SUPPORT MESSAGE GET ERROR:",
                 error
@@ -332,16 +362,22 @@ router.get(
 // ======================================================
 
 router.post("/:userId", async (req, res) => {
-    try {
-        const userId = String(
-            req.params.userId || ""
-        ).trim();
 
-        const category = String(
-            req.body?.category || "general"
-        ).trim();
+    try {
+
+        const userId =
+            String(
+                req.params.userId || ""
+            ).trim();
+
+        const category =
+            String(
+                req.body?.category ||
+                "general"
+            ).trim();
 
         if (!userId) {
+
             return res.status(400).json({
                 success: false,
                 error: "User ID is required."
@@ -358,6 +394,7 @@ router.post("/:userId", async (req, res) => {
             .maybeSingle();
 
         if (userError) {
+
             console.error(
                 "SUPPORT USER CHECK ERROR:",
                 userError
@@ -370,6 +407,7 @@ router.post("/:userId", async (req, res) => {
         }
 
         if (!user) {
+
             return res.status(404).json({
                 success: false,
                 error: "User not found."
@@ -391,6 +429,7 @@ router.post("/:userId", async (req, res) => {
             .maybeSingle();
 
         if (existingError) {
+
             console.error(
                 "SUPPORT EXISTING CONVERSATION ERROR:",
                 existingError
@@ -403,6 +442,7 @@ router.post("/:userId", async (req, res) => {
         }
 
         if (existingConversation) {
+
             return res.json({
                 success: true,
                 conversation:
@@ -425,6 +465,7 @@ router.post("/:userId", async (req, res) => {
             .single();
 
         if (createError) {
+
             console.error(
                 "SUPPORT CREATE CONVERSATION ERROR:",
                 createError
@@ -443,6 +484,7 @@ router.post("/:userId", async (req, res) => {
         });
 
     } catch (error) {
+
         console.error(
             "SUPPORT CREATE API ERROR:",
             error
@@ -465,20 +507,26 @@ router.post("/:userId", async (req, res) => {
 router.post(
     "/:userId/:conversationId/message",
     async (req, res) => {
+
         try {
-            const userId = String(
-                req.params.userId || ""
-            ).trim();
 
-            const conversationId = String(
-                req.params.conversationId || ""
-            ).trim();
+            const userId =
+                String(
+                    req.params.userId || ""
+                ).trim();
 
-            const message = String(
-                req.body?.message || ""
-            ).trim();
+            const conversationId =
+                String(
+                    req.params.conversationId || ""
+                ).trim();
+
+            const message =
+                String(
+                    req.body?.message || ""
+                ).trim();
 
             if (!userId || !conversationId) {
+
                 return res.status(400).json({
                     success: false,
                     error:
@@ -487,16 +535,20 @@ router.post(
             }
 
             if (!message) {
+
                 return res.status(400).json({
                     success: false,
-                    error: "Message cannot be empty."
+                    error:
+                        "Message cannot be empty."
                 });
             }
 
             if (message.length > 5000) {
+
                 return res.status(400).json({
                     success: false,
-                    error: "Message is too long."
+                    error:
+                        "Message is too long."
                 });
             }
 
@@ -507,11 +559,13 @@ router.post(
                 );
 
             if (!verification.ok) {
+
                 return res.status(
                     verification.status
                 ).json({
                     success: false,
-                    error: verification.error
+                    error:
+                        verification.error
                 });
             }
 
@@ -521,20 +575,36 @@ router.post(
             } = await supabase
                 .from("support_messages")
                 .insert({
+
                     conversation_id:
                         conversationId,
-                    sender_id: userId,
-                    sender_type: "user",
-                    message,
-                    attachment_url: null,
-                    attachment_name: null,
-                    attachment_type: null,
-                    attachment_size: null
+
+                    sender_id:
+                        userId,
+
+                    sender_type:
+                        "user",
+
+                    message:
+                        message,
+
+                    attachment_url:
+                        null,
+
+                    attachment_name:
+                        null,
+
+                    attachment_type:
+                        null,
+
+                    attachment_size:
+                        null
                 })
                 .select("*")
                 .single();
 
             if (messageError) {
+
                 console.error(
                     "SUPPORT MESSAGE INSERT ERROR:",
                     messageError
@@ -542,7 +612,8 @@ router.post(
 
                 return res.status(500).json({
                     success: false,
-                    error: messageError.message
+                    error:
+                        messageError.message
                 });
             }
 
@@ -552,7 +623,10 @@ router.post(
                     updated_at:
                         new Date().toISOString()
                 })
-                .eq("id", conversationId);
+                .eq(
+                    "id",
+                    conversationId
+                );
 
             return res.status(201).json({
                 success: true,
@@ -560,6 +634,7 @@ router.post(
             });
 
         } catch (error) {
+
             console.error(
                 "SUPPORT SEND MESSAGE ERROR:",
                 error
@@ -580,7 +655,7 @@ router.post(
 // POST /api/support/:userId/:conversationId/upload
 //
 // multipart/form-data
-// field name: file
+// field: file
 // optional field: message
 // ======================================================
 
@@ -588,16 +663,21 @@ router.post(
     "/:userId/:conversationId/upload",
 
     async (req, res, next) => {
-        try {
-            const userId = String(
-                req.params.userId || ""
-            ).trim();
 
-            const conversationId = String(
-                req.params.conversationId || ""
-            ).trim();
+        try {
+
+            const userId =
+                String(
+                    req.params.userId || ""
+                ).trim();
+
+            const conversationId =
+                String(
+                    req.params.conversationId || ""
+                ).trim();
 
             if (!userId || !conversationId) {
+
                 return res.status(400).json({
                     success: false,
                     error:
@@ -612,17 +692,20 @@ router.post(
                 );
 
             if (!verification.ok) {
+
                 return res.status(
                     verification.status
                 ).json({
                     success: false,
-                    error: verification.error
+                    error:
+                        verification.error
                 });
             }
 
             next();
 
         } catch (error) {
+
             console.error(
                 "SUPPORT UPLOAD VERIFY ERROR:",
                 error
@@ -640,32 +723,46 @@ router.post(
     upload.single("file"),
 
     async (req, res) => {
-        try {
-            const userId = String(
-                req.params.userId || ""
-            ).trim();
 
-            const conversationId = String(
-                req.params.conversationId || ""
-            ).trim();
+        try {
+
+            const userId =
+                String(
+                    req.params.userId || ""
+                ).trim();
+
+            const conversationId =
+                String(
+                    req.params.conversationId || ""
+                ).trim();
 
             if (!req.file) {
+
                 return res.status(400).json({
                     success: false,
-                    error: "Please select a file."
+                    error:
+                        "Please select a file."
                 });
             }
 
-            const message = String(
-                req.body?.message || ""
-            ).trim();
+            // IMPORTANT:
+            // Database message column is NOT NULL.
+            // Empty string is used instead of null.
+            const message =
+                String(
+                    req.body?.message || ""
+                ).trim();
 
             if (message.length > 5000) {
-                deleteUploadedFile(req.file);
+
+                deleteUploadedFile(
+                    req.file
+                );
 
                 return res.status(400).json({
                     success: false,
-                    error: "Message is too long."
+                    error:
+                        "Message is too long."
                 });
             }
 
@@ -681,13 +778,19 @@ router.post(
             } = await supabase
                 .from("support_messages")
                 .insert({
+
                     conversation_id:
                         conversationId,
-                    sender_id: userId,
-                    sender_type: "user",
 
+                    sender_id:
+                        userId,
+
+                    sender_type:
+                        "user",
+
+                    // NEVER NULL
                     message:
-                        message || null,
+                        message || "",
 
                     attachment_url:
                         attachmentUrl,
@@ -705,7 +808,10 @@ router.post(
                 .single();
 
             if (messageError) {
-                deleteUploadedFile(req.file);
+
+                deleteUploadedFile(
+                    req.file
+                );
 
                 console.error(
                     "SUPPORT ATTACHMENT DB ERROR:",
@@ -714,7 +820,8 @@ router.post(
 
                 return res.status(500).json({
                     success: false,
-                    error: messageError.message
+                    error:
+                        messageError.message
                 });
             }
 
@@ -724,22 +831,41 @@ router.post(
                     updated_at:
                         new Date().toISOString()
                 })
-                .eq("id", conversationId);
+                .eq(
+                    "id",
+                    conversationId
+                );
 
             return res.status(201).json({
+
                 success: true,
-                message: newMessage,
+
+                message:
+                    newMessage,
+
                 attachment: {
-                    url: attachmentUrl,
-                    name: req.file.originalname,
-                    type: req.file.mimetype,
-                    size: req.file.size
+
+                    url:
+                        attachmentUrl,
+
+                    name:
+                        req.file.originalname,
+
+                    type:
+                        req.file.mimetype,
+
+                    size:
+                        req.file.size
                 }
             });
 
         } catch (error) {
+
             if (req.file) {
-                deleteUploadedFile(req.file);
+
+                deleteUploadedFile(
+                    req.file
+                );
             }
 
             console.error(
@@ -768,13 +894,16 @@ router.use(
         res,
         next
     ) => {
+
         if (
             error instanceof multer.MulterError
         ) {
+
             if (
                 error.code ===
                 "LIMIT_FILE_SIZE"
             ) {
+
                 return res.status(413).json({
                     success: false,
                     error:
@@ -791,6 +920,7 @@ router.use(
         }
 
         if (error) {
+
             return res.status(400).json({
                 success: false,
                 error:
@@ -804,33 +934,39 @@ router.use(
 );
 
 // ======================================================
-// CLOSE CONVERSATION
+// CLOSE / UPDATE CONVERSATION
 // PATCH /api/support/:userId/:conversationId
 // ======================================================
 
 router.patch(
     "/:userId/:conversationId",
     async (req, res) => {
+
         try {
-            const userId = String(
-                req.params.userId || ""
-            ).trim();
 
-            const conversationId = String(
-                req.params.conversationId || ""
-            ).trim();
+            const userId =
+                String(
+                    req.params.userId || ""
+                ).trim();
 
-            const status = String(
-                req.body?.status || ""
-            )
-                .trim()
-                .toLowerCase();
+            const conversationId =
+                String(
+                    req.params.conversationId || ""
+                ).trim();
+
+            const status =
+                String(
+                    req.body?.status || ""
+                )
+                    .trim()
+                    .toLowerCase();
 
             if (
                 !["open", "closed"].includes(
                     status
                 )
             ) {
+
                 return res.status(400).json({
                     success: false,
                     error:
@@ -844,16 +980,25 @@ router.patch(
             } = await supabase
                 .from("support_conversations")
                 .update({
+
                     status,
+
                     updated_at:
                         new Date().toISOString()
                 })
-                .eq("id", conversationId)
-                .eq("user_id", userId)
+                .eq(
+                    "id",
+                    conversationId
+                )
+                .eq(
+                    "user_id",
+                    userId
+                )
                 .select("*")
                 .maybeSingle();
 
             if (error) {
+
                 console.error(
                     "SUPPORT STATUS UPDATE ERROR:",
                     error
@@ -861,11 +1006,13 @@ router.patch(
 
                 return res.status(500).json({
                     success: false,
-                    error: error.message
+                    error:
+                        error.message
                 });
             }
 
             if (!data) {
+
                 return res.status(404).json({
                     success: false,
                     error:
@@ -879,6 +1026,7 @@ router.patch(
             });
 
         } catch (error) {
+
             console.error(
                 "SUPPORT CLOSE ERROR:",
                 error
@@ -893,5 +1041,9 @@ router.patch(
         }
     }
 );
+
+// ======================================================
+// EXPORT
+// ======================================================
 
 module.exports = router;
