@@ -10,70 +10,100 @@ export default function AdminLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isLogin = pathname === "/admin/login";
-  const [checking, setChecking] = useState(!isLogin);
+  const isLoginPage = pathname === "/admin/login";
+
+  const [checking, setChecking] = useState(!isLoginPage);
+  const [authenticated, setAuthenticated] = useState(isLoginPage);
 
   useEffect(() => {
-    if (isLogin) {
+    if (isLoginPage) {
       setChecking(false);
+      setAuthenticated(true);
       return;
     }
 
-    let alive = true;
+    let cancelled = false;
 
-    async function checkAdminSession() {
+    const checkSession = async () => {
       try {
+        setChecking(true);
+
         const response = await fetch(
           `${API_BASE}/api/admin/session`,
           {
             method: "GET",
             credentials: "include",
             cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
           }
         );
 
+        if (cancelled) return;
+
         if (!response.ok) {
-          if (alive) {
-            router.replace("/admin/login");
-          }
+          console.error(
+            "ADMIN SESSION HTTP ERROR:",
+            response.status
+          );
+
+          setAuthenticated(false);
+          setChecking(false);
+
+          router.replace("/admin/login");
           return;
         }
 
         const data = await response.json();
 
-        if (!data?.success || !data?.authenticated) {
-          if (alive) {
-            router.replace("/admin/login");
-          }
+        console.log("ADMIN SESSION:", data);
+
+        if (
+          data?.success === true &&
+          data?.authenticated === true
+        ) {
+          setAuthenticated(true);
+          setChecking(false);
           return;
         }
 
-        if (alive) {
-          setChecking(false);
-        }
+        setAuthenticated(false);
+        setChecking(false);
+
+        router.replace("/admin/login");
       } catch (error) {
+        if (cancelled) return;
+
         console.error(
           "ADMIN SESSION CHECK ERROR:",
           error
         );
 
-        if (alive) {
-          router.replace("/admin/login");
-        }
-      }
-    }
+        setAuthenticated(false);
+        setChecking(false);
 
-    checkAdminSession();
+        router.replace("/admin/login");
+      }
+    };
+
+    checkSession();
 
     return () => {
-      alive = false;
+      cancelled = true;
     };
-  }, [isLogin, pathname, router]);
+  }, [isLoginPage, router]);
 
-  if (isLogin) {
+  /*
+   * LOGIN PAGE
+   */
+  if (isLoginPage) {
     return children;
   }
 
+  /*
+   * SESSION CHECK
+   */
   if (checking) {
     return (
       <main
@@ -85,24 +115,64 @@ export default function AdminLayout({ children }) {
           color: "#111827",
         }}
       >
-        <div style={{ textAlign: "center" }}>
+        <div
+          style={{
+            textAlign: "center",
+          }}
+        >
           <div
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               border: "3px solid #e5e7eb",
               borderTopColor: "#ff174f",
               borderRadius: "50%",
-              margin: "0 auto 12px",
-              animation: "spin 0.8s linear infinite",
+              margin: "0 auto 14px",
+              animation: "adminSpin 0.8s linear infinite",
             }}
           />
 
           <b>Checking admin access...</b>
+
+          <style jsx>{`
+            @keyframes adminSpin {
+              from {
+                transform: rotate(0deg);
+              }
+
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          `}</style>
         </div>
       </main>
     );
   }
 
+  /*
+   * NOT AUTHENTICATED
+   */
+  if (!authenticated) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fafc",
+          color: "#111827",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <b>Redirecting to admin login...</b>
+        </div>
+      </main>
+    );
+  }
+
+  /*
+   * AUTHENTICATED ADMIN
+   */
   return children;
 }
