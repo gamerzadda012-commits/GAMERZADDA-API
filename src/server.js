@@ -17,6 +17,7 @@ const referralsRouter = require("./routes/referrals");
 const statsRouter = require("./routes/stats");
 const profileRouter = require("./routes/profile");
 const spinRouter = require("./routes/spin");
+const supportRouter = require("./routes/support");
 
 const app = express();
 
@@ -166,7 +167,7 @@ app.use(
 // GET  /spin/:userId
 // POST /spin/:userId
 //
-// Mounting at /api makes:
+// Final:
 //
 // GET  /api/spin/:userId
 // POST /api/spin/:userId
@@ -175,6 +176,31 @@ app.use(
 app.use(
     "/api",
     spinRouter
+);
+
+// ===============================
+// SUPPORT
+//
+// support.js contains:
+//
+// GET    /:userId
+// GET    /:userId/:conversationId
+// POST   /:userId
+// POST   /:userId/:conversationId/message
+// PATCH  /:userId/:conversationId
+//
+// Final:
+//
+// GET    /api/support/:userId
+// GET    /api/support/:userId/:conversationId
+// POST   /api/support/:userId
+// POST   /api/support/:userId/:conversationId/message
+// PATCH  /api/support/:userId/:conversationId
+// ===============================
+
+app.use(
+    "/api/support",
+    supportRouter
 );
 
 // ===============================
