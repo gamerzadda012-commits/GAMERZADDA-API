@@ -141,7 +141,7 @@ async function verifyOpenConversation(
     } = await supabase
         .from("support_conversations")
         .select(
-            "id, user_id, status, category, created_at, updated_at"
+            "id, user_id, status, created_at, updated_at"
         )
         .eq("id", conversationId)
         .eq("user_id", userId)
@@ -278,7 +278,7 @@ router.get(
             } = await supabase
                 .from("support_conversations")
                 .select(
-                    "id, user_id, status, category, created_at, updated_at"
+                    "id, user_id, status, created_at, updated_at"
                 )
                 .eq("id", conversationId)
                 .eq("user_id", userId)
@@ -458,8 +458,7 @@ router.post("/:userId", async (req, res) => {
             .from("support_conversations")
             .insert({
                 user_id: userId,
-                status: "open",
-                category
+                status: "open"
             })
             .select("*")
             .single();
