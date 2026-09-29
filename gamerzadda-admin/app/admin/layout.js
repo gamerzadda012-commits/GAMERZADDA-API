@@ -2,56 +2,102 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase.js";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "https://api.gamerzadda.in";
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
+
   const isLogin = pathname === "/admin/login";
   const [checking, setChecking] = useState(!isLogin);
 
   useEffect(() => {
-    if (isLogin) return;
+    if (isLogin) {
+      setChecking(false);
+      return;
+    }
 
     let alive = true;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        if (alive) router.replace("/admin/login");
-        return;
+
+    async function checkAdminSession() {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/admin/session`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok) {
+          if (alive) {
+            router.replace("/admin/login");
+          }
+          return;
+        }
+
+        const data = await response.json();
+
+        if (!data?.success || !data?.authenticated) {
+          if (alive) {
+            router.replace("/admin/login");
+          }
+          return;
+        }
+
+        if (alive) {
+          setChecking(false);
+        }
+      } catch (error) {
+        console.error(
+          "ADMIN SESSION CHECK ERROR:",
+          error
+        );
+
+        if (alive) {
+          router.replace("/admin/login");
+        }
       }
+    }
 
-      const { data: admin, error } = await supabase
-        .from("users")
-        .select("role,status")
-        .eq("id", session.user.id)
-        .maybeSingle();
-
-      if (error || !admin || admin.role !== "admin" || (admin.status && admin.status !== "active")) {
-        await supabase.auth.signOut();
-        if (alive) router.replace("/admin/login");
-        return;
-      }
-
-      if (alive) setChecking(false);
-    })();
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && pathname !== "/admin/login") router.replace("/admin/login");
-    });
+    checkAdminSession();
 
     return () => {
       alive = false;
-      listener?.subscription?.unsubscribe();
     };
   }, [isLogin, pathname, router]);
 
-  if (isLogin) return children;
+  if (isLogin) {
+    return children;
+  }
+
   if (checking) {
     return (
-      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f8fafc", color: "#111827" }}>
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fafc",
+          color: "#111827",
+        }}
+      >
         <div style={{ textAlign: "center" }}>
-          <div style={{ width: 34, height: 34, border: "3px solid #e5e7eb", borderTopColor: "#ff174f", borderRadius: "50%", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }} />
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              border: "3px solid #e5e7eb",
+              borderTopColor: "#ff174f",
+              borderRadius: "50%",
+              margin: "0 auto 12px",
+              animation: "spin 0.8s linear infinite",
+            }}
+          />
+
           <b>Checking admin access...</b>
         </div>
       </main>
