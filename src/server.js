@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 
 // ===============================
 // ROUTES
@@ -22,11 +23,36 @@ const supportRouter = require("./routes/support");
 const app = express();
 
 // ===============================
+// SUPPORT UPLOADS
+// ===============================
+// Files stored in:
+// /var/www/gamerzadda-api/uploads/
+//
+// Public URL:
+// https://api.gamerzadda.in/uploads/...
+//
+// IMPORTANT:
+// This must be BEFORE the 404 handler.
+// ===============================
+
+app.use(
+    "/uploads",
+    express.static(
+        path.join(__dirname, "uploads"),
+        {
+            maxAge: "1d",
+            etag: true
+        }
+    )
+);
+
+// ===============================
 // CORS
 // ===============================
 
 const ADMIN_FRONTEND_URL =
-    process.env.ADMIN_FRONTEND_URL || "http://localhost:3000";
+    process.env.ADMIN_FRONTEND_URL ||
+    "http://localhost:3000";
 
 app.use(
     cors({
@@ -69,23 +95,29 @@ app.use(
 // HEALTH
 // ===============================
 
-app.get("/api/health", async (req, res) => {
-    try {
-        return res.status(200).json({
-            success: true,
-            api: "running",
-            database: "connected"
-        });
-    } catch (error) {
-        console.error("HEALTH CHECK ERROR:", error);
+app.get(
+    "/api/health",
+    async (req, res) => {
+        try {
+            return res.status(200).json({
+                success: true,
+                api: "running",
+                database: "connected"
+            });
+        } catch (error) {
+            console.error(
+                "HEALTH CHECK ERROR:",
+                error
+            );
 
-        return res.status(500).json({
-            success: false,
-            api: "running",
-            database: "error"
-        });
+            return res.status(500).json({
+                success: false,
+                api: "running",
+                database: "error"
+            });
+        }
     }
-});
+);
 
 // ===============================
 // AUTH
@@ -187,6 +219,7 @@ app.use(
 // GET    /:userId/:conversationId
 // POST   /:userId
 // POST   /:userId/:conversationId/message
+// POST   /:userId/:conversationId/upload
 // PATCH  /:userId/:conversationId
 //
 // Final:
@@ -195,6 +228,7 @@ app.use(
 // GET    /api/support/:userId/:conversationId
 // POST   /api/support/:userId
 // POST   /api/support/:userId/:conversationId/message
+// POST   /api/support/:userId/:conversationId/upload
 // PATCH  /api/support/:userId/:conversationId
 // ===============================
 
@@ -216,48 +250,56 @@ app.use(
 // ROOT
 // ===============================
 
-app.get("/", (req, res) => {
-    return res.status(200).json({
-        success: true,
-        message: "GAMERZADDA API is running"
-    });
-});
+app.get(
+    "/",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message:
+                "GAMERZADDA API is running"
+        });
+    }
+);
 
 // ===============================
 // 404
 // ===============================
 
-app.use((req, res) => {
-    console.log(
-        "404 ROUTE:",
-        req.method,
-        req.originalUrl
-    );
+app.use(
+    (req, res) => {
+        console.log(
+            "404 ROUTE:",
+            req.method,
+            req.originalUrl
+        );
 
-    return res.status(404).json({
-        success: false,
-        error: "Route not found",
-        path: req.originalUrl
-    });
-});
+        return res.status(404).json({
+            success: false,
+            error: "Route not found",
+            path: req.originalUrl
+        });
+    }
+);
 
 // ===============================
 // GLOBAL ERROR
 // ===============================
 
-app.use((error, req, res, next) => {
-    console.error(
-        "GLOBAL SERVER ERROR:",
-        error
-    );
+app.use(
+    (error, req, res, next) => {
+        console.error(
+            "GLOBAL SERVER ERROR:",
+            error
+        );
 
-    return res.status(500).json({
-        success: false,
-        error:
-            error?.message ||
-            "Internal server error"
-    });
-});
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error"
+        });
+    }
+);
 
 // ===============================
 // SERVER
