@@ -1570,4 +1570,272 @@ router.post(
 |--------------------------------------------------------------------------
 */
 
+
+/*
+|--------------------------------------------------------------------------
+| SUPPORT ADMIN APIs
+|--------------------------------------------------------------------------
+*/
+
+router.get("/support", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("support_conversations")
+            .select("*")
+            .order("updated_at", { ascending: false });
+
+        if (error) {
+            console.error("ADMIN SUPPORT LIST ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                error: error.message || "Unable to load support conversations."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            conversations: data || []
+        });
+    } catch (error) {
+        console.error("ADMIN SUPPORT LIST EXCEPTION:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Internal server error."
+        });
+    }
+});
+
+router.get("/support/:conversationId", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const conversationId = String(req.params.conversationId || "").trim();
+
+        if (!conversationId) {
+            return res.status(400).json({
+                success: false,
+                error: "Conversation ID is required."
+            });
+        }
+
+        const { data: conversation, error: conversationError } =
+            await supabase
+                .from("support_conversations")
+                .select("*")
+                .eq("id", conversationId)
+                .maybeSingle();
+
+        if (conversationError) {
+            console.error("ADMIN SUPPORT CONVERSATION ERROR:", conversationError);
+            return res.status(500).json({
+                success: false,
+                error: conversationError.message || "Unable to load conversation."
+            });
+        }
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                error: "Conversation not found."
+            });
+        }
+
+        const { data: messages, error: messagesError } = await supabase
+            .from("support_messages")
+            .select("*")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: true });
+
+        if (messagesError) {
+            console.error("ADMIN SUPPORT MESSAGES ERROR:", messagesError);
+            return res.status(500).json({
+                success: false,
+                error: messagesError.message || "Unable to load support messages."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            conversation,
+            messages: messages || []
+        });
+    } catch (error) {
+        console.error("ADMIN SUPPORT DETAIL EXCEPTION:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Internal server error."
+        });
+    }
+});
+
+router.post("/support/:conversationId/message", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const conversationId = String(req.params.conversationId || "").trim();
+        const message = String(req.body?.message || "").trim();
+
+        if (!conversationId || !message) {
+            return res.status(400).json({
+                success: false,
+                error: !conversationId
+                    ? "Conversation ID is required."
+                    : "Message is required."
+            });
+        }
+
+        const { data: conversation, error: conversationError } =
+            await supabase
+                .from("support_conversations")
+                .select("id, status")
+                .eq("id", conversationId)
+                .maybeSingle();
+
+        if (conversationError) {
+            return res.status(500).json({
+                success: false,
+                error: conversationError.message
+            });
+        }
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                error: "Conversation not found."
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("support_messages")
+            .insert({
+                conversation_id: conversationId,
+                sender_id: admin.user.id,
+                sender_type: "admin",
+                message
+            })
+            .select("*")
+            .single();
+
+        if (error) {
+            console.error("ADMIN SUPPORT REPLY ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                error: error.message || "Unable to send reply."
+            });
+        }
+
+        await supabase
+            .from("support_conversations")
+            .update({
+                updated_at: new Date().toISOString(),
+                status: "open"
+            })
+            .eq("id", conversationId);
+
+        return res.status(201).json({
+            success: true,
+            message: data
+        });
+    } catch (error) {
+        console.error("ADMIN SUPPORT REPLY EXCEPTION:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Internal server error."
+        });
+    }
+});
+
+router.patch("/support/:conversationId", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const conversationId = String(req.params.conversationId || "").trim();
+        const status = String(req.body?.status || "").trim().toLowerCase();
+
+        if (!conversationId) {
+            return res.status(400).json({
+                success: false,
+                error: "Conversation ID is required."
+            });
+        }
+
+        if (!["open", "closed"].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: "Status must be open or closed."
+            });
+        }
+
+        const { data, error } = await supabase
+            .from("support_conversations")
+            .update({
+                status,
+                updated_at: new Date().toISOString()
+            })
+            .eq("id", conversationId)
+            .select("*")
+            .maybeSingle();
+
+        if (error) {
+            console.error("ADMIN SUPPORT STATUS ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                error: error.message || "Unable to update support status."
+            });
+        }
+
+        if (!data) {
+            return res.status(404).json({
+                success: false,
+                error: "Conversation not found."
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            conversation: data
+        });
+    } catch (error) {
+        console.error("ADMIN SUPPORT STATUS EXCEPTION:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Internal server error."
+        });
+    }
+});
+
 module.exports = router;
