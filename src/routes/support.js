@@ -1,7 +1,167 @@
 const express = require("express");
+const multer = require("multer");
+const path = require("path");
+const crypto = require("crypto");
+const fs = require("fs");
 
 const router = express.Router();
 const supabase = require("../config/supabase");
+
+// ======================================================
+// CONFIG
+// ======================================================
+
+const UPLOAD_DIR = path.join(
+    __dirname,
+    "..",
+    "..",
+    "uploads",
+    "support"
+);
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+const ALLOWED_MIME_TYPES = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+
+    "application/pdf"
+]);
+
+// Make sure upload directory exists
+fs.mkdirSync(UPLOAD_DIR, {
+    recursive: true
+});
+
+// ======================================================
+// MULTER STORAGE
+// ======================================================
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, UPLOAD_DIR);
+    },
+
+    filename: function (req, file, cb) {
+        const ext = path.extname(file.originalname || "").toLowerCase();
+
+        const safeExt = ext && ext.length <= 10
+            ? ext
+            : "";
+
+        const uniqueName =
+            `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${safeExt}`;
+
+        cb(null, uniqueName);
+    }
+});
+
+const upload = multer({
+    storage,
+
+    limits: {
+        fileSize: MAX_FILE_SIZE,
+        files: 1
+    },
+
+    fileFilter: function (req, file, cb) {
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+            return cb(
+                new Error(
+                    "Unsupported file type. Allowed: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV and PDF."
+                )
+            );
+        }
+
+        cb(null, true);
+    }
+});
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function getAttachmentUrl(req, filename) {
+    const protocol =
+        req.headers["x-forwarded-proto"] ||
+        req.protocol ||
+        "https";
+
+    const host =
+        req.get("host") ||
+        "api.gamerzadda.in";
+
+    return `${protocol}://${host}/uploads/support/${encodeURIComponent(
+        filename
+    )}`;
+}
+
+function deleteUploadedFile(file) {
+    if (!file?.path) return;
+
+    try {
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+        }
+    } catch (error) {
+        console.error(
+            "UPLOAD CLEANUP ERROR:",
+            error
+        );
+    }
+}
+
+// ======================================================
+// VERIFY USER CONVERSATION
+// ======================================================
+
+async function verifyOpenConversation(
+    userId,
+    conversationId
+) {
+    const {
+        data: conversation,
+        error
+    } = await supabase
+        .from("support_conversations")
+        .select(
+            "id, user_id, status, category, created_at, updated_at"
+        )
+        .eq("id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    if (!conversation) {
+        return {
+            ok: false,
+            status: 404,
+            error: "Support conversation not found."
+        };
+    }
+
+    if (conversation.status !== "open") {
+        return {
+            ok: false,
+            status: 400,
+            error: "This support conversation is closed."
+        };
+    }
+
+    return {
+        ok: true,
+        conversation
+    };
+}
 
 // ======================================================
 // GET USER SUPPORT CONVERSATIONS
@@ -10,7 +170,9 @@ const supabase = require("../config/supabase");
 
 router.get("/:userId", async (req, res) => {
     try {
-        const userId = String(req.params.userId || "").trim();
+        const userId = String(
+            req.params.userId || ""
+        ).trim();
 
         if (!userId) {
             return res.status(400).json({
@@ -19,7 +181,10 @@ router.get("/:userId", async (req, res) => {
             });
         }
 
-        const { data, error } = await supabase
+        const {
+            data,
+            error
+        } = await supabase
             .from("support_conversations")
             .select("*")
             .eq("user_id", userId)
@@ -28,7 +193,10 @@ router.get("/:userId", async (req, res) => {
             });
 
         if (error) {
-            console.error("SUPPORT CONVERSATIONS ERROR:", error);
+            console.error(
+                "SUPPORT CONVERSATIONS ERROR:",
+                error
+            );
 
             return res.status(500).json({
                 success: false,
@@ -42,65 +210,81 @@ router.get("/:userId", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("SUPPORT GET ERROR:", error);
+        console.error(
+            "SUPPORT GET ERROR:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            error: error.message || "Internal server error."
+            error:
+                error.message ||
+                "Internal server error."
         });
     }
 });
-
 
 // ======================================================
 // GET MESSAGES
 // GET /api/support/:userId/:conversationId
 // ======================================================
 
-router.get("/:userId/:conversationId", async (req, res) => {
-    try {
-        const userId = String(req.params.userId || "").trim();
-        const conversationId = String(
-            req.params.conversationId || ""
-        ).trim();
+router.get(
+    "/:userId/:conversationId",
+    async (req, res) => {
+        try {
+            const userId = String(
+                req.params.userId || ""
+            ).trim();
 
-        if (!userId || !conversationId) {
-            return res.status(400).json({
-                success: false,
-                error: "User ID and conversation ID are required."
-            });
-        }
+            const conversationId = String(
+                req.params.conversationId || ""
+            ).trim();
 
-        // Verify conversation belongs to user
-        const { data: conversation, error: conversationError } =
-            await supabase
+            if (!userId || !conversationId) {
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        "User ID and conversation ID are required."
+                });
+            }
+
+            const {
+                data: conversation,
+                error: conversationError
+            } = await supabase
                 .from("support_conversations")
-                .select("id, user_id, status, category, created_at, updated_at")
+                .select(
+                    "id, user_id, status, category, created_at, updated_at"
+                )
                 .eq("id", conversationId)
                 .eq("user_id", userId)
                 .maybeSingle();
 
-        if (conversationError) {
-            console.error(
-                "SUPPORT CONVERSATION CHECK ERROR:",
-                conversationError
-            );
+            if (conversationError) {
+                console.error(
+                    "SUPPORT CONVERSATION CHECK ERROR:",
+                    conversationError
+                );
 
-            return res.status(500).json({
-                success: false,
-                error: conversationError.message
-            });
-        }
+                return res.status(500).json({
+                    success: false,
+                    error: conversationError.message
+                });
+            }
 
-        if (!conversation) {
-            return res.status(404).json({
-                success: false,
-                error: "Support conversation not found."
-            });
-        }
+            if (!conversation) {
+                return res.status(404).json({
+                    success: false,
+                    error:
+                        "Support conversation not found."
+                });
+            }
 
-        const { data: messages, error: messagesError } =
-            await supabase
+            const {
+                data: messages,
+                error: messagesError
+            } = await supabase
                 .from("support_messages")
                 .select("*")
                 .eq("conversation_id", conversationId)
@@ -108,34 +292,39 @@ router.get("/:userId/:conversationId", async (req, res) => {
                     ascending: true
                 });
 
-        if (messagesError) {
+            if (messagesError) {
+                console.error(
+                    "SUPPORT MESSAGES ERROR:",
+                    messagesError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: messagesError.message
+                });
+            }
+
+            return res.json({
+                success: true,
+                conversation,
+                messages: messages || []
+            });
+
+        } catch (error) {
             console.error(
-                "SUPPORT MESSAGES ERROR:",
-                messagesError
+                "SUPPORT MESSAGE GET ERROR:",
+                error
             );
 
             return res.status(500).json({
                 success: false,
-                error: messagesError.message
+                error:
+                    error.message ||
+                    "Internal server error."
             });
         }
-
-        return res.json({
-            success: true,
-            conversation,
-            messages: messages || []
-        });
-
-    } catch (error) {
-        console.error("SUPPORT MESSAGE GET ERROR:", error);
-
-        return res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error."
-        });
     }
-});
-
+);
 
 // ======================================================
 // CREATE CONVERSATION
@@ -144,7 +333,9 @@ router.get("/:userId/:conversationId", async (req, res) => {
 
 router.post("/:userId", async (req, res) => {
     try {
-        const userId = String(req.params.userId || "").trim();
+        const userId = String(
+            req.params.userId || ""
+        ).trim();
 
         const category = String(
             req.body?.category || "general"
@@ -157,13 +348,14 @@ router.post("/:userId", async (req, res) => {
             });
         }
 
-        // Check if user exists
-        const { data: user, error: userError } =
-            await supabase
-                .from("users")
-                .select("id")
-                .eq("id", userId)
-                .maybeSingle();
+        const {
+            data: user,
+            error: userError
+        } = await supabase
+            .from("users")
+            .select("id")
+            .eq("id", userId)
+            .maybeSingle();
 
         if (userError) {
             console.error(
@@ -184,18 +376,19 @@ router.post("/:userId", async (req, res) => {
             });
         }
 
-        // Reuse existing open conversation if available
-        const { data: existingConversation, error: existingError } =
-            await supabase
-                .from("support_conversations")
-                .select("*")
-                .eq("user_id", userId)
-                .eq("status", "open")
-                .order("updated_at", {
-                    ascending: false
-                })
-                .limit(1)
-                .maybeSingle();
+        const {
+            data: existingConversation,
+            error: existingError
+        } = await supabase
+            .from("support_conversations")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("status", "open")
+            .order("updated_at", {
+                ascending: false
+            })
+            .limit(1)
+            .maybeSingle();
 
         if (existingError) {
             console.error(
@@ -212,21 +405,24 @@ router.post("/:userId", async (req, res) => {
         if (existingConversation) {
             return res.json({
                 success: true,
-                conversation: existingConversation,
+                conversation:
+                    existingConversation,
                 existing: true
             });
         }
 
-        const { data: conversation, error: createError } =
-            await supabase
-                .from("support_conversations")
-                .insert({
-                    user_id: userId,
-                    status: "open",
-                    category
-                })
-                .select("*")
-                .single();
+        const {
+            data: conversation,
+            error: createError
+        } = await supabase
+            .from("support_conversations")
+            .insert({
+                user_id: userId,
+                status: "open",
+                category
+            })
+            .select("*")
+            .single();
 
         if (createError) {
             console.error(
@@ -254,11 +450,12 @@ router.post("/:userId", async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            error: error.message || "Internal server error."
+            error:
+                error.message ||
+                "Internal server error."
         });
     }
 });
-
 
 // ======================================================
 // SEND TEXT MESSAGE
@@ -284,7 +481,8 @@ router.post(
             if (!userId || !conversationId) {
                 return res.status(400).json({
                     success: false,
-                    error: "User ID and conversation ID are required."
+                    error:
+                        "User ID and conversation ID are required."
                 });
             }
 
@@ -302,56 +500,39 @@ router.post(
                 });
             }
 
-            // Verify conversation
-            const { data: conversation, error: conversationError } =
-                await supabase
-                    .from("support_conversations")
-                    .select("id, user_id, status")
-                    .eq("id", conversationId)
-                    .eq("user_id", userId)
-                    .maybeSingle();
-
-            if (conversationError) {
-                console.error(
-                    "SUPPORT MESSAGE CONVERSATION ERROR:",
-                    conversationError
+            const verification =
+                await verifyOpenConversation(
+                    userId,
+                    conversationId
                 );
 
-                return res.status(500).json({
+            if (!verification.ok) {
+                return res.status(
+                    verification.status
+                ).json({
                     success: false,
-                    error: conversationError.message
+                    error: verification.error
                 });
             }
 
-            if (!conversation) {
-                return res.status(404).json({
-                    success: false,
-                    error: "Support conversation not found."
-                });
-            }
-
-            if (conversation.status !== "open") {
-                return res.status(400).json({
-                    success: false,
-                    error: "This support conversation is closed."
-                });
-            }
-
-            const { data: newMessage, error: messageError } =
-                await supabase
-                    .from("support_messages")
-                    .insert({
-                        conversation_id: conversationId,
-                        sender_id: userId,
-                        sender_type: "user",
-                        message,
-                        attachment_url: null,
-                        attachment_name: null,
-                        attachment_type: null,
-                        attachment_size: null
-                    })
-                    .select("*")
-                    .single();
+            const {
+                data: newMessage,
+                error: messageError
+            } = await supabase
+                .from("support_messages")
+                .insert({
+                    conversation_id:
+                        conversationId,
+                    sender_id: userId,
+                    sender_type: "user",
+                    message,
+                    attachment_url: null,
+                    attachment_name: null,
+                    attachment_type: null,
+                    attachment_size: null
+                })
+                .select("*")
+                .single();
 
             if (messageError) {
                 console.error(
@@ -368,7 +549,8 @@ router.post(
             await supabase
                 .from("support_conversations")
                 .update({
-                    updated_at: new Date().toISOString()
+                    updated_at:
+                        new Date().toISOString()
                 })
                 .eq("id", conversationId);
 
@@ -385,12 +567,241 @@ router.post(
 
             return res.status(500).json({
                 success: false,
-                error: error.message || "Internal server error."
+                error:
+                    error.message ||
+                    "Internal server error."
             });
         }
     }
 );
 
+// ======================================================
+// UPLOAD ATTACHMENT
+// POST /api/support/:userId/:conversationId/upload
+//
+// multipart/form-data
+// field name: file
+// optional field: message
+// ======================================================
+
+router.post(
+    "/:userId/:conversationId/upload",
+
+    async (req, res, next) => {
+        try {
+            const userId = String(
+                req.params.userId || ""
+            ).trim();
+
+            const conversationId = String(
+                req.params.conversationId || ""
+            ).trim();
+
+            if (!userId || !conversationId) {
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        "User ID and conversation ID are required."
+                });
+            }
+
+            const verification =
+                await verifyOpenConversation(
+                    userId,
+                    conversationId
+                );
+
+            if (!verification.ok) {
+                return res.status(
+                    verification.status
+                ).json({
+                    success: false,
+                    error: verification.error
+                });
+            }
+
+            next();
+
+        } catch (error) {
+            console.error(
+                "SUPPORT UPLOAD VERIFY ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    error.message ||
+                    "Unable to verify support conversation."
+            });
+        }
+    },
+
+    upload.single("file"),
+
+    async (req, res) => {
+        try {
+            const userId = String(
+                req.params.userId || ""
+            ).trim();
+
+            const conversationId = String(
+                req.params.conversationId || ""
+            ).trim();
+
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Please select a file."
+                });
+            }
+
+            const message = String(
+                req.body?.message || ""
+            ).trim();
+
+            if (message.length > 5000) {
+                deleteUploadedFile(req.file);
+
+                return res.status(400).json({
+                    success: false,
+                    error: "Message is too long."
+                });
+            }
+
+            const attachmentUrl =
+                getAttachmentUrl(
+                    req,
+                    req.file.filename
+                );
+
+            const {
+                data: newMessage,
+                error: messageError
+            } = await supabase
+                .from("support_messages")
+                .insert({
+                    conversation_id:
+                        conversationId,
+                    sender_id: userId,
+                    sender_type: "user",
+
+                    message:
+                        message || null,
+
+                    attachment_url:
+                        attachmentUrl,
+
+                    attachment_name:
+                        req.file.originalname,
+
+                    attachment_type:
+                        req.file.mimetype,
+
+                    attachment_size:
+                        req.file.size
+                })
+                .select("*")
+                .single();
+
+            if (messageError) {
+                deleteUploadedFile(req.file);
+
+                console.error(
+                    "SUPPORT ATTACHMENT DB ERROR:",
+                    messageError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: messageError.message
+                });
+            }
+
+            await supabase
+                .from("support_conversations")
+                .update({
+                    updated_at:
+                        new Date().toISOString()
+                })
+                .eq("id", conversationId);
+
+            return res.status(201).json({
+                success: true,
+                message: newMessage,
+                attachment: {
+                    url: attachmentUrl,
+                    name: req.file.originalname,
+                    type: req.file.mimetype,
+                    size: req.file.size
+                }
+            });
+
+        } catch (error) {
+            if (req.file) {
+                deleteUploadedFile(req.file);
+            }
+
+            console.error(
+                "SUPPORT ATTACHMENT UPLOAD ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    error.message ||
+                    "Unable to upload attachment."
+            });
+        }
+    }
+);
+
+// ======================================================
+// MULTER / UPLOAD ERROR HANDLER
+// ======================================================
+
+router.use(
+    (
+        error,
+        req,
+        res,
+        next
+    ) => {
+        if (
+            error instanceof multer.MulterError
+        ) {
+            if (
+                error.code ===
+                "LIMIT_FILE_SIZE"
+            ) {
+                return res.status(413).json({
+                    success: false,
+                    error:
+                        "File is too large. Maximum size is 50 MB."
+                });
+            }
+
+            return res.status(400).json({
+                success: false,
+                error:
+                    error.message ||
+                    "File upload failed."
+            });
+        }
+
+        if (error) {
+            return res.status(400).json({
+                success: false,
+                error:
+                    error.message ||
+                    "File upload failed."
+            });
+        }
+
+        next();
+    }
+);
 
 // ======================================================
 // CLOSE CONVERSATION
@@ -411,20 +822,31 @@ router.patch(
 
             const status = String(
                 req.body?.status || ""
-            ).trim().toLowerCase();
+            )
+                .trim()
+                .toLowerCase();
 
-            if (!["open", "closed"].includes(status)) {
+            if (
+                !["open", "closed"].includes(
+                    status
+                )
+            ) {
                 return res.status(400).json({
                     success: false,
-                    error: "Status must be open or closed."
+                    error:
+                        "Status must be open or closed."
                 });
             }
 
-            const { data, error } = await supabase
+            const {
+                data,
+                error
+            } = await supabase
                 .from("support_conversations")
                 .update({
                     status,
-                    updated_at: new Date().toISOString()
+                    updated_at:
+                        new Date().toISOString()
                 })
                 .eq("id", conversationId)
                 .eq("user_id", userId)
@@ -446,7 +868,8 @@ router.patch(
             if (!data) {
                 return res.status(404).json({
                     success: false,
-                    error: "Support conversation not found."
+                    error:
+                        "Support conversation not found."
                 });
             }
 
@@ -463,11 +886,12 @@ router.patch(
 
             return res.status(500).json({
                 success: false,
-                error: error.message || "Internal server error."
+                error:
+                    error.message ||
+                    "Internal server error."
             });
         }
     }
 );
-
 
 module.exports = router;
