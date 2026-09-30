@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 
 import fs from "fs";
@@ -281,140 +280,93 @@ function getFirebaseAdmin() {
 ========================================================= */
 
 async function getAdmin() {
-  const cookieStore =
-    await cookies();
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("gamerzadda_admin_session")?.value || "";
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  const supabaseKey =
-    process.env
-      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Supabase environment variables are missing."
-    );
+  if (!sessionCookie) {
+    console.warn("NOTIFICATION ADMIN AUTH: gamerzadda_admin_session cookie missing.");
+    return { user: null, adminUser: null, adminSupabase: null };
   }
 
-  const supabase =
-    createServerClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
+  const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "https://api.gamerzadda.in")
+    .trim()
+    .replace(/\/$/, "");
 
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(
-                ({
-                  name,
-                  value,
-                  options,
-                }) => {
-                  cookieStore.set(
-                    name,
-                    value,
-                    options
-                  );
-                }
-              );
-            } catch {
-              // Ignore cookie write errors
-            }
-          },
-        },
-      }
-    );
-
-  const {
-    data: authData,
-    error: authError,
-  } =
-    await supabase.auth.getUser();
-
-  if (authError) {
-    console.error(
-      "AUTH ERROR:",
-      authError
-    );
+  let sessionResponse;
+  try {
+    sessionResponse = await fetch(`${apiUrl}/api/admin/session`, {
+      method: "GET",
+      headers: {
+        Cookie: `gamerzadda_admin_session=${encodeURIComponent(sessionCookie)}`,
+      },
+      cache: "no-store",
+    });
+  } catch (error) {
+    console.error("NOTIFICATION ADMIN SESSION REQUEST ERROR:", error);
+    return { user: null, adminUser: null, adminSupabase: null };
   }
 
-  const user =
-    authData?.user || null;
+  let sessionData = null;
+  try {
+    sessionData = await sessionResponse.json();
+  } catch (error) {
+    console.error("NOTIFICATION ADMIN SESSION JSON ERROR:", error);
+  }
 
-  if (!user) {
+  if (!sessionResponse.ok || !sessionData?.success || !sessionData?.authenticated || !sessionData?.admin) {
+    console.warn(
+      "NOTIFICATION ADMIN AUTH FAILED:",
+      sessionResponse.status,
+      sessionData?.error || "Admin session is not authenticated."
+    );
+    return { user: null, adminUser: null, adminSupabase: null };
+  }
+
+  const admin = sessionData.admin;
+  const role = String(admin.role || "").trim().toLowerCase();
+  const status = String(admin.status || "active").trim().toLowerCase();
+
+  if (role !== "admin" || status !== "active") {
+    console.warn("NOTIFICATION ADMIN AUTH ROLE/STATUS FAILED:", { role, status });
+    return { user: null, adminUser: null, adminSupabase: null };
+  }
+
+  const adminSupabase = getSupabaseAdminClient();
+
+  if (!adminSupabase) {
     return {
-      supabase,
+      user: { id: admin.id, email: admin.email || null },
+      adminUser: admin,
       adminSupabase: null,
-      user: null,
-      adminUser: null,
     };
   }
 
-  const adminSupabase =
-    getSupabaseAdminClient();
+  const { data: dbAdmin, error: dbAdminError } = await adminSupabase
+    .from("users")
+    .select("id,email,full_name,role,status")
+    .eq("id", admin.id)
+    .maybeSingle();
 
-  let adminUser = null;
-
-  /* -------------------------------------------------------
-     ADMIN ROLE CHECK
-  ------------------------------------------------------- */
-
-  if (adminSupabase) {
-    const {
-      data,
-      error,
-    } =
-      await adminSupabase
-        .from("users")
-        .select("id,role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    if (error) {
-      console.error(
-        "ADMIN LOOKUP ERROR:",
-        error
-      );
-    }
-
-    adminUser = data || null;
+  if (dbAdminError) {
+    console.error("NOTIFICATION ADMIN DB LOOKUP ERROR:", dbAdminError);
+    return { user: null, adminUser: null, adminSupabase };
   }
 
-  /* -------------------------------------------------------
-     FALLBACK ROLE CHECK
-  ------------------------------------------------------- */
+  if (!dbAdmin) {
+    return { user: null, adminUser: null, adminSupabase };
+  }
 
-  if (!adminUser) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from("users")
-        .select("id,role")
-        .eq("id", user.id)
-        .maybeSingle();
+  const dbRole = String(dbAdmin.role || "").trim().toLowerCase();
+  const dbStatus = String(dbAdmin.status || "active").trim().toLowerCase();
 
-    if (error) {
-      console.error(
-        "ROLE LOOKUP ERROR:",
-        error
-      );
-    }
-
-    adminUser = data || null;
+  if (dbRole !== "admin" || dbStatus !== "active") {
+    return { user: null, adminUser: null, adminSupabase };
   }
 
   return {
-    supabase,
+    user: { id: dbAdmin.id, email: dbAdmin.email || admin.email || null },
+    adminUser: dbAdmin,
     adminSupabase,
-    user,
-    adminUser,
   };
 }
 
@@ -425,7 +377,6 @@ async function getAdmin() {
 export async function GET() {
   try {
     const {
-      supabase,
       adminSupabase,
       user,
       adminUser,
@@ -447,8 +398,14 @@ export async function GET() {
       return unauthorized();
     }
 
-    const db =
-      adminSupabase || supabase;
+    const db = adminSupabase;
+
+    if (!db) {
+      return json(
+        { success: false, error: "SUPABASE_SERVICE_ROLE_KEY is missing." },
+        500
+      );
+    }
 
     /* -------------------------------------------------------
        USERS
@@ -530,7 +487,6 @@ export async function GET() {
 export async function POST(request) {
   try {
     const {
-      supabase,
       adminSupabase,
       user,
       adminUser,
