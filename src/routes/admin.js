@@ -7,6 +7,439 @@ const router = express.Router();
 
 /*
 |--------------------------------------------------------------------------
+| FCM / FIREBASE HELPERS
+|--------------------------------------------------------------------------
+*/
+
+let firebaseAdmin = null;
+
+function getFirebaseAdmin() {
+    if (firebaseAdmin) {
+        return firebaseAdmin;
+    }
+
+    try {
+        const admin = require("firebase-admin");
+
+        if (admin.apps.length > 0) {
+            firebaseAdmin = admin;
+            return firebaseAdmin;
+        }
+
+        const serviceAccountPath =
+            process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+        if (serviceAccountPath) {
+            const path = require("path");
+            const fs = require("fs");
+
+            const absolutePath = path.isAbsolute(serviceAccountPath)
+                ? serviceAccountPath
+                : path.resolve(process.cwd(), serviceAccountPath);
+
+            if (!fs.existsSync(absolutePath)) {
+                console.error(
+                    "FCM SERVICE ACCOUNT FILE NOT FOUND:",
+                    absolutePath
+                );
+                return null;
+            }
+
+            const serviceAccount =
+                require(absolutePath);
+
+            firebaseAdmin = admin.initializeApp({
+                credential:
+                    admin.credential.cert(serviceAccount)
+            });
+
+            return firebaseAdmin;
+        }
+
+        const projectId =
+            process.env.FIREBASE_PROJECT_ID;
+
+        const clientEmail =
+            process.env.FIREBASE_CLIENT_EMAIL;
+
+        const privateKey =
+            process.env.FIREBASE_PRIVATE_KEY
+                ? process.env.FIREBASE_PRIVATE_KEY.replace(
+                    /\\n/g,
+                    "\n"
+                )
+                : null;
+
+        if (
+            !projectId ||
+            !clientEmail ||
+            !privateKey
+        ) {
+            console.error(
+                "FCM FIREBASE CONFIG MISSING."
+            );
+            return null;
+        }
+
+        firebaseAdmin = admin.initializeApp({
+            credential:
+                admin.credential.cert({
+                    projectId,
+                    clientEmail,
+                    privateKey
+                })
+        });
+
+        return firebaseAdmin;
+
+    } catch (error) {
+        console.error(
+            "FCM FIREBASE INIT ERROR:",
+            error
+        );
+
+        return null;
+    }
+}
+
+async function sendRoomKeysNotification({
+    tournamentId,
+    tournamentTitle,
+    roomId,
+    roomPassword
+}) {
+    try {
+        const admin = getFirebaseAdmin();
+
+        if (!admin) {
+            return {
+                success: false,
+                sent: 0,
+                failed: 0,
+                reason: "Firebase is not configured."
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET JOINED PLAYERS ONLY
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: entries,
+            error: entriesError
+        } = await supabase
+            .from("tournament_entries")
+            .select("user_id")
+            .eq(
+                "tournament_id",
+                tournamentId
+            )
+            .eq(
+                "cancelled",
+                false
+            );
+
+        if (entriesError) {
+            console.error(
+                "ROOM KEYS FCM ENTRIES ERROR:",
+                entriesError
+            );
+
+            return {
+                success: false,
+                sent: 0,
+                failed: 0,
+                reason: entriesError.message
+            };
+        }
+
+        const userIds = [
+            ...new Set(
+                (entries || [])
+                    .map((entry) =>
+                        String(
+                            entry?.user_id || ""
+                        ).trim()
+                    )
+                    .filter(Boolean)
+            )
+        ];
+
+        if (userIds.length === 0) {
+            console.log(
+                "ROOM KEYS FCM: NO JOINED PLAYERS",
+                tournamentId
+            );
+
+            return {
+                success: true,
+                participants: 0,
+                tokens: 0,
+                sent: 0,
+                failed: 0
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET FCM TOKENS
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: users,
+            error: usersError
+        } = await supabase
+            .from("users")
+            .select(
+                "id, fcm_token"
+            )
+            .in(
+                "id",
+                userIds
+            );
+
+        if (usersError) {
+            console.error(
+                "ROOM KEYS FCM USERS ERROR:",
+                usersError
+            );
+
+            return {
+                success: false,
+                participants: userIds.length,
+                tokens: 0,
+                sent: 0,
+                failed: 0,
+                reason: usersError.message
+            };
+        }
+
+        const tokenToUser = new Map();
+
+        for (const user of users || []) {
+            const token =
+                String(
+                    user?.fcm_token || ""
+                ).trim();
+
+            if (token) {
+                tokenToUser.set(
+                    token,
+                    user.id
+                );
+            }
+        }
+
+        const tokens = [
+            ...tokenToUser.keys()
+        ];
+
+        if (tokens.length === 0) {
+            console.log(
+                "ROOM KEYS FCM: JOINED PLAYERS HAVE NO TOKENS",
+                tournamentId
+            );
+
+            return {
+                success: true,
+                participants: userIds.length,
+                tokens: 0,
+                sent: 0,
+                failed: 0
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NOTIFICATION
+        |--------------------------------------------------------------------------
+        */
+
+        const title =
+            `${tournamentTitle || "Tournament"} 🎮 is LIVE NOW`;
+
+        const body =
+            `🔐 ID: ${roomId} || PASS: ${roomPassword} — JOIN FAST! ⚡`;
+
+        let sent = 0;
+        let failed = 0;
+        const invalidTokens = [];
+
+        /*
+        |--------------------------------------------------------------------------
+        | FCM MAX MULTICAST SIZE = 500
+        |--------------------------------------------------------------------------
+        */
+
+        for (
+            let start = 0;
+            start < tokens.length;
+            start += 500
+        ) {
+            const chunk =
+                tokens.slice(
+                    start,
+                    start + 500
+                );
+
+            console.log(
+                `ROOM KEYS FCM SENDING CHUNK: ${start + 1}-${start + chunk.length}`
+            );
+
+            const response =
+                await admin
+                    .messaging()
+                    .sendEachForMulticast({
+                        tokens: chunk,
+                        notification: {
+                            title,
+                            body
+                        },
+                        data: {
+                            type:
+                                "tournament_room_keys",
+                            tournament_id:
+                                String(
+                                    tournamentId
+                                ),
+                            tournament_title:
+                                String(
+                                    tournamentTitle ||
+                                    ""
+                                ),
+                            room_id:
+                                String(
+                                    roomId
+                                ),
+                            room_password:
+                                String(
+                                    roomPassword
+                                )
+                        },
+                        android: {
+                            priority:
+                                "high",
+                            notification: {
+                                channelId:
+                                    "gamerzadda_notifications",
+                                sound:
+                                    "default"
+                            }
+                        }
+                    });
+
+            sent +=
+                Number(
+                    response.successCount || 0
+                );
+
+            failed +=
+                Number(
+                    response.failureCount || 0
+                );
+
+            response.responses.forEach(
+                (result, index) => {
+                    if (
+                        result.success
+                    ) {
+                        return;
+                    }
+
+                    const code =
+                        result.error?.code ||
+                        "";
+
+                    if (
+                        code ===
+                            "messaging/registration-token-not-registered" ||
+                        code ===
+                            "messaging/invalid-registration-token"
+                    ) {
+                        invalidTokens.push(
+                            chunk[index]
+                        );
+                    }
+
+                    console.error(
+                        "ROOM KEYS FCM SEND ERROR:",
+                        code ||
+                            result.error?.message ||
+                            "Unknown FCM error"
+                    );
+                }
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | CLEAN INVALID TOKENS
+        |--------------------------------------------------------------------------
+        */
+
+        for (
+            const invalidToken of invalidTokens
+        ) {
+            await supabase
+                .from("users")
+                .update({
+                    fcm_token: null
+                })
+                .eq(
+                    "fcm_token",
+                    invalidToken
+                );
+        }
+
+        console.log(
+            "ROOM KEYS FCM COMPLETE:",
+            {
+                participants:
+                    userIds.length,
+                tokens:
+                    tokens.length,
+                sent,
+                failed,
+                invalidTokens:
+                    invalidTokens.length
+            }
+        );
+
+        return {
+            success: true,
+            participants:
+                userIds.length,
+            tokens:
+                tokens.length,
+            sent,
+            failed,
+            invalidTokens:
+                invalidTokens.length
+        };
+
+    } catch (error) {
+        console.error(
+            "ROOM KEYS FCM EXCEPTION:",
+            error
+        );
+
+        return {
+            success: false,
+            sent: 0,
+            failed: 0,
+            reason:
+                error?.message ||
+                "FCM notification failed."
+        };
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
 | CONFIG
 |--------------------------------------------------------------------------
 */
@@ -1531,6 +1964,34 @@ router.post(
                 cleanTournamentId
             );
 
+            /*
+            |--------------------------------------------------------------------------
+            | SEND FCM TO JOINED PLAYERS ONLY
+            |--------------------------------------------------------------------------
+            |
+            | IMPORTANT:
+            | Room keys are already saved and tournament is already LIVE.
+            | FCM failure must NOT make the admin request fail.
+            |--------------------------------------------------------------------------
+            */
+
+            const notificationResult =
+                await sendRoomKeysNotification({
+                    tournamentId:
+                        cleanTournamentId,
+                    tournamentTitle:
+                        tournament?.title || "Tournament",
+                    roomId:
+                        cleanRoomId,
+                    roomPassword:
+                        cleanRoomPassword
+                });
+
+            console.log(
+                "ROOM KEYS NOTIFICATION RESULT:",
+                notificationResult
+            );
+
             return res
                 .status(200)
                 .json({
@@ -1543,7 +2004,9 @@ router.post(
                         cleanRoomId,
                     roomPassword:
                         cleanRoomPassword,
-                    match
+                    match,
+                    notification:
+                        notificationResult
                 });
 
         } catch (error) {
