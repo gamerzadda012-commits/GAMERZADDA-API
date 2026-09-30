@@ -1798,6 +1798,17 @@ router.get("/members", async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
+function getSupportTicketId(conversationId) {
+    const clean = String(conversationId || "")
+        .replace(/[^a-fA-F0-9]/g, "")
+        .toUpperCase();
+
+    const seed = clean || "0";
+    const value = parseInt(seed.slice(0, 5), 16) % 100000;
+
+    return `#GZ-${String(value).padStart(5, "0")}`;
+}
+
 router.get("/support", async (req, res) => {
     try {
         const admin = await verifyAdmin(req);
@@ -2040,6 +2051,10 @@ router.get("/support", async (req, res) => {
 
                     return {
                         ...conversation,
+                        ticket_id:
+                            getSupportTicketId(
+                                conversation.id
+                            ),
 
                         user: user
                             ? {
@@ -2162,7 +2177,13 @@ router.get("/support/:conversationId", async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            conversation,
+            conversation: {
+                ...conversation,
+                ticket_id:
+                    getSupportTicketId(
+                        conversation.id
+                    )
+            },
             messages: messages || []
         });
     } catch (error) {
@@ -2216,6 +2237,14 @@ router.post("/support/:conversationId/message", async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: "Conversation not found."
+            });
+        }
+
+        if (conversation.status !== "open") {
+            return res.status(400).json({
+                success: false,
+                error:
+                    "This support ticket is closed. Reopen it before replying."
             });
         }
 
@@ -2288,6 +2317,36 @@ router.patch("/support/:conversationId", async (req, res) => {
             });
         }
 
+        const {
+            data: currentConversation,
+            error: currentError
+        } = await supabase
+            .from("support_conversations")
+            .select("id, user_id, status")
+            .eq("id", conversationId)
+            .maybeSingle();
+
+        if (currentError) {
+            console.error(
+                "ADMIN SUPPORT CURRENT STATUS ERROR:",
+                currentError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    currentError.message ||
+                    "Unable to load support ticket."
+            });
+        }
+
+        if (!currentConversation) {
+            return res.status(404).json({
+                success: false,
+                error: "Conversation not found."
+            });
+        }
+
         const { data, error } = await supabase
             .from("support_conversations")
             .update({
@@ -2313,9 +2372,59 @@ router.patch("/support/:conversationId", async (req, res) => {
             });
         }
 
+        if (
+            status === "closed" &&
+            currentConversation.status === "open"
+        ) {
+            const ticketId =
+                getSupportTicketId(
+                    conversationId
+                );
+
+            const resolutionMessage =
+                `Your GAMERZADDA support ticket ${ticketId} has been marked as resolved. ✅\n\n` +
+                `If your issue is still not resolved or you need help with a different issue, please open Support again and send a new message. A new ticket will be created for you.`;
+
+            const {
+                error: resolutionError
+            } = await supabase
+                .from("support_messages")
+                .insert({
+                    conversation_id:
+                        conversationId,
+                    sender_id:
+                        currentConversation.user_id,
+                    sender_type:
+                        "admin",
+                    message:
+                        resolutionMessage,
+                    attachment_url:
+                        null,
+                    attachment_name:
+                        null,
+                    attachment_type:
+                        null,
+                    attachment_size:
+                        null
+                });
+
+            if (resolutionError) {
+                console.error(
+                    "ADMIN SUPPORT RESOLUTION MESSAGE ERROR:",
+                    resolutionError
+                );
+            }
+        }
+
         return res.status(200).json({
             success: true,
-            conversation: data
+            conversation: {
+                ...data,
+                ticket_id:
+                    getSupportTicketId(
+                        data.id
+                    )
+            }
         });
     } catch (error) {
         console.error("ADMIN SUPPORT STATUS EXCEPTION:", error);

@@ -126,6 +126,19 @@ function deleteUploadedFile(file) {
     }
 }
 
+// Stable human-friendly ticket ID derived from the conversation UUID.
+// No database schema change is required.
+function getTicketId(conversationId) {
+    const clean = String(conversationId || "")
+        .replace(/[^a-fA-F0-9]/g, "")
+        .toUpperCase();
+
+    const seed = clean || "0";
+    const value = parseInt(seed.slice(0, 5), 16) % 100000;
+
+    return `#GZ-${String(value).padStart(5, "0")}`;
+}
+
 // ======================================================
 // VERIFY OPEN CONVERSATION
 // ======================================================
@@ -476,9 +489,58 @@ router.post("/:userId", async (req, res) => {
             });
         }
 
+        // The welcome message is created only when the first real
+        // user action creates the ticket.
+        const ticketId =
+            getTicketId(conversation.id);
+
+        const welcomeMessage =
+            `Welcome to GAMERZADDA Support! 👋\n\n` +
+            `Your support ticket ${ticketId} has been created.\n\n` +
+            `Please describe your issue clearly so our support team can help you as quickly as possible. You can contact us for app issues, tournament problems, payment/deposit issues, withdrawal issues, account problems, rewards, or any other GAMERZADDA-related issue.\n\n` +
+            `If required, you can also attach a screenshot, video, or PDF as proof. Please make sure the attachment is clear and relevant to your issue.\n\n` +
+            `Please do not send multiple messages for the same issue. Send all important details in one place and wait for our support team to respond.\n\n` +
+            `Our team will review your ticket and reply here. Thank you for contacting GAMERZADDA Support. ❤️`;
+
+        const {
+            error: welcomeError
+        } = await supabase
+            .from("support_messages")
+            .insert({
+                conversation_id: conversation.id,
+                sender_id: userId,
+                sender_type: "admin",
+                message: welcomeMessage,
+                attachment_url: null,
+                attachment_name: null,
+                attachment_type: null,
+                attachment_size: null
+            });
+
+        if (welcomeError) {
+            console.error(
+                "SUPPORT WELCOME MESSAGE ERROR:",
+                welcomeError
+            );
+
+            await supabase
+                .from("support_conversations")
+                .delete()
+                .eq("id", conversation.id)
+                .eq("user_id", userId);
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    welcomeError.message ||
+                    "Unable to initialize support ticket."
+            });
+        }
+
         return res.status(201).json({
             success: true,
             conversation,
+            ticketId,
             existing: false
         });
 
@@ -974,6 +1036,35 @@ router.patch(
             }
 
             const {
+                data: currentConversation,
+                error: currentError
+            } = await supabase
+                .from("support_conversations")
+                .select("id, user_id, status")
+                .eq("id", conversationId)
+                .eq("user_id", userId)
+                .maybeSingle();
+
+            if (currentError) {
+                console.error(
+                    "SUPPORT CURRENT STATUS ERROR:",
+                    currentError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: currentError.message
+                });
+            }
+
+            if (!currentConversation) {
+                return res.status(404).json({
+                    success: false,
+                    error: "Support conversation not found."
+                });
+            }
+
+            const {
                 data,
                 error
             } = await supabase
@@ -1017,6 +1108,48 @@ router.patch(
                     error:
                         "Support conversation not found."
                 });
+            }
+
+            if (
+                status === "closed" &&
+                currentConversation.status === "open"
+            ) {
+                const ticketId =
+                    getTicketId(conversationId);
+
+                const resolutionMessage =
+                    `Your GAMERZADDA support ticket ${ticketId} has been marked as resolved. ✅\n\n` +
+                    `If your issue is still not resolved or you need help with a different issue, please open Support again and send a new message. A new ticket will be created for you.`;
+
+                const {
+                    error: resolutionError
+                } = await supabase
+                    .from("support_messages")
+                    .insert({
+                        conversation_id:
+                            conversationId,
+                        sender_id:
+                            userId,
+                        sender_type:
+                            "admin",
+                        message:
+                            resolutionMessage,
+                        attachment_url:
+                            null,
+                        attachment_name:
+                            null,
+                        attachment_type:
+                            null,
+                        attachment_size:
+                            null
+                    });
+
+                if (resolutionError) {
+                    console.error(
+                        "SUPPORT RESOLUTION MESSAGE ERROR:",
+                        resolutionError
+                    );
+                }
             }
 
             return res.json({
