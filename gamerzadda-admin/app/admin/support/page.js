@@ -6,6 +6,17 @@ import AdminShell from "../AdminShell";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "https://api.gamerzadda.in";
 
+function supportTicketId(conversationId) {
+  const clean = String(conversationId || "")
+    .replace(/[^a-fA-F0-9]/g, "")
+    .toUpperCase();
+
+  const seed = clean || "0";
+  const value = parseInt(seed.slice(0, 5), 16) % 100000;
+
+  return `#GZ-${String(value).padStart(5, "0")}`;
+}
+
 export default function Page() {
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -51,96 +62,10 @@ export default function Page() {
 
       const data = await api("/api/admin/support");
       const list = data.conversations || [];
-
-      // Resolve every conversation's real member profile so the
-      // conversation list does not fall back to "User <id>".
-      const enriched = await Promise.all(
-        list.map(async (conversation) => {
-          const nestedUser =
-            conversation.user ||
-            conversation.member ||
-            conversation.profile ||
-            null;
-
-          const nestedName = getRealName(nestedUser);
-          const nestedImage = getProfileImage(nestedUser);
-
-          if (
-            nestedName ||
-            nestedImage ||
-            conversation.user_name ||
-            conversation.full_name ||
-            conversation.game_name ||
-            conversation.profile_image ||
-            conversation.avatar_url
-          ) {
-            return {
-              ...conversation,
-              user_name:
-                conversation.user_name ||
-                conversation.full_name ||
-                conversation.game_name ||
-                nestedName ||
-                "",
-              profile_image:
-                conversation.profile_image ||
-                conversation.profile_image_url ||
-                conversation.profile_pic ||
-                conversation.profile_pic_url ||
-                conversation.avatar_url ||
-                nestedImage ||
-                "",
-            };
-          }
-
-          if (!conversation.user_id) return conversation;
-
-          try {
-            const memberData = await api(
-              `/api/admin/members?userId=${encodeURIComponent(
-                conversation.user_id
-              )}`
-            );
-
-            const m =
-              memberData.member ||
-              memberData.user ||
-              memberData.profile ||
-              {};
-
-            return {
-              ...conversation,
-              user_name:
-                getRealName(m) ||
-                `User ${shortId(conversation.user_id)}`,
-              full_name: m.full_name || "",
-              game_name: m.game_name || "",
-              profile_image: getProfileImage(m),
-              profile_image_url: getProfileImage(m),
-              avatar_url: getProfileImage(m),
-            };
-          } catch (memberErr) {
-            console.error(
-              "SUPPORT MEMBER LIST LOAD:",
-              memberErr
-            );
-
-            return {
-              ...conversation,
-              user_name:
-                conversation.user_name ||
-                conversation.full_name ||
-                conversation.game_name ||
-                `User ${shortId(conversation.user_id)}`,
-            };
-          }
-        })
-      );
-
-      setConversations(enriched);
+      setConversations(list);
 
       if (selectedId) {
-        const updated = enriched.find(
+        const updated = list.find(
           (item) => String(item.id) === String(selectedId)
         );
         if (updated) setSelected(updated);
@@ -189,13 +114,7 @@ export default function Page() {
         `/api/admin/members?userId=${encodeURIComponent(userId)}`
       );
 
-      const loadedMember =
-        data.member ||
-        data.user ||
-        data.profile ||
-        null;
-
-      setMember(loadedMember);
+      setMember(data.member || null);
       setWallet(
         data.wallet || {
           deposit_balance: 0,
@@ -342,39 +261,6 @@ export default function Page() {
     return `${id.slice(0, 8)}...${id.slice(-6)}`;
   }
 
-  // Support the profile fields used by different user/member responses.
-  function getProfileImage(user) {
-    if (!user) return "";
-
-    return (
-      user.profile_image_url ||
-      user.profile_image ||
-      user.profile_pic_url ||
-      user.profile_pic ||
-      user.avatar_url ||
-      user.avatar ||
-      user.photo_url ||
-      user.photo ||
-      user.image_url ||
-      user.image ||
-      ""
-    );
-  }
-
-  function getRealName(user) {
-    if (!user) return "";
-
-    return (
-      user.full_name ||
-      user.fullName ||
-      user.name ||
-      user.game_name ||
-      user.gameName ||
-      user.username ||
-      ""
-    );
-  }
-
   return (
     <AdminShell title="Support">
       <div className="support-page">
@@ -469,17 +355,7 @@ export default function Page() {
                       }
                     >
                       <div className="avatar">
-                        {getProfileImage(conversation) ? (
-                          <img
-                            src={getProfileImage(conversation)}
-                            alt={name}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          String(name).charAt(0).toUpperCase()
-                        )}
+                        {String(name).charAt(0).toUpperCase()}
                       </div>
 
                       <div className="conversation-info">
@@ -533,39 +409,30 @@ export default function Page() {
                       onClick={() => setProfileOpen(true)}
                     >
                       <span className="header-avatar">
-                        {getProfileImage(member || selected) ? (
-                          <img
-                            src={getProfileImage(member || selected)}
-                            alt={
-                              getRealName(member) ||
-                              getRealName(selected) ||
-                              "User"
-                            }
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          (
-                            getRealName(member) ||
-                            getRealName(selected) ||
-                            "U"
-                          )
-                            .charAt(0)
-                            .toUpperCase()
-                        )}
+                        {(
+                          member?.full_name ||
+                          member?.game_name ||
+                          "U"
+                        )
+                          .charAt(0)
+                          .toUpperCase()}
                       </span>
 
                       <span className="header-user-text">
                         <strong>
-                          {getRealName(member) ||
-                            getRealName(selected) ||
+                          {member?.full_name ||
+                            member?.game_name ||
                             "User Support"}
                         </strong>
 
                         <span>
                           {member?.phone ||
                             `ID: ${shortId(selected.user_id)}`}
+                        </span>
+
+                        <span className="support-ticket-id">
+                          {selected.ticket_id ||
+                            supportTicketId(selected.id)}
                         </span>
                       </span>
                     </button>
@@ -759,8 +626,8 @@ export default function Page() {
               <div className="profile-drawer-header">
                 <div>
                   <h2>
-                    {getRealName(member) ||
-                      getRealName(selected) ||
+                    {member?.full_name ||
+                      member?.game_name ||
                       "Member"}
                   </h2>
                   <p>Member details & wallet</p>
@@ -782,33 +649,19 @@ export default function Page() {
                 <>
                   <div className="profile-hero">
                     <div className="profile-avatar">
-                      {getProfileImage(member || selected) ? (
-                        <img
-                          src={getProfileImage(member || selected)}
-                          alt={
-                            getRealName(member) ||
-                            getRealName(selected) ||
-                            "User"
-                          }
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        (
-                          getRealName(member) ||
-                          getRealName(selected) ||
-                          "U"
-                        )
-                          .charAt(0)
-                          .toUpperCase()
-                      )}
+                      {(
+                        member?.full_name ||
+                        member?.game_name ||
+                        "U"
+                      )
+                        .charAt(0)
+                        .toUpperCase()}
                     </div>
 
                     <div>
                       <strong>
-                        {getRealName(member) ||
-                          getRealName(selected) ||
+                        {member?.full_name ||
+                          member?.game_name ||
                           "Unknown User"}
                       </strong>
                       <span>
@@ -1109,17 +962,6 @@ export default function Page() {
             border-radius: 14px;
             background: #ffe8ee;
             color: #ff174f;
-            overflow: hidden;
-          }
-
-          .avatar img,
-          .header-avatar img,
-          .profile-avatar img {
-            width: 100%;
-            height: 100%;
-            display: block;
-            object-fit: cover;
-            border-radius: inherit;
           }
 
           .conversation-info {
@@ -1200,7 +1042,6 @@ export default function Page() {
             border-radius: 14px;
             background: #ffe8ee;
             color: #ff174f;
-            overflow: hidden;
           }
 
           .header-user-text {
@@ -1450,9 +1291,8 @@ export default function Page() {
             inset: 0;
             z-index: 90;
             border: 0;
-            background: rgba(30, 40, 60, 0.18);
-            backdrop-filter: blur(9px);
-            -webkit-backdrop-filter: blur(9px);
+            background: rgba(0, 0, 0, 0.42);
+            backdrop-filter: blur(2px);
           }
 
           .profile-drawer {
@@ -1460,25 +1300,24 @@ export default function Page() {
             top: 0;
             right: 0;
             z-index: 100;
-            width: min(455px, 94vw);
+            width: min(440px, 92vw);
             height: 100vh;
             overflow-y: auto;
             box-sizing: border-box;
-            background: rgba(255, 255, 255, 0.90);
-            color: #182033;
+            background: #070b12;
+            color: #e9eef7;
             padding: 22px;
-            border-left: 1px solid rgba(255,255,255,.85);
-            box-shadow:
-              -18px 0 45px rgba(90, 105, 135, .18),
-              inset 1px 0 0 rgba(255,255,255,.9);
-            backdrop-filter: blur(22px);
-            -webkit-backdrop-filter: blur(22px);
-            animation: profileSlide .25s ease-out;
+            box-shadow: -18px 0 45px rgba(0, 0, 0, 0.2);
+            animation: profileSlide 0.24s ease-out;
           }
 
           @keyframes profileSlide {
-            from { transform: translateX(100%); opacity: .75; }
-            to { transform: translateX(0); opacity: 1; }
+            from {
+              transform: translateX(100%);
+            }
+            to {
+              transform: translateX(0);
+            }
           }
 
           .profile-drawer-header {
@@ -1486,76 +1325,49 @@ export default function Page() {
             justify-content: space-between;
             align-items: flex-start;
             gap: 15px;
-            margin-bottom: 18px;
+            margin-bottom: 22px;
           }
 
           .profile-drawer-header h2 {
             margin: 0;
-            font-size: 22px;
-            font-weight: 950;
-            color: #172033;
+            font-size: 20px;
+            font-weight: 900;
           }
 
           .profile-drawer-header p {
             margin: 5px 0 0;
-            color: #7d8799;
-            font-size: 11px;
-            font-weight: 650;
+            color: #738197;
+            font-size: 10px;
           }
 
           .drawer-close {
-            width: 40px;
-            height: 40px;
-            border: 0;
-            border-radius: 14px;
-            background: rgba(255,255,255,.82);
-            color: #ff174f;
+            width: 34px;
+            height: 34px;
+            border: 1px solid #263448;
+            border-radius: 9px;
+            background: #101925;
+            color: #fff;
             cursor: pointer;
-            font-size: 21px;
-            font-weight: 900;
-            box-shadow:
-              6px 6px 13px rgba(180, 188, 203, .55),
-              -5px -5px 12px rgba(255,255,255,.98);
-            transition: transform .18s ease, box-shadow .18s ease;
-          }
-
-          .drawer-close:hover {
-            transform: translateY(-1px);
-            box-shadow:
-              3px 3px 8px rgba(180,188,203,.58),
-              -3px -3px 8px rgba(255,255,255,1);
+            font-size: 18px;
           }
 
           .profile-hero {
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 16px;
-            border-radius: 22px;
-            background: rgba(255,255,255,.74);
-            border: 1px solid rgba(255,255,255,.9);
-            box-shadow:
-              9px 9px 20px rgba(183, 190, 204, .55),
-              -9px -9px 20px rgba(255,255,255,.98);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            margin-bottom: 18px;
+            gap: 12px;
+            padding: 14px;
+            border: 1px solid #1d2a3b;
+            border-radius: 14px;
+            background: #0e1723;
           }
 
           .profile-avatar {
-            width: 66px;
-            height: 66px;
-            flex-shrink: 0;
-            border-radius: 21px;
-            background: linear-gradient(145deg, #ff174f, #ff4f78);
+            width: 54px;
+            height: 54px;
+            border-radius: 17px;
+            background: #ff174f;
             color: #fff;
-            font-size: 23px;
-            overflow: hidden;
-            display: grid;
-            place-items: center;
-            box-shadow:
-              6px 6px 13px rgba(183,190,204,.58),
-              -5px -5px 11px rgba(255,255,255,.96);
+            font-size: 20px;
           }
 
           .profile-hero strong,
@@ -1564,49 +1376,40 @@ export default function Page() {
           }
 
           .profile-hero strong {
-            font-size: 17px;
-            color: #172033;
-            font-weight: 950;
+            font-size: 14px;
           }
 
           .profile-hero span {
             margin-top: 4px;
-            color: #7a8598;
+            color: #8794a8;
             font-size: 10px;
-            font-weight: 650;
             word-break: break-word;
           }
 
           .profile-section {
-            margin-top: 18px;
+            margin-top: 20px;
           }
 
           .profile-section-title {
-            margin: 0 0 10px 4px;
-            color: #59657a;
-            font-size: 10px;
-            letter-spacing: .8px;
+            margin-bottom: 9px;
+            color: #66758a;
+            font-size: 8px;
+            letter-spacing: 1.4px;
             text-transform: uppercase;
-            font-weight: 950;
+            font-weight: 900;
           }
 
           .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            gap: 8px;
           }
 
           .info {
-            min-width: 0;
-            padding: 12px 13px;
-            border-radius: 16px;
-            background: rgba(255,255,255,.78);
-            border: 1px solid rgba(255,255,255,.9);
-            box-shadow:
-              5px 5px 11px rgba(184,191,204,.48),
-              -5px -5px 11px rgba(255,255,255,.98);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            padding: 11px;
+            border: 1px solid #1d2a3b;
+            border-radius: 9px;
+            background: #0e1723;
           }
 
           .info.full {
@@ -1614,107 +1417,77 @@ export default function Page() {
           }
 
           .info-label {
-            color: #8a94a5;
+            color: #647186;
             font-size: 8px;
             margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: .45px;
-            font-weight: 850;
           }
 
           .info-value {
-            color: #202a3d;
-            font-size: 11px;
-            font-weight: 850;
+            color: #edf2f8;
+            font-size: 10px;
+            font-weight: 700;
             word-break: break-word;
           }
 
           .wallet-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            gap: 8px;
           }
 
           .wallet-card {
-            padding: 13px 9px;
-            border-radius: 17px;
-            background: rgba(255,255,255,.78);
-            border: 1px solid rgba(255,255,255,.9);
+            padding: 12px 8px;
+            border: 1px solid #1d2a3b;
+            border-radius: 9px;
+            background: #0e1723;
             text-align: center;
-            box-shadow:
-              5px 5px 11px rgba(184,191,204,.48),
-              -5px -5px 11px rgba(255,255,255,.98);
-          }
-
-          .wallet-card:nth-child(1) {
-            border-top: 3px solid #2474e8;
-          }
-
-          .wallet-card:nth-child(2) {
-            border-top: 3px solid #20b86b;
-          }
-
-          .wallet-card:nth-child(3) {
-            border-top: 3px solid #ff174f;
           }
 
           .wallet-label {
-            color: #7c8799;
-            font-size: 8px;
+            color: #647186;
+            font-size: 7px;
             text-transform: uppercase;
-            letter-spacing: .5px;
-            font-weight: 900;
+            letter-spacing: 0.6px;
           }
 
           .wallet-value {
             margin-top: 7px;
-            font-size: 13px;
-            font-weight: 950;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 900;
           }
-
-          .wallet-card:nth-child(1) .wallet-value { color: #2474e8; }
-          .wallet-card:nth-child(2) .wallet-value { color: #16a45c; }
-          .wallet-card:nth-child(3) .wallet-value { color: #ed164b; }
 
           .wallet-total-card {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-top: 11px;
-            padding: 14px 16px;
-            border-radius: 17px;
-            background: rgba(236, 244, 255, .78);
-            border: 1px solid rgba(255,255,255,.9);
-            box-shadow:
-              inset 4px 4px 9px rgba(185,192,205,.30),
-              inset -4px -4px 9px rgba(255,255,255,.98);
+            margin-top: 8px;
+            padding: 12px;
+            border: 1px solid #3b2230;
+            border-radius: 9px;
+            background: #1a0e15;
           }
 
           .wallet-total-card span {
-            color: #617087;
-            font-size: 10px;
-            font-weight: 850;
+            color: #9f7d8b;
+            font-size: 9px;
           }
 
           .wallet-total-card strong {
-            color: #1d67ce;
-            font-size: 18px;
-            font-weight: 950;
+            color: #ff6a8c;
+            font-size: 15px;
           }
 
           .support-meta {
             display: grid;
-            gap: 10px;
+            gap: 8px;
           }
 
           .support-meta > div {
-            padding: 13px 14px;
-            border-radius: 16px;
-            background: rgba(255,255,255,.78);
-            border: 1px solid rgba(255,255,255,.9);
-            box-shadow:
-              5px 5px 11px rgba(184,191,204,.48),
-              -5px -5px 11px rgba(255,255,255,.98);
+            padding: 11px;
+            border: 1px solid #1d2a3b;
+            border-radius: 9px;
+            background: #0e1723;
           }
 
           .support-meta span,
@@ -1723,18 +1496,14 @@ export default function Page() {
           }
 
           .support-meta span {
-            color: #8791a3;
+            color: #647186;
             font-size: 8px;
             margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: .5px;
-            font-weight: 850;
           }
 
           .support-meta strong {
-            color: #202a3d;
-            font-size: 11px;
-            font-weight: 850;
+            color: #edf2f8;
+            font-size: 10px;
             word-break: break-all;
           }
 
