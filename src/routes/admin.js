@@ -1586,9 +1586,10 @@ router.get("/members", async (req, res) => {
             });
         }
 
-        const userId = String(
-            req.query.userId || ""
-        ).trim();
+        const userId =
+            String(
+                req.query.userId || ""
+            ).trim();
 
         if (!userId) {
             return res.status(400).json({
@@ -1599,7 +1600,7 @@ router.get("/members", async (req, res) => {
 
         /*
         |--------------------------------------------------------------------------
-        | LOAD USER PROFILE
+        | USER PROFILE
         |--------------------------------------------------------------------------
         */
 
@@ -1615,18 +1616,25 @@ router.get("/members", async (req, res) => {
                 free_fire_uid,
                 game_name,
                 level,
+                wallet_balance,
                 role,
                 created_at,
                 updated_at,
                 phone,
                 phone_verified,
                 status,
+                referral_code,
+                referred_by,
                 bio,
                 avatar_url,
                 ip_address,
                 device_id,
                 device_user_agent,
                 last_login_at,
+                device_changed_at,
+                status_reason,
+                status_updated_at,
+                restricted_until,
                 profile_pic
             `)
             .eq("id", userId)
@@ -1655,7 +1663,7 @@ router.get("/members", async (req, res) => {
 
         /*
         |--------------------------------------------------------------------------
-        | LOAD WALLET
+        | WALLET BALANCES
         |--------------------------------------------------------------------------
         */
 
@@ -1688,28 +1696,40 @@ router.get("/members", async (req, res) => {
             });
         }
 
-        const deposit = Number(
-            wallet?.deposit_balance || 0
-        );
-
-        const bonus = Number(
-            wallet?.bonus_balance || 0
-        );
-
-        const winning = Number(
-            wallet?.winning_balance || 0
-        );
-
-        const totalWallet =
-            deposit +
-            bonus +
-            winning;
-
         /*
         |--------------------------------------------------------------------------
-        | RESPONSE
+        | WALLET FALLBACK
+        |
+        | Some older accounts may only have users.wallet_balance.
+        | Use it as a safe fallback for total balance, while keeping
+        | the three detailed balances at zero when no wallet row exists.
         |--------------------------------------------------------------------------
         */
+
+        const deposit =
+            Number(
+                wallet?.deposit_balance || 0
+            );
+
+        const bonus =
+            Number(
+                wallet?.bonus_balance || 0
+            );
+
+        const winning =
+            Number(
+                wallet?.winning_balance || 0
+            );
+
+        const legacyWallet =
+            Number(
+                member.wallet_balance || 0
+            );
+
+        const totalWallet =
+            wallet
+                ? deposit + bonus + winning
+                : legacyWallet;
 
         return res.status(200).json({
             success: true,
@@ -1726,9 +1746,28 @@ router.get("/members", async (req, res) => {
                 total_balance: totalWallet
             },
 
-            referral: null,
+            referral: {
+                referral_code:
+                    member.referral_code || null,
+                referred_by:
+                    member.referred_by || null
+            },
 
-            loginHistory: []
+            loginHistory: member.last_login_at
+                ? [
+                    {
+                        last_login_at:
+                            member.last_login_at,
+                        ip_address:
+                            member.ip_address || null,
+                        device_id:
+                            member.device_id || null,
+                        device_user_agent:
+                            member.device_user_agent ||
+                            null
+                    }
+                ]
+                : []
         });
 
     } catch (error) {
@@ -1771,28 +1810,295 @@ router.get("/support", async (req, res) => {
             });
         }
 
-        const { data, error } = await supabase
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD ALL CONVERSATIONS
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: rawConversations,
+            error: conversationsError
+        } = await supabase
             .from("support_conversations")
             .select("*")
-            .order("updated_at", { ascending: false });
+            .order("updated_at", {
+                ascending: false
+            });
 
-        if (error) {
-            console.error("ADMIN SUPPORT LIST ERROR:", error);
+        if (conversationsError) {
+            console.error(
+                "ADMIN SUPPORT LIST ERROR:",
+                conversationsError
+            );
+
             return res.status(500).json({
                 success: false,
-                error: error.message || "Unable to load support conversations."
+                error:
+                    conversationsError.message ||
+                    "Unable to load support conversations."
             });
         }
 
+        const conversations =
+            rawConversations || [];
+
+        /*
+        |--------------------------------------------------------------------------
+        | IMPORTANT:
+        | One inbox row per USER.
+        |
+        | Old duplicate support conversations can exist for the
+        | same user. The admin inbox must not show 3-4 rows for
+        | the same person.
+        |
+        | Because the query is already sorted newest-first,
+        | the first conversation we keep is the latest one.
+        |--------------------------------------------------------------------------
+        */
+
+        const latestByUser =
+            new Map();
+
+        for (const conversation of conversations) {
+            const userId =
+                String(
+                    conversation?.user_id || ""
+                ).trim();
+
+            if (!userId) {
+                continue;
+            }
+
+            if (!latestByUser.has(userId)) {
+                latestByUser.set(
+                    userId,
+                    conversation
+                );
+            }
+        }
+
+        const uniqueConversations =
+            Array.from(
+                latestByUser.values()
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD USER PROFILES
+        |--------------------------------------------------------------------------
+        */
+
+        const userIds =
+            uniqueConversations
+                .map((item) =>
+                    String(
+                        item?.user_id || ""
+                    ).trim()
+                )
+                .filter(Boolean);
+
+        let users = [];
+
+        if (userIds.length > 0) {
+            const {
+                data,
+                error: usersError
+            } = await supabase
+                .from("users")
+                .select(`
+                    id,
+                    email,
+                    full_name,
+                    free_fire_uid,
+                    game_name,
+                    level,
+                    role,
+                    status,
+                    phone,
+                    phone_verified,
+                    created_at,
+                    last_login_at,
+                    profile_pic,
+                    avatar_url
+                `)
+                .in("id", userIds);
+
+            if (usersError) {
+                console.error(
+                    "ADMIN SUPPORT USERS ERROR:",
+                    usersError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        usersError.message ||
+                        "Unable to load support users."
+                });
+            }
+
+            users = data || [];
+        }
+
+        const userMap =
+            new Map(
+                users.map((user) => [
+                    String(user.id),
+                    user
+                ])
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD LAST MESSAGE FOR EACH CONVERSATION
+        |--------------------------------------------------------------------------
+        */
+
+        const conversationIds =
+            uniqueConversations
+                .map((item) => item.id)
+                .filter(Boolean);
+
+        let lastMessages = [];
+
+        if (conversationIds.length > 0) {
+            const {
+                data,
+                error: messagesError
+            } = await supabase
+                .from("support_messages")
+                .select(`
+                    id,
+                    conversation_id,
+                    sender_id,
+                    sender_type,
+                    message,
+                    attachment_url,
+                    attachment_name,
+                    attachment_type,
+                    attachment_size,
+                    created_at
+                `)
+                .in(
+                    "conversation_id",
+                    conversationIds
+                )
+                .order(
+                    "created_at",
+                    { ascending: false }
+                );
+
+            if (messagesError) {
+                console.error(
+                    "ADMIN SUPPORT LAST MESSAGE ERROR:",
+                    messagesError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        messagesError.message ||
+                        "Unable to load support messages."
+                });
+            }
+
+            lastMessages = data || [];
+        }
+
+        const lastMessageMap =
+            new Map();
+
+        for (const message of lastMessages) {
+            if (
+                !lastMessageMap.has(
+                    message.conversation_id
+                )
+            ) {
+                lastMessageMap.set(
+                    message.conversation_id,
+                    message
+                );
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | FINAL ADMIN INBOX DATA
+        |--------------------------------------------------------------------------
+        */
+
+        const result =
+            uniqueConversations.map(
+                (conversation) => {
+                    const user =
+                        userMap.get(
+                            String(
+                                conversation.user_id
+                            )
+                        ) || null;
+
+                    return {
+                        ...conversation,
+
+                        user: user
+                            ? {
+                                id: user.id,
+                                email:
+                                    user.email || "",
+                                full_name:
+                                    user.full_name || "",
+                                game_name:
+                                    user.game_name || "",
+                                free_fire_uid:
+                                    user.free_fire_uid || "",
+                                level:
+                                    user.level ?? null,
+                                role:
+                                    user.role || "user",
+                                status:
+                                    user.status || "active",
+                                phone:
+                                    user.phone || "",
+                                phone_verified:
+                                    Boolean(
+                                        user.phone_verified
+                                    ),
+                                created_at:
+                                    user.created_at || null,
+                                last_login_at:
+                                    user.last_login_at || null,
+                                profile_pic:
+                                    user.profile_pic ||
+                                    user.avatar_url ||
+                                    ""
+                            }
+                            : null,
+
+                        last_message:
+                            lastMessageMap.get(
+                                conversation.id
+                            ) || null
+                    };
+                }
+            );
+
         return res.status(200).json({
             success: true,
-            conversations: data || []
+            conversations: result
         });
+
     } catch (error) {
-        console.error("ADMIN SUPPORT LIST EXCEPTION:", error);
+        console.error(
+            "ADMIN SUPPORT LIST EXCEPTION:",
+            error
+        );
+
         return res.status(500).json({
             success: false,
-            error: error?.message || "Internal server error."
+            error:
+                error?.message ||
+                "Internal server error."
         });
     }
 });
