@@ -1566,6 +1566,186 @@ router.post(
     }
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/members
+| LOAD MEMBER PROFILE + WALLET
+|--------------------------------------------------------------------------
+*/
+
+router.get("/members", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const userId = String(
+            req.query.userId || ""
+        ).trim();
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: "User ID is required."
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD USER PROFILE
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: member,
+            error: memberError
+        } = await supabase
+            .from("users")
+            .select(`
+                id,
+                email,
+                full_name,
+                free_fire_uid,
+                game_name,
+                level,
+                role,
+                created_at,
+                updated_at,
+                phone,
+                phone_verified,
+                status,
+                bio,
+                avatar_url,
+                ip_address,
+                device_id,
+                device_user_agent,
+                last_login_at,
+                profile_pic
+            `)
+            .eq("id", userId)
+            .maybeSingle();
+
+        if (memberError) {
+            console.error(
+                "ADMIN MEMBER PROFILE ERROR:",
+                memberError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    memberError.message ||
+                    "Unable to load member profile."
+            });
+        }
+
+        if (!member) {
+            return res.status(404).json({
+                success: false,
+                error: "Member not found."
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD WALLET
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: wallet,
+            error: walletError
+        } = await supabase
+            .from("wallet_balances")
+            .select(`
+                user_id,
+                deposit_balance,
+                bonus_balance,
+                winning_balance,
+                created_at
+            `)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        if (walletError) {
+            console.error(
+                "ADMIN MEMBER WALLET ERROR:",
+                walletError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    walletError.message ||
+                    "Unable to load member wallet."
+            });
+        }
+
+        const deposit = Number(
+            wallet?.deposit_balance || 0
+        );
+
+        const bonus = Number(
+            wallet?.bonus_balance || 0
+        );
+
+        const winning = Number(
+            wallet?.winning_balance || 0
+        );
+
+        const totalWallet =
+            deposit +
+            bonus +
+            winning;
+
+        /*
+        |--------------------------------------------------------------------------
+        | RESPONSE
+        |--------------------------------------------------------------------------
+        */
+
+        return res.status(200).json({
+            success: true,
+
+            member: {
+                ...member
+            },
+
+            wallet: {
+                user_id: userId,
+                deposit_balance: deposit,
+                bonus_balance: bonus,
+                winning_balance: winning,
+                total_balance: totalWallet
+            },
+
+            referral: null,
+
+            loginHistory: []
+        });
+
+    } catch (error) {
+        console.error(
+            "ADMIN MEMBER PROFILE EXCEPTION:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error."
+        });
+    }
+});
+
 /*
 |--------------------------------------------------------------------------
 | EXPORT
