@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "../../../../lib/supabase.js";
+import { supabase } from "../../../lib/supabase";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "https://api.gamerzadda.in";
