@@ -417,7 +417,7 @@ export default function CreateTournamentPage() {
         .trim();
 
       const finalTournamentTitle = cleanTournamentTitle
-        ? `${tournamentCode} - ${cleanTournamentTitle}`
+        ? `${cleanTournamentTitle} ${tournamentCode}`
         : tournamentCode;
 
       const tournamentData = {
