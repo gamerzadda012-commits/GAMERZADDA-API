@@ -1,6 +1,6 @@
  "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminShell from "../AdminShell";
 
 const API_BASE =
@@ -21,6 +21,10 @@ export default function Page() {
   const [error, setError] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  // Prevent a slow response from an old conversation from replacing
+  // messages of the newly selected conversation.
+  const activeConversationRef = useRef(null);
 
   const selectedId = selected?.id;
 
@@ -69,22 +73,54 @@ export default function Page() {
   async function loadMessages(conversationId, silent = false) {
     if (!conversationId) return;
 
+    const requestConversationId = String(conversationId);
+
     try {
       if (!silent) setMessagesLoading(true);
 
       const data = await api(
-        `/api/admin/support/${conversationId}`
+        `/api/admin/support/${requestConversationId}`
       );
+
+      // IMPORTANT:
+      // If the admin switched to another user while this request was
+      // still loading, ignore this old response completely.
+      if (
+        String(activeConversationRef.current || "") !==
+        requestConversationId
+      ) {
+        return;
+      }
 
       setMessages(data.messages || []);
 
       if (data.conversation) {
-        setSelected(data.conversation);
+        setSelected((current) => {
+          if (
+            !current ||
+            String(current.id) !== requestConversationId
+          ) {
+            return current;
+          }
+
+          return data.conversation;
+        });
       }
     } catch (err) {
-      setError(err.message || "Unable to load messages.");
+      if (
+        String(activeConversationRef.current || "") ===
+        requestConversationId
+      ) {
+        setError(err.message || "Unable to load messages.");
+      }
     } finally {
-      if (!silent) setMessagesLoading(false);
+      if (
+        !silent &&
+        String(activeConversationRef.current || "") ===
+          requestConversationId
+      ) {
+        setMessagesLoading(false);
+      }
     }
   }
 
@@ -129,10 +165,18 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
+    // Invalidate every request belonging to the previous chat immediately.
+    activeConversationRef.current = selectedId
+      ? String(selectedId)
+      : null;
+
+    // NEVER keep the previous user's messages while switching chats.
+    setMessages([]);
+    setMember(null);
+    setWallet(null);
+    setMessagesLoading(false);
+
     if (!selectedId) {
-      setMessages([]);
-      setMember(null);
-      setWallet(null);
       return;
     }
 
@@ -143,12 +187,20 @@ export default function Page() {
       loadMessages(selectedId, true);
     }, 5000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, [selectedId]);
 
   async function selectConversation(conversation) {
-    setSelected(conversation);
+    // Clear the visible chat BEFORE the new API request starts.
+    // This prevents the previous user's messages from being shown
+    // during the loading period.
+    activeConversationRef.current = String(conversation.id);
     setMessages([]);
+    setMessagesLoading(true);
+
+    setSelected(conversation);
     setMobileChatOpen(true);
     setProfileOpen(false);
     setError("");
