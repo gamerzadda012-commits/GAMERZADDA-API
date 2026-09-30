@@ -96,17 +96,21 @@ export default function Page() {
     setWallet(null);
 
     try {
-      const [membersResult, walletResult] = await Promise.all([
-        api("/api/admin/members"),
-        api(`/api/admin/members?userId=${encodeURIComponent(userId)}`),
-      ]);
-
-      const found = (membersResult.members || []).find(
-        (item) => String(item.id) === String(userId)
+      // Load the exact member profile for this support conversation.
+      // Do not call /api/admin/members without userId here because the
+      // profile drawer needs the single real user record.
+      const data = await api(
+        `/api/admin/members?userId=${encodeURIComponent(userId)}`
       );
 
-      setMember(found || null);
-      setWallet(walletResult.wallet || null);
+      setMember(data.member || null);
+      setWallet(
+        data.wallet || {
+          deposit_balance: 0,
+          bonus_balance: 0,
+          winning_balance: 0,
+        }
+      );
     } catch (err) {
       console.error("SUPPORT MEMBER LOAD:", err);
     } finally {
