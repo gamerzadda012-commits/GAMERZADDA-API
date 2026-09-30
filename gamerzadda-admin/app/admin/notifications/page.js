@@ -204,7 +204,7 @@ export default function AdminNotificationsPage() {
 
         setStatus(
 
-          `❌ ${data.message || "Failed to send notification."}`
+          `❌ ${data.error || data.message || "Failed to send notification."}`
 
         );
 
