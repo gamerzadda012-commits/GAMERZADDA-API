@@ -53,6 +53,83 @@ function getUserId(req) {
 }
 
 
+// ============================================================
+// TOURNAMENT ID RESOLVER
+// ============================================================
+// DB tournament IDs are UUIDs. Android may send the visible
+// tournament code/title such as #CS_1 or #FF_1.
+// This helper accepts either form and returns the real UUID.
+// ============================================================
+
+const TOURNAMENT_UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function resolveTournamentId(rawTournamentId) {
+    const value = String(rawTournamentId || "").trim();
+
+    if (!value) {
+        return { id: "", error: null, notFound: false };
+    }
+
+    if (TOURNAMENT_UUID_RE.test(value)) {
+        return { id: value, error: null, notFound: false };
+    }
+
+    // Exact title match first.
+    let result = await supabase
+        .from("tournaments")
+        .select("id,title")
+        .ilike("title", value)
+        .limit(1)
+        .maybeSingle();
+
+    if (result.error) {
+        return {
+            id: "",
+            error: result.error,
+            notFound: false
+        };
+    }
+
+    // Then allow a visible code prefix:
+    // "#CS_1" -> "#CS_1 - Tournament Name"
+    if (!result.data) {
+        result = await supabase
+            .from("tournaments")
+            .select("id,title")
+            .ilike("title", `${value}%`)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        if (result.error) {
+            return {
+                id: "",
+                error: result.error,
+                notFound: false
+            };
+        }
+    }
+
+    if (!result.data?.id) {
+        return {
+            id: "",
+            error: null,
+            notFound: true
+        };
+    }
+
+    return {
+        id: String(result.data.id).trim(),
+        title: String(result.data.title || "").trim(),
+        error: null,
+        notFound: false
+    };
+}
+
+
+
+
 
 function cleanNumber(value, fallback = 0) {
 
@@ -554,9 +631,7 @@ router.get(
 
 
 
-            const tournamentId =
-
-                String(
+            let tournamentId = String(
 
                     req.query.tournamentId ||
 
@@ -601,6 +676,35 @@ router.get(
                 });
 
             }
+
+            // Accept both DB UUID and visible tournament code/title.
+            const resolvedTournament =
+                await resolveTournamentId(tournamentId);
+
+            if (resolvedTournament.error) {
+                console.error(
+                    "MY ENTRY TOURNAMENT RESOLVE ERROR:",
+                    resolvedTournament.error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "TOURNAMENT_RESOLVE_FAILED",
+                    error: resolvedTournament.error.message
+                });
+            }
+
+            if (resolvedTournament.notFound) {
+                return res.status(404).json({
+                    success: false,
+                    code: "TOURNAMENT_NOT_FOUND",
+                    error: "Tournament not found."
+                });
+            }
+
+            tournamentId = resolvedTournament.id;
+
+
 
 
 
@@ -968,6 +1072,36 @@ router.post(
 
             }
 
+            // Resolve visible code/title to the real DB UUID.
+            const resolvedJoinTournament =
+                await resolveTournamentId(cleanTournamentId);
+
+            if (resolvedJoinTournament.error) {
+                console.error(
+                    "JOIN TOURNAMENT RESOLVE ERROR:",
+                    resolvedJoinTournament.error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "TOURNAMENT_RESOLVE_FAILED",
+                    error: resolvedJoinTournament.error.message
+                });
+            }
+
+            if (resolvedJoinTournament.notFound) {
+                return res.status(404).json({
+                    success: false,
+                    code: "TOURNAMENT_NOT_FOUND",
+                    error: "Tournament not found."
+                });
+            }
+
+            const dbTournamentId =
+                resolvedJoinTournament.id;
+
+
+
 
 
             // =================================================
@@ -1016,13 +1150,7 @@ router.post(
 
                     `)
 
-                    .eq(
-
-                        "id",
-
-                        cleanTournamentId
-
-                    )
+                    .eq("id", dbTournamentId)
 
                     .maybeSingle();
 
@@ -1238,13 +1366,7 @@ router.post(
 
                         )
 
-                        .eq(
-
-                            "tournament_id",
-
-                            cleanTournamentId
-
-                        )
+                        .eq("tournament_id", dbTournamentId)
 
                         .eq(
 
@@ -1344,13 +1466,7 @@ router.post(
 
                     .select("id")
 
-                    .eq(
-
-                        "tournament_id",
-
-                        cleanTournamentId
-
-                    )
+                    .eq("tournament_id", dbTournamentId)
 
                     .eq(
 
@@ -1948,9 +2064,7 @@ router.post(
 
                     .insert({
 
-                        tournament_id:
-
-                            cleanTournamentId,
+                        tournament_id: dbTournamentId,
 
 
 
@@ -2278,7 +2392,9 @@ router.post(
 
 
 
-                wallet: {
+                
+                databaseTournamentId: dbTournamentId,
+wallet: {
 
 
 
@@ -2483,6 +2599,149 @@ router.post(
 
 
 // ============================================================
+
+// ============================================================
+// GET MY MATCH / ROOM KEYS
+// GET /api/tournaments/my-match?tournamentId=UUID
+// ============================================================
+
+router.get(
+    "/my-match",
+    async (req, res) => {
+        try {
+            const userId = getUserId(req);
+
+            let tournamentId = String(
+                req.query.tournamentId || ""
+            ).trim();
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    code: "AUTH_REQUIRED",
+                    error: "User session not found."
+                });
+            }
+
+            if (!tournamentId) {
+                return res.status(400).json({
+                    success: false,
+                    code: "INVALID_TOURNAMENT",
+                    error: "Tournament ID is required."
+                });
+            }
+
+            const resolvedTournament =
+                await resolveTournamentId(tournamentId);
+
+            if (resolvedTournament.error) {
+                console.error(
+                    "MY MATCH TOURNAMENT RESOLVE ERROR:",
+                    resolvedTournament.error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "TOURNAMENT_RESOLVE_FAILED",
+                    error: resolvedTournament.error.message
+                });
+            }
+
+            if (resolvedTournament.notFound) {
+                return res.status(404).json({
+                    success: false,
+                    code: "TOURNAMENT_NOT_FOUND",
+                    error: "Tournament not found."
+                });
+            }
+
+            tournamentId = resolvedTournament.id;
+
+            const {
+                data: entry,
+                error: entryError
+            } = await supabase
+                .from("tournament_entries")
+                .select("id,tournament_id,user_id,cancelled")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .eq("cancelled", false)
+                .maybeSingle();
+
+            if (entryError) {
+                console.error(
+                    "MY MATCH ENTRY ERROR:",
+                    entryError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "ENTRY_CHECK_FAILED",
+                    error: entryError.message
+                });
+            }
+
+            if (!entry) {
+                return res.status(404).json({
+                    success: false,
+                    code: "NOT_JOINED",
+                    error: "You have not joined this tournament.",
+                    match: null,
+                    room_id: null,
+                    room_password: null,
+                    tournament_id: tournamentId
+                });
+            }
+
+            const {
+                data: match,
+                error: matchError
+            } = await supabase
+                .from("matches")
+                .select("id,tournament_id,room_id,room_password")
+                .eq("tournament_id", tournamentId)
+                .limit(1)
+                .maybeSingle();
+
+            if (matchError) {
+                console.error(
+                    "MY MATCH QUERY ERROR:",
+                    matchError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "MATCH_QUERY_FAILED",
+                    error: matchError.message
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                tournament_id: tournamentId,
+                entry_id: entry.id,
+                match: match || null,
+                room_id: match?.room_id || null,
+                room_password: match?.room_password || null
+            });
+        } catch (error) {
+            console.error(
+                "MY MATCH EXCEPTION:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                code: "SERVER_ERROR",
+                error:
+                    error?.message ||
+                    "Internal server error"
+            });
+        }
+    }
+);
+
+
 
 // GET SINGLE TOURNAMENT
 
