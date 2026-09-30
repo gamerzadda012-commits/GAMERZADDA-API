@@ -56,9 +56,9 @@ function getUserId(req) {
 // ============================================================
 // TOURNAMENT ID RESOLVER
 // ============================================================
-// DB tournament IDs are UUIDs. Android may send the visible
-// tournament code/title such as #CS_1 or #FF_1.
-// This helper accepts either form and returns the real UUID.
+// The database stores tournaments.id as UUID.
+// App requests may contain either the real UUID or the visible
+// tournament code/title such as #CS_1 / #FF_1.
 // ============================================================
 
 const TOURNAMENT_UUID_RE =
@@ -68,14 +68,23 @@ async function resolveTournamentId(rawTournamentId) {
     const value = String(rawTournamentId || "").trim();
 
     if (!value) {
-        return { id: "", error: null, notFound: false };
+        return {
+            id: "",
+            error: null,
+            notFound: false,
+        };
     }
 
+    // Already the real database UUID.
     if (TOURNAMENT_UUID_RE.test(value)) {
-        return { id: value, error: null, notFound: false };
+        return {
+            id: value,
+            error: null,
+            notFound: false,
+        };
     }
 
-    // Exact title match first.
+    // Exact visible title.
     let result = await supabase
         .from("tournaments")
         .select("id,title")
@@ -87,12 +96,11 @@ async function resolveTournamentId(rawTournamentId) {
         return {
             id: "",
             error: result.error,
-            notFound: false
+            notFound: false,
         };
     }
 
-    // Then allow a visible code prefix:
-    // "#CS_1" -> "#CS_1 - Tournament Name"
+    // Visible code prefix, e.g. #CS_1 -> #CS_1 - Tournament Name
     if (!result.data) {
         result = await supabase
             .from("tournaments")
@@ -106,7 +114,7 @@ async function resolveTournamentId(rawTournamentId) {
             return {
                 id: "",
                 error: result.error,
-                notFound: false
+                notFound: false,
             };
         }
     }
@@ -115,7 +123,7 @@ async function resolveTournamentId(rawTournamentId) {
         return {
             id: "",
             error: null,
-            notFound: true
+            notFound: true,
         };
     }
 
@@ -123,7 +131,7 @@ async function resolveTournamentId(rawTournamentId) {
         id: String(result.data.id).trim(),
         title: String(result.data.title || "").trim(),
         error: null,
-        notFound: false
+        notFound: false,
     };
 }
 
@@ -677,7 +685,8 @@ router.get(
 
             }
 
-            // Accept both DB UUID and visible tournament code/title.
+            // Resolve UUID / visible tournament code before querying
+            // the UUID tournament_id column.
             const resolvedTournament =
                 await resolveTournamentId(tournamentId);
 
@@ -1072,36 +1081,6 @@ router.post(
 
             }
 
-            // Resolve visible code/title to the real DB UUID.
-            const resolvedJoinTournament =
-                await resolveTournamentId(cleanTournamentId);
-
-            if (resolvedJoinTournament.error) {
-                console.error(
-                    "JOIN TOURNAMENT RESOLVE ERROR:",
-                    resolvedJoinTournament.error
-                );
-
-                return res.status(500).json({
-                    success: false,
-                    code: "TOURNAMENT_RESOLVE_FAILED",
-                    error: resolvedJoinTournament.error.message
-                });
-            }
-
-            if (resolvedJoinTournament.notFound) {
-                return res.status(404).json({
-                    success: false,
-                    code: "TOURNAMENT_NOT_FOUND",
-                    error: "Tournament not found."
-                });
-            }
-
-            const dbTournamentId =
-                resolvedJoinTournament.id;
-
-
-
 
 
             // =================================================
@@ -1150,7 +1129,13 @@ router.post(
 
                     `)
 
-                    .eq("id", dbTournamentId)
+                    .eq(
+
+                        "id",
+
+                        cleanTournamentId
+
+                    )
 
                     .maybeSingle();
 
@@ -1366,7 +1351,13 @@ router.post(
 
                         )
 
-                        .eq("tournament_id", dbTournamentId)
+                        .eq(
+
+                            "tournament_id",
+
+                            cleanTournamentId
+
+                        )
 
                         .eq(
 
@@ -1466,7 +1457,13 @@ router.post(
 
                     .select("id")
 
-                    .eq("tournament_id", dbTournamentId)
+                    .eq(
+
+                        "tournament_id",
+
+                        cleanTournamentId
+
+                    )
 
                     .eq(
 
@@ -2064,7 +2061,9 @@ router.post(
 
                     .insert({
 
-                        tournament_id: dbTournamentId,
+                        tournament_id:
+
+                            cleanTournamentId,
 
 
 
@@ -2392,9 +2391,7 @@ router.post(
 
 
 
-                
-                databaseTournamentId: dbTournamentId,
-wallet: {
+                wallet: {
 
 
 
@@ -2604,6 +2601,9 @@ wallet: {
 // GET MY MATCH / ROOM KEYS
 // GET /api/tournaments/my-match?tournamentId=UUID
 // ============================================================
+// IMPORTANT: This route MUST stay BEFORE /:id.
+// Otherwise Express treats "my-match" as the tournament UUID.
+// ============================================================
 
 router.get(
     "/my-match",
@@ -2614,6 +2614,14 @@ router.get(
             let tournamentId = String(
                 req.query.tournamentId || ""
             ).trim();
+
+            console.log(
+                "[MY MATCH] Request",
+                JSON.stringify({
+                    userId: userId ? "present" : "missing",
+                    requestedTournamentId: tournamentId
+                })
+            );
 
             if (!userId) {
                 return res.status(401).json({
@@ -2631,12 +2639,13 @@ router.get(
                 });
             }
 
+            // Accept both the real UUID and visible tournament code/title.
             const resolvedTournament =
                 await resolveTournamentId(tournamentId);
 
             if (resolvedTournament.error) {
                 console.error(
-                    "MY MATCH TOURNAMENT RESOLVE ERROR:",
+                    "[MY MATCH] Tournament resolve error:",
                     resolvedTournament.error
                 );
 
@@ -2651,18 +2660,22 @@ router.get(
                 return res.status(404).json({
                     success: false,
                     code: "TOURNAMENT_NOT_FOUND",
-                    error: "Tournament not found."
+                    error: "Tournament not found.",
+                    requested_tournament_id: tournamentId
                 });
             }
 
             tournamentId = resolvedTournament.id;
 
+            // Verify that this user actually joined this tournament.
             const {
                 data: entry,
                 error: entryError
             } = await supabase
                 .from("tournament_entries")
-                .select("id,tournament_id,user_id,cancelled")
+                .select(
+                    "id,tournament_id,user_id,cancelled"
+                )
                 .eq("tournament_id", tournamentId)
                 .eq("user_id", userId)
                 .eq("cancelled", false)
@@ -2670,7 +2683,7 @@ router.get(
 
             if (entryError) {
                 console.error(
-                    "MY MATCH ENTRY ERROR:",
+                    "[MY MATCH] Entry query error:",
                     entryError
                 );
 
@@ -2686,26 +2699,30 @@ router.get(
                     success: false,
                     code: "NOT_JOINED",
                     error: "You have not joined this tournament.",
+                    tournament_id: tournamentId,
                     match: null,
                     room_id: null,
-                    room_password: null,
-                    tournament_id: tournamentId
+                    room_password: null
                 });
             }
 
+            // Get latest room keys for this tournament.
             const {
                 data: match,
                 error: matchError
             } = await supabase
                 .from("matches")
-                .select("id,tournament_id,room_id,room_password")
+                .select(
+                    "id,tournament_id,room_id,room_password,status,start_time"
+                )
                 .eq("tournament_id", tournamentId)
+                .order("id", { ascending: false })
                 .limit(1)
                 .maybeSingle();
 
             if (matchError) {
                 console.error(
-                    "MY MATCH QUERY ERROR:",
+                    "[MY MATCH] Match query error:",
                     matchError
                 );
 
@@ -2716,17 +2733,30 @@ router.get(
                 });
             }
 
+            console.log(
+                "[MY MATCH] Success",
+                JSON.stringify({
+                    tournamentId,
+                    matchFound: !!match,
+                    hasRoomId: !!String(match?.room_id || "").trim(),
+                    hasRoomPassword:
+                        !!String(match?.room_password || "").trim()
+                })
+            );
+
             return res.status(200).json({
                 success: true,
                 tournament_id: tournamentId,
                 entry_id: entry.id,
                 match: match || null,
                 room_id: match?.room_id || null,
-                room_password: match?.room_password || null
+                room_password:
+                    match?.room_password || null
             });
+
         } catch (error) {
             console.error(
-                "MY MATCH EXCEPTION:",
+                "[MY MATCH] Exception:",
                 error
             );
 
