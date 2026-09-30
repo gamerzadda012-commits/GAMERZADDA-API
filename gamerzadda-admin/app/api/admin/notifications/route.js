@@ -297,7 +297,7 @@ async function getAdmin() {
     sessionResponse = await fetch(`${apiUrl}/api/admin/session`, {
       method: "GET",
       headers: {
-        Cookie: `gamerzadda_admin_session=${encodeURIComponent(sessionCookie)}`,
+        Cookie: `gamerzadda_admin_session=${sessionCookie}`,
       },
       cache: "no-store",
     });
