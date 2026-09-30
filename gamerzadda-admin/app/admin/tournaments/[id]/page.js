@@ -311,8 +311,12 @@ export default function TournamentManagePage() {
     setMessage("");
 
     try {
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_URL ||
+        "https://api.gamerzadda.in";
+
       const response = await fetch(
-        "/api/admin/keys",
+        `${API_BASE}/api/admin/keys`,
         {
           method: "POST",
           headers: {
