@@ -1,6 +1,6 @@
  "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminShell from "../AdminShell";
 
 const API_BASE =
@@ -21,10 +21,6 @@ export default function Page() {
   const [error, setError] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-
-  // Prevent a slow response from an old conversation from replacing
-  // messages of the newly selected conversation.
-  const activeConversationRef = useRef(null);
 
   const selectedId = selected?.id;
 
@@ -55,10 +51,96 @@ export default function Page() {
 
       const data = await api("/api/admin/support");
       const list = data.conversations || [];
-      setConversations(list);
+
+      // Resolve every conversation's real member profile so the
+      // conversation list does not fall back to "User <id>".
+      const enriched = await Promise.all(
+        list.map(async (conversation) => {
+          const nestedUser =
+            conversation.user ||
+            conversation.member ||
+            conversation.profile ||
+            null;
+
+          const nestedName = getRealName(nestedUser);
+          const nestedImage = getProfileImage(nestedUser);
+
+          if (
+            nestedName ||
+            nestedImage ||
+            conversation.user_name ||
+            conversation.full_name ||
+            conversation.game_name ||
+            conversation.profile_image ||
+            conversation.avatar_url
+          ) {
+            return {
+              ...conversation,
+              user_name:
+                conversation.user_name ||
+                conversation.full_name ||
+                conversation.game_name ||
+                nestedName ||
+                "",
+              profile_image:
+                conversation.profile_image ||
+                conversation.profile_image_url ||
+                conversation.profile_pic ||
+                conversation.profile_pic_url ||
+                conversation.avatar_url ||
+                nestedImage ||
+                "",
+            };
+          }
+
+          if (!conversation.user_id) return conversation;
+
+          try {
+            const memberData = await api(
+              `/api/admin/members?userId=${encodeURIComponent(
+                conversation.user_id
+              )}`
+            );
+
+            const m =
+              memberData.member ||
+              memberData.user ||
+              memberData.profile ||
+              {};
+
+            return {
+              ...conversation,
+              user_name:
+                getRealName(m) ||
+                `User ${shortId(conversation.user_id)}`,
+              full_name: m.full_name || "",
+              game_name: m.game_name || "",
+              profile_image: getProfileImage(m),
+              profile_image_url: getProfileImage(m),
+              avatar_url: getProfileImage(m),
+            };
+          } catch (memberErr) {
+            console.error(
+              "SUPPORT MEMBER LIST LOAD:",
+              memberErr
+            );
+
+            return {
+              ...conversation,
+              user_name:
+                conversation.user_name ||
+                conversation.full_name ||
+                conversation.game_name ||
+                `User ${shortId(conversation.user_id)}`,
+            };
+          }
+        })
+      );
+
+      setConversations(enriched);
 
       if (selectedId) {
-        const updated = list.find(
+        const updated = enriched.find(
           (item) => String(item.id) === String(selectedId)
         );
         if (updated) setSelected(updated);
@@ -73,54 +155,22 @@ export default function Page() {
   async function loadMessages(conversationId, silent = false) {
     if (!conversationId) return;
 
-    const requestConversationId = String(conversationId);
-
     try {
       if (!silent) setMessagesLoading(true);
 
       const data = await api(
-        `/api/admin/support/${requestConversationId}`
+        `/api/admin/support/${conversationId}`
       );
-
-      // IMPORTANT:
-      // If the admin switched to another user while this request was
-      // still loading, ignore this old response completely.
-      if (
-        String(activeConversationRef.current || "") !==
-        requestConversationId
-      ) {
-        return;
-      }
 
       setMessages(data.messages || []);
 
       if (data.conversation) {
-        setSelected((current) => {
-          if (
-            !current ||
-            String(current.id) !== requestConversationId
-          ) {
-            return current;
-          }
-
-          return data.conversation;
-        });
+        setSelected(data.conversation);
       }
     } catch (err) {
-      if (
-        String(activeConversationRef.current || "") ===
-        requestConversationId
-      ) {
-        setError(err.message || "Unable to load messages.");
-      }
+      setError(err.message || "Unable to load messages.");
     } finally {
-      if (
-        !silent &&
-        String(activeConversationRef.current || "") ===
-          requestConversationId
-      ) {
-        setMessagesLoading(false);
-      }
+      if (!silent) setMessagesLoading(false);
     }
   }
 
@@ -139,7 +189,13 @@ export default function Page() {
         `/api/admin/members?userId=${encodeURIComponent(userId)}`
       );
 
-      setMember(data.member || null);
+      const loadedMember =
+        data.member ||
+        data.user ||
+        data.profile ||
+        null;
+
+      setMember(loadedMember);
       setWallet(
         data.wallet || {
           deposit_balance: 0,
@@ -165,18 +221,10 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    // Invalidate every request belonging to the previous chat immediately.
-    activeConversationRef.current = selectedId
-      ? String(selectedId)
-      : null;
-
-    // NEVER keep the previous user's messages while switching chats.
-    setMessages([]);
-    setMember(null);
-    setWallet(null);
-    setMessagesLoading(false);
-
     if (!selectedId) {
+      setMessages([]);
+      setMember(null);
+      setWallet(null);
       return;
     }
 
@@ -187,20 +235,12 @@ export default function Page() {
       loadMessages(selectedId, true);
     }, 5000);
 
-    return () => {
-      clearInterval(timer);
-    };
+    return () => clearInterval(timer);
   }, [selectedId]);
 
   async function selectConversation(conversation) {
-    // Clear the visible chat BEFORE the new API request starts.
-    // This prevents the previous user's messages from being shown
-    // during the loading period.
-    activeConversationRef.current = String(conversation.id);
-    setMessages([]);
-    setMessagesLoading(true);
-
     setSelected(conversation);
+    setMessages([]);
     setMobileChatOpen(true);
     setProfileOpen(false);
     setError("");
@@ -302,6 +342,39 @@ export default function Page() {
     return `${id.slice(0, 8)}...${id.slice(-6)}`;
   }
 
+  // Support the profile fields used by different user/member responses.
+  function getProfileImage(user) {
+    if (!user) return "";
+
+    return (
+      user.profile_image_url ||
+      user.profile_image ||
+      user.profile_pic_url ||
+      user.profile_pic ||
+      user.avatar_url ||
+      user.avatar ||
+      user.photo_url ||
+      user.photo ||
+      user.image_url ||
+      user.image ||
+      ""
+    );
+  }
+
+  function getRealName(user) {
+    if (!user) return "";
+
+    return (
+      user.full_name ||
+      user.fullName ||
+      user.name ||
+      user.game_name ||
+      user.gameName ||
+      user.username ||
+      ""
+    );
+  }
+
   return (
     <AdminShell title="Support">
       <div className="support-page">
@@ -396,7 +469,17 @@ export default function Page() {
                       }
                     >
                       <div className="avatar">
-                        {String(name).charAt(0).toUpperCase()}
+                        {getProfileImage(conversation) ? (
+                          <img
+                            src={getProfileImage(conversation)}
+                            alt={name}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          String(name).charAt(0).toUpperCase()
+                        )}
                       </div>
 
                       <div className="conversation-info">
@@ -450,19 +533,33 @@ export default function Page() {
                       onClick={() => setProfileOpen(true)}
                     >
                       <span className="header-avatar">
-                        {(
-                          member?.full_name ||
-                          member?.game_name ||
-                          "U"
-                        )
-                          .charAt(0)
-                          .toUpperCase()}
+                        {getProfileImage(member || selected) ? (
+                          <img
+                            src={getProfileImage(member || selected)}
+                            alt={
+                              getRealName(member) ||
+                              getRealName(selected) ||
+                              "User"
+                            }
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          (
+                            getRealName(member) ||
+                            getRealName(selected) ||
+                            "U"
+                          )
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
                       </span>
 
                       <span className="header-user-text">
                         <strong>
-                          {member?.full_name ||
-                            member?.game_name ||
+                          {getRealName(member) ||
+                            getRealName(selected) ||
                             "User Support"}
                         </strong>
 
@@ -662,8 +759,8 @@ export default function Page() {
               <div className="profile-drawer-header">
                 <div>
                   <h2>
-                    {member?.full_name ||
-                      member?.game_name ||
+                    {getRealName(member) ||
+                      getRealName(selected) ||
                       "Member"}
                   </h2>
                   <p>Member details & wallet</p>
@@ -685,19 +782,33 @@ export default function Page() {
                 <>
                   <div className="profile-hero">
                     <div className="profile-avatar">
-                      {(
-                        member?.full_name ||
-                        member?.game_name ||
-                        "U"
-                      )
-                        .charAt(0)
-                        .toUpperCase()}
+                      {getProfileImage(member || selected) ? (
+                        <img
+                          src={getProfileImage(member || selected)}
+                          alt={
+                            getRealName(member) ||
+                            getRealName(selected) ||
+                            "User"
+                          }
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        (
+                          getRealName(member) ||
+                          getRealName(selected) ||
+                          "U"
+                        )
+                          .charAt(0)
+                          .toUpperCase()
+                      )}
                     </div>
 
                     <div>
                       <strong>
-                        {member?.full_name ||
-                          member?.game_name ||
+                        {getRealName(member) ||
+                          getRealName(selected) ||
                           "Unknown User"}
                       </strong>
                       <span>
@@ -998,6 +1109,17 @@ export default function Page() {
             border-radius: 14px;
             background: #ffe8ee;
             color: #ff174f;
+            overflow: hidden;
+          }
+
+          .avatar img,
+          .header-avatar img,
+          .profile-avatar img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            border-radius: inherit;
           }
 
           .conversation-info {
@@ -1008,7 +1130,7 @@ export default function Page() {
           .conversation-info strong {
             display: block;
             font-size: 13px;
-            overflow: hidden;
+            overflow: hidden;      
             text-overflow: ellipsis;
             white-space: nowrap;
           }
@@ -1078,6 +1200,7 @@ export default function Page() {
             border-radius: 14px;
             background: #ffe8ee;
             color: #ff174f;
+            overflow: hidden;
           }
 
           .header-user-text {
@@ -1404,6 +1527,7 @@ export default function Page() {
             background: #ff174f;
             color: #fff;
             font-size: 20px;
+            overflow: hidden;
           }
 
           .profile-hero strong,
