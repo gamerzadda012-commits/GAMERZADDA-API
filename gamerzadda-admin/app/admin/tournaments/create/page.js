@@ -10,7 +10,12 @@ import { supabase } from "../../../../lib/supabase";
 
 
 
-const GAMES = ["Free Fire", "Free Fire MAX"];
+const GAMES = [
+  "Free Fire",
+  "Free Fire MAX",
+  "Clash Squad",
+  "Lone Wolf",
+];
 
 const MODES = ["Solo", "Duo", "Squad"];
 
@@ -364,9 +369,60 @@ export default function CreateTournamentPage() {
 
        */
 
+      /*
+       * Auto tournament ID/title prefix.
+       * Sequence is maintained separately for each game:
+       * Free Fire     -> #FF_1, #FF_2, ...
+       * Free Fire MAX -> #FFMAX_1, #FFMAX_2, ...
+       * Clash Squad   -> #CS_1, #CS_2, ...
+       * Lone Wolf     -> #LW_1, #LW_2, ...
+       */
+      const gamePrefixMap = {
+        "Free Fire": "#FF",
+        "Free Fire MAX": "#FFMAX",
+        "Clash Squad": "#CS",
+        "Lone Wolf": "#LW",
+      };
+
+      const prefix = gamePrefixMap[form.game] || "#GZ";
+
+      const { data: existingTournaments, error: existingTitleError } =
+        await supabase
+          .from("tournaments")
+          .select("title")
+          .eq("game", form.game);
+
+      if (existingTitleError) {
+        throw existingTitleError;
+      }
+
+      let highestNumber = 0;
+      const idPattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_([0-9]+)(?:\\s*-)?`, "i");
+
+      for (const tournament of existingTournaments || []) {
+        const title = String(tournament?.title || "").trim();
+        const match = title.match(idPattern);
+        if (match) {
+          highestNumber = Math.max(
+            highestNumber,
+            Number.parseInt(match[1], 10) || 0
+          );
+        }
+      }
+
+      const tournamentCode = `${prefix}_${highestNumber + 1}`;
+      const cleanTournamentTitle = form.title
+        .trim()
+        .replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_\\d+\\s*-?\\s*`, "i"), "")
+        .trim();
+
+      const finalTournamentTitle = cleanTournamentTitle
+        ? `${tournamentCode} - ${cleanTournamentTitle}`
+        : tournamentCode;
+
       const tournamentData = {
 
-        title: form.title.trim(),
+        title: finalTournamentTitle,
 
 
 
