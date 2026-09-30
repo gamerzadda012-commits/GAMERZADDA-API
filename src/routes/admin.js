@@ -239,6 +239,7 @@ function setAdminCookie(
         `${SESSION_COOKIE_NAME}=${encodeURIComponent(
             token
         )}`,
+        "Domain=.gamerzadda.in",
         "Path=/",
         `Max-Age=${SESSION_MAX_AGE}`,
         "HttpOnly",
@@ -268,6 +269,7 @@ function clearAdminCookie(res) {
         "Set-Cookie",
         [
             `${SESSION_COOKIE_NAME}=`,
+            "Domain=.gamerzadda.in",
             "Path=/",
             "Max-Age=0",
             "HttpOnly",
