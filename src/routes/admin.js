@@ -249,8 +249,27 @@ async function sendRoomKeysNotification({
         |--------------------------------------------------------------------------
         */
 
-        const title =
-            `${tournamentTitle || "Tournament"} 🎮 is LIVE NOW`;
+        // Admin stores titles like: "#CS_12 - Clash Squad"
+        // Notification should be: "Clash Squad #CS_12 🎮 is LIVE NOW"
+        const rawTournamentTitle = String(
+            tournamentTitle || "Tournament"
+        ).trim();
+
+        let displayTournamentTitle = rawTournamentTitle;
+        let tournamentCode = "";
+
+        const titleMatch = rawTournamentTitle.match(
+            /^\s*(#[A-Za-z0-9_-]+)\s*[-–—:]\s*(.+?)\s*$/
+        );
+
+        if (titleMatch) {
+            tournamentCode = titleMatch[1];
+            displayTournamentTitle = titleMatch[2].trim();
+        }
+
+        const title = tournamentCode
+            ? `${displayTournamentTitle} ${tournamentCode} 🎮 is LIVE NOW`
+            : `${displayTournamentTitle} 🎮 is LIVE NOW`;
 
         const body =
             `🔐 ID: ${roomId} || PASS: ${roomPassword} — JOIN FAST! ⚡`;
