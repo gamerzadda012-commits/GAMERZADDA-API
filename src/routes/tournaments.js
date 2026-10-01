@@ -306,6 +306,76 @@ router.get("/", async (req, res) => {
         );
 
         // --------------------------------------------------------
+        // MATCH KEY STATUS
+        // Never expose room ID/password in the public tournament list.
+        // Only send a boolean telling the app that both are live.
+        // --------------------------------------------------------
+
+        const matchKeysByTournament = new Map();
+
+        if (list.length > 0) {
+            const tournamentIds = list
+                .map((tournament) => tournament.id)
+                .filter(Boolean);
+
+            if (tournamentIds.length > 0) {
+                const {
+                    data: matches,
+                    error: matchesError
+                } = await supabase
+                    .from("matches")
+                    .select("tournament_id,room_id,room_password,status")
+                    .in("tournament_id", tournamentIds);
+
+                if (matchesError) {
+                    console.error(
+                        "[TOURNAMENTS] Match key query error:",
+                        matchesError
+                    );
+                } else {
+                    for (const match of matches || []) {
+                        const tournamentId = String(
+                            match.tournament_id || ""
+                        ).trim();
+
+                        if (!tournamentId) continue;
+
+                        const roomId = String(
+                            match.room_id || ""
+                        ).trim();
+
+                        const roomPassword = String(
+                            match.room_password || ""
+                        ).trim();
+
+                        const status = String(
+                            match.status || ""
+                        ).trim().toLowerCase();
+
+                        const hasKeys =
+                            roomId.length > 0 &&
+                            roomPassword.length > 0;
+
+                        const isLive = [
+                            "live",
+                            "ongoing",
+                            "started",
+                            "in_progress",
+                            "in-progress"
+                        ].includes(status);
+
+                        if (hasKeys || isLive) {
+                            matchKeysByTournament.set(
+                                tournamentId,
+                                true
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------------
         // JOINED COUNT
         // Run all entry-count requests in parallel instead of
         // waiting for every tournament one by one.
@@ -340,13 +410,21 @@ router.get("/", async (req, res) => {
 
                         return {
                             ...tournament,
-                            joined_count: 0
+                            joined_count: 0,
+                            has_match_keys:
+                                matchKeysByTournament.get(
+                                    String(tournament.id)
+                                ) === true
                         };
                     }
 
                     return {
                         ...tournament,
-                        joined_count: count || 0
+                        joined_count: count || 0,
+                        has_match_keys:
+                            matchKeysByTournament.get(
+                                String(tournament.id)
+                            ) === true
                     };
 
                 } catch (countException) {
@@ -357,7 +435,11 @@ router.get("/", async (req, res) => {
 
                     return {
                         ...tournament,
-                        joined_count: 0
+                        joined_count: 0,
+                        has_match_keys:
+                            matchKeysByTournament.get(
+                                String(tournament.id)
+                            ) === true
                     };
                 }
             })
