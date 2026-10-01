@@ -6,6 +6,8 @@ import fs from "fs";
 
 import path from "path";
 
+import crypto from "crypto";
+
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 
 import { getMessaging } from "firebase-admin/messaging";
@@ -78,116 +80,136 @@ async function requireAdmin(request) {
 
     }
 
-    // Fallback to admin cookie
-
+    // Primary admin session cookie used by the GAMERZADDA backend.
     if (!token) {
-
       token =
-
         request.cookies.get(
-
-          "gamerzadda_admin_access"
-
+          "gamerzadda_admin_session"
         )?.value || "";
+    }
 
+    // Backward compatibility with the old cookie.
+    if (!token) {
+      token =
+        request.cookies.get(
+          "gamerzadda_admin_access"
+        )?.value || "";
     }
 
     if (!token) {
-
-      console.log(
-
-        "RESULTS AUTH: No token found"
-
-      );
-
+      console.log("RESULTS AUTH: No token found");
       return null;
-
     }
 
+    // The current admin architecture uses the signed
+    // gamerzadda_admin_session cookie, not a Supabase access token.
+    const parts = token.split(".");
+    if (parts.length === 2) {
+      try {
+        const [encodedPayload, receivedSignature] = parts;
+
+        const secret =
+          process.env.ADMIN_SESSION_SECRET;
+
+        if (secret) {
+          const expectedSignature = crypto
+            .createHmac("sha256", secret)
+            .update(encodedPayload)
+            .digest("base64url");
+
+          const receivedBuffer =
+            Buffer.from(receivedSignature);
+          const expectedBuffer =
+            Buffer.from(expectedSignature);
+
+          if (
+            receivedBuffer.length ===
+              expectedBuffer.length &&
+            crypto.timingSafeEqual(
+              receivedBuffer,
+              expectedBuffer
+            )
+          ) {
+            const payload = JSON.parse(
+              Buffer.from(
+                encodedPayload,
+                "base64url"
+              ).toString("utf8")
+            );
+
+            if (
+              payload?.userId &&
+              payload?.role === "admin" &&
+              payload?.expiresAt > Date.now()
+            ) {
+              const { data: admin, error: adminError } =
+                await supabaseAdmin
+                  .from("users")
+                  .select("id, role, status")
+                  .eq("id", payload.userId)
+                  .maybeSingle();
+
+              if (
+                !adminError &&
+                admin &&
+                admin.role === "admin" &&
+                String(admin.status || "active")
+                  .toLowerCase() === "active"
+              ) {
+                console.log(
+                  "RESULTS AUTH: Admin session verified",
+                  payload.userId
+                );
+                return payload.userId;
+              }
+            }
+          }
+        }
+      } catch (sessionError) {
+        console.error(
+          "RESULTS AUTH SESSION ERROR:",
+          sessionError
+        );
+      }
+    }
+
+    // Backward compatibility: if the old cookie/header is
+    // actually a Supabase access token, verify it normally.
     const {
-
       data: authData,
-
       error: authError,
-
     } =
-
       await supabaseAdmin.auth.getUser(token);
 
     if (authError || !authData?.user) {
-
       console.log(
-
         "RESULTS AUTH: Invalid token",
-
         authError?.message
-
       );
-
       return null;
-
     }
 
     const {
-
       data: admin,
-
       error: adminError,
-
     } =
-
       await supabaseAdmin
-
         .from("users")
-
         .select("id, role, status")
-
         .eq("id", authData.user.id)
-
         .maybeSingle();
 
-    if (adminError) {
-
-      console.error(
-
-        "RESULTS AUTH USER ERROR:",
-
-        adminError
-
-      );
-
-      return null;
-
-    }
-
     if (
-
+      adminError ||
       !admin ||
-
       admin.role !== "admin" ||
-
-      admin.status !== "active"
-
+      String(admin.status || "active").toLowerCase() !==
+        "active"
     ) {
-
       console.log(
-
-        "RESULTS AUTH: User is not active admin",
-
-        {
-
-          id: admin?.id,
-
-          role: admin?.role,
-
-          status: admin?.status,
-
-        }
-
+        "RESULTS AUTH: User is not active admin"
       );
-
       return null;
-
     }
 
     return authData.user.id;
@@ -326,19 +348,6 @@ function getFirebaseAdmin() {
 
 }
 
-function formatResultNotificationTitle(tournamentTitle) {
-  const raw = String(tournamentTitle || "Tournament").trim();
-  const match = raw.match(/^#([^\s-]+)\s*-\s*(.+)$/);
-
-  if (match) {
-    const tournamentCode = `#${match[1]}`;
-    const cleanName = match[2].trim();
-    return `${cleanName} ${tournamentCode} 🏆 Results Are LIVE`;
-  }
-
-  return `${raw} 🏆 Results Are LIVE`;
-}
-
 async function sendTournamentResultNotifications({
 
   tournamentId,
@@ -437,11 +446,36 @@ async function sendTournamentResultNotifications({
 
         if (!token) return null;
 
+        const winningAmount =
+
+          resultMap.get(String(user.id)) || 0;
+
+        if (winningAmount > 0) {
+
+          return {
+
+            token,
+
+            title: `🏆 You Won ₹${winningAmount}!`,
+
+            body:
+
+              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
+
+          };
+
+        }
+
         return {
+
           token,
-          title: formatResultNotificationTitle(tournamentTitle),
+
+          title: "📊 Tournament Results Are Out",
+
           body:
-            "🎉 Your tournament results are now available. Open GAMERZADDA and check your rank, winnings & match details.",
+
+            "Your tournament results are now available. Check your results now!",
+
         };
 
       })
