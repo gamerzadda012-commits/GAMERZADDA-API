@@ -62,7 +62,8 @@ function jsonError(message, status = 500) {
 
 async function requireAdmin(request) {
   try {
-    const sessionCookie = request.cookies.get("gamerzadda_admin_session")?.value || "";
+    const sessionCookie =
+      request.cookies.get("gamerzadda_admin_session")?.value || "";
 
     if (!sessionCookie) {
       console.log("RESULTS AUTH: No admin session cookie");
@@ -87,15 +88,24 @@ async function requireAdmin(request) {
     const data = await response.json().catch(() => null);
 
     if (!response.ok || !data?.authenticated || !data?.admin) {
-      console.log("RESULTS AUTH: Backend admin session rejected", {
-        status: response.status,
-        authenticated: data?.authenticated,
-      });
+      console.log(
+        "RESULTS AUTH: Backend admin session rejected",
+        {
+          status: response.status,
+          authenticated: data?.authenticated,
+        }
+      );
       return null;
     }
 
-    console.log("RESULTS AUTH: Admin session verified", data.admin.id);
-    return data.admin.id;
+    const adminId = data.admin.id;
+
+    console.log(
+      "RESULTS AUTH: Admin session verified",
+      adminId
+    );
+
+    return adminId;
   } catch (error) {
     console.error("RESULTS AUTH ERROR:", error);
     return null;
@@ -1686,45 +1696,77 @@ export async function POST(
 
 
     /* -----------------------------------------
-       CREDIT TO WINNING WALLET
-       -----------------------------------------
-       This happens before the match/tournament is
-       marked completed. If any credit fails, all
-       already-applied credits are rolled back and
-       the saved result rows are removed, so the
-       admin can safely retry.
+       CREDIT TOURNAMENT WINNINGS
+       reference_id MUST be a UUID because
+       wallet_transactions.reference_id is UUID.
     ----------------------------------------- */
 
-    const winningRows = (savedRows || []).filter((row) => {
-      return (
-        String(row?.user_id || "").trim() &&
-        Number(row?.winning_amount || 0) > 0
-      );
-    });
+    const winningRows = (savedRows || []).filter(
+      (row) =>
+        Number(row?.winning_amount || 0) > 0 &&
+        row?.id &&
+        row?.user_id
+    );
 
     const creditedWinners = [];
+    const insertedWinningTransactions = [];
 
     try {
-      for (const resultRow of winningRows) {
-        const userId = String(resultRow.user_id).trim();
-        const amount =
-          Math.round(
-            Number(resultRow.winning_amount || 0) * 100
-          ) / 100;
+      for (const winner of winningRows) {
+        const userId = String(winner.user_id);
+        const amount = Number(winner.winning_amount || 0);
+        const referenceId = String(winner.id);
 
-        if (!Number.isFinite(amount) || amount <= 0) {
+        if (!amount || amount <= 0) {
           continue;
         }
 
-        const referenceId =
-          `tournament_result:${tournamentId}:${userId}`;
+        /* -----------------------------------------
+           Idempotency guard
+           If this exact result UUID was already
+           credited, do not credit it again.
+        ----------------------------------------- */
+
+        const {
+          data: existingTransaction,
+          error: existingTransactionError,
+        } = await supabaseAdmin
+          .from("wallet_transactions")
+          .select("id,user_id,amount,type,reference_id")
+          .eq("reference_id", referenceId)
+          .eq("user_id", userId)
+          .eq("type", "tournament_winning")
+          .maybeSingle();
+
+        if (existingTransactionError) {
+          throw new Error(
+            `Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}`
+          );
+        }
+
+        if (existingTransaction) {
+          console.log(
+            "RESULT WINNING ALREADY CREDITED:",
+            JSON.stringify({
+              tournamentId,
+              userId,
+              amount,
+              referenceId,
+            })
+          );
+          continue;
+        }
+
+        /* -----------------------------------------
+           Read current winning balance
+        ----------------------------------------- */
 
         const {
           data: wallet,
           error: walletError,
         } = await supabaseAdmin
           .from("wallet_balances")
-          .select("winning_balance")
+          .select("user_id,winning_balance")
           .eq("user_id", userId)
           .maybeSingle();
 
@@ -1740,13 +1782,16 @@ export async function POST(
           );
         }
 
-        const oldWinning =
-          Number(wallet.winning_balance || 0);
+        const oldWinning = Number(
+          wallet.winning_balance || 0
+        );
 
-        const newWinning =
-          Math.round(
-            (oldWinning + amount) * 100
-          ) / 100;
+        const newWinning = oldWinning + amount;
+
+        /* -----------------------------------------
+           Conditional balance update
+           Prevents concurrent overwrite.
+        ----------------------------------------- */
 
         const {
           data: updatedWallet,
@@ -1759,19 +1804,29 @@ export async function POST(
           })
           .eq("user_id", userId)
           .eq("winning_balance", oldWinning)
-          .select("winning_balance")
+          .select("user_id,winning_balance")
           .maybeSingle();
 
-        if (walletUpdateError || !updatedWallet) {
+        if (
+          walletUpdateError ||
+          !updatedWallet
+        ) {
           throw new Error(
-            `Wallet update failed for ${userId}: ${
+            `Wallet balance update failed for ${userId}: ${
               walletUpdateError?.message ||
-              "wallet changed concurrently"
+              "balance changed concurrently"
             }`
           );
         }
 
+        /* -----------------------------------------
+           Insert wallet transaction
+           reference_id = tournament_results.id
+           which is a real UUID.
+        ----------------------------------------- */
+
         const {
+          data: insertedTransaction,
           error: transactionError,
         } = await supabaseAdmin
           .from("wallet_transactions")
@@ -1780,12 +1835,19 @@ export async function POST(
             amount,
             type: "tournament_winning",
             description:
-              `Tournament winning ₹${amount} credited - ${tournamentId}`,
+              `Tournament winning ₹${amount} credited`,
             reference_id: referenceId,
-          });
+          })
+          .select(
+            "id,user_id,amount,type,reference_id"
+          )
+          .single();
 
-        if (transactionError) {
-          // Immediately restore this user's wallet.
+        if (
+          transactionError ||
+          !insertedTransaction
+        ) {
+          /* Roll back this user's balance immediately. */
           await supabaseAdmin
             .from("wallet_balances")
             .update({
@@ -1796,7 +1858,10 @@ export async function POST(
             .eq("winning_balance", newWinning);
 
           throw new Error(
-            `Wallet transaction failed for ${userId}: ${transactionError.message}`
+            `Wallet transaction failed for ${userId}: ${
+              transactionError?.message ||
+              "transaction insert returned no row"
+            }`
           );
         }
 
@@ -1808,6 +1873,10 @@ export async function POST(
           referenceId,
         });
 
+        insertedWinningTransactions.push(
+          insertedTransaction
+        );
+
         console.log(
           "RESULT WINNING CREDITED:",
           JSON.stringify({
@@ -1816,6 +1885,7 @@ export async function POST(
             amount,
             oldWinning,
             newWinning,
+            referenceId,
           })
         );
       }
@@ -1825,8 +1895,20 @@ export async function POST(
         walletCreditError
       );
 
-      // Roll back all previously credited winners.
-      for (const credited of creditedWinners) {
+      /* -----------------------------------------
+         FULL ROLLBACK
+         Do not leave a partially credited
+         tournament if any winner fails.
+      ----------------------------------------- */
+
+      for (
+        let i = creditedWinners.length - 1;
+        i >= 0;
+        i--
+      ) {
+        const credited =
+          creditedWinners[i];
+
         await supabaseAdmin
           .from("wallet_transactions")
           .delete()
@@ -1861,16 +1943,44 @@ export async function POST(
           );
       }
 
-      // Remove the just-created result rows so the locked publish
-      // check does not permanently block a retry.
-      await supabaseAdmin
+      /* Also remove the current transaction if
+         the insert succeeded but later processing
+         reported an error. */
+      for (
+        const transaction of
+          insertedWinningTransactions
+      ) {
+        await supabaseAdmin
+          .from("wallet_transactions")
+          .delete()
+          .eq(
+            "id",
+            transaction.id
+          );
+      }
+
+      /* Remove result rows so the admin can retry
+         after fixing the wallet issue. */
+      const {
+        error: resultRollbackError,
+      } = await supabaseAdmin
         .from("tournament_results")
         .delete()
-        .eq("tournament_id", tournamentId);
+        .eq(
+          "tournament_id",
+          tournamentId
+        );
+
+      if (resultRollbackError) {
+        console.error(
+          "RESULT ROLLBACK DELETE ERROR:",
+          resultRollbackError
+        );
+      }
 
       return jsonError(
         walletCreditError?.message ||
-          "Unable to credit tournament winnings.",
+          "Tournament winnings could not be credited.",
         500
       );
     }
