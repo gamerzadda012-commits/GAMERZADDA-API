@@ -42,23 +42,11 @@ function getUserId(req) {
 
 
 
-    const headerUserId =
+    const headerUserId =
 
 
 
-        req.headers["x-user-id"];
-
-
-
-
-
-
-
-    const bodyUserId =
-
-
-
-        req.body?.userId;
+        req.headers["x-user-id"];
 
 
 
@@ -66,11 +54,11 @@ function getUserId(req) {
 
 
 
-    const queryUserId =
+    const bodyUserId =
 
 
 
-        req.query?.userId;
+        req.body?.userId;
 
 
 
@@ -78,27 +66,39 @@ function getUserId(req) {
 
 
 
-    return String(
+    const queryUserId =
 
 
 
-        headerUserId ||
+        req.query?.userId;
 
 
 
-        bodyUserId ||
 
 
 
-        queryUserId ||
+
+    return String(
 
 
 
-        ""
+        headerUserId ||
 
 
 
-    ).trim();
+        bodyUserId ||
+
+
+
+        queryUserId ||
+
+
+
+        ""
+
+
+
+    ).trim();
 
 
 
@@ -114,7 +114,7 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-    const number = Number(value);
+    const number = Number(value);
 
 
 
@@ -122,15 +122,15 @@ function cleanNumber(value, fallback = 0) {
 
 
 
-    return Number.isFinite(number)
+    return Number.isFinite(number)
 
 
 
-        ? number
+        ? number
 
 
 
-        : fallback;
+        : fallback;
 
 
 
@@ -166,23 +166,23 @@ router.get("/", async (req, res) => {
 
 
 
-    try {
+    try {
 
 
 
-        const game =
+        const game =
 
 
 
-            String(
+            String(
 
 
 
-                req.query.game || ""
+                req.query.game || ""
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -190,99 +190,99 @@ router.get("/", async (req, res) => {
 
 
 
-        let query =
+        let query =
 
 
 
-            supabase
+            supabase
 
 
 
-                .from("tournaments")
+                .from("tournaments")
 
 
 
-                .select(`
+                .select(`
 
 
 
-                    id,
+                    id,
 
 
 
-                    title,
+                    title,
 
 
 
-                    game,
+                    game,
 
 
 
-                    mode,
+                    mode,
 
 
 
-                    entry_fee,
+                    entry_fee,
 
 
 
-                    prize_pool,
+                    prize_pool,
 
 
 
-                    kill_reward,
+                    kill_reward,
 
 
 
-                    max_players,
+                    max_players,
 
 
 
-                    start_time,
+                    start_time,
 
 
 
-                    map,
+                    map,
 
 
 
-                    status,
+                    status,
 
 
 
-                    rules,
+                    rules,
 
 
 
-                    bonus_usable_percent
+                    bonus_usable_percent
 
 
 
-                `)
+                `)
 
 
 
-                .order(
+                .order(
 
 
 
-                    "start_time",
+                    "start_time",
 
 
 
-                    {
+                    {
 
 
 
-                        ascending: true
+                        ascending: true
 
 
 
-                    }
+                    }
 
 
 
-                );
+                );
 
 
 
@@ -290,31 +290,31 @@ router.get("/", async (req, res) => {
 
 
 
-        if (game) {
+        if (game) {
 
 
 
-            query =
+            query =
 
 
 
-                query.eq(
+                query.eq(
 
 
 
-                    "game",
+                    "game",
 
 
 
-                    game
+                    game
 
 
 
-                );
+                );
 
 
 
-        }
+        }
 
 
 
@@ -322,19 +322,19 @@ router.get("/", async (req, res) => {
 
 
 
-        const {
+        const {
 
 
 
-            data: tournaments,
+            data: tournaments,
 
 
 
-            error
+            error
 
 
 
-        } = await query;
+        } = await query;
 
 
 
@@ -342,7 +342,7 @@ router.get("/", async (req, res) => {
 
 
 
-        if (error) {
+        if (error) {
 
 
 
@@ -350,19 +350,19 @@ router.get("/", async (req, res) => {
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "GET TOURNAMENTS ERROR:",
+                "GET TOURNAMENTS ERROR:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -370,23 +370,23 @@ router.get("/", async (req, res) => {
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error: error.message
+                error: error.message
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
@@ -394,7 +394,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const list = tournaments || [];
+        const list = tournaments || [];
 
         // Hide started/live/completed tournaments from the public list.
         // Applies to Free Fire, Free Fire MAX, Lone Wolf and Clash Squad.
@@ -475,19 +475,19 @@ router.get("/", async (req, res) => {
 
 
 
-        // one Supabase request per tournament.
+        // one Supabase request per tournament.
 
 
 
-        const tournamentIds = visibleList
+        const tournamentIds = visibleList
 
 
 
-            .map((tournament) => tournament.id)
+            .map((tournament) => tournament.id)
 
 
 
-            .filter(Boolean);
+            .filter(Boolean);
 
 
 
@@ -495,7 +495,7 @@ router.get("/", async (req, res) => {
 
 
 
-        const countMap = {};
+        const countMap = {};
 
 
 
@@ -503,39 +503,39 @@ router.get("/", async (req, res) => {
 
 
 
-        if (tournamentIds.length) {
+        if (tournamentIds.length) {
 
 
 
-            const {
+            const {
 
 
 
-                data: entryRows,
+                data: entryRows,
 
 
 
-                error: countError
+                error: countError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
-                .select("tournament_id")
+                .select("tournament_id")
 
 
 
-                .in("tournament_id", tournamentIds)
+                .in("tournament_id", tournamentIds)
 
 
 
-                .eq("cancelled", false);
+                .eq("cancelled", false);
 
 
 
@@ -543,55 +543,55 @@ router.get("/", async (req, res) => {
 
 
 
-            if (countError) {
+            if (countError) {
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "COUNT ERROR:",
+                    "COUNT ERROR:",
 
 
 
-                    countError
+                    countError
 
 
 
-                );
+                );
 
 
 
-            } else {
+            } else {
 
 
 
-                for (const row of entryRows || []) {
+                for (const row of entryRows || []) {
 
 
 
-                    const key = String(row.tournament_id);
+                    const key = String(row.tournament_id);
 
 
 
-                    countMap[key] =
+                    countMap[key] =
 
 
 
-                        (countMap[key] || 0) + 1;
+                        (countMap[key] || 0) + 1;
 
 
 
-                }
+                }
 
 
 
-            }
+            }
 
 
 
-        }
+        }
 
 
 
@@ -599,23 +599,23 @@ router.get("/", async (req, res) => {
 
 
 
-        const result = visibleList.map((tournament) => ({
+        const result = visibleList.map((tournament) => ({
 
 
 
-            ...tournament,
+            ...tournament,
 
 
 
-            joined_count:
+            joined_count:
 
 
 
-                countMap[String(tournament.id)] || 0
+                countMap[String(tournament.id)] || 0
 
 
 
-        }));
+        }));
 
 
 
@@ -623,19 +623,19 @@ router.get("/", async (req, res) => {
 
 
 
-        return res.status(200).json({
+        return res.status(200).json({
 
 
 
-            success: true,
+            success: true,
 
 
 
-            tournaments: result
+            tournaments: result
 
 
 
-        });
+        });
 
 
 
@@ -643,7 +643,7 @@ router.get("/", async (req, res) => {
 
 
 
-    } catch (error) {
+    } catch (error) {
 
 
 
@@ -651,19 +651,19 @@ router.get("/", async (req, res) => {
 
 
 
-        console.error(
+        console.error(
 
 
 
-            "GET TOURNAMENTS EXCEPTION:",
+            "GET TOURNAMENTS EXCEPTION:",
 
 
 
-            error
+            error
 
 
 
-        );
+        );
 
 
 
@@ -671,31 +671,31 @@ router.get("/", async (req, res) => {
 
 
 
-        return res.status(500).json({
+        return res.status(500).json({
 
 
 
-            success: false,
+            success: false,
 
 
 
-            error:
+            error:
 
 
 
-                error?.message ||
+                error?.message ||
 
 
 
-                "Internal server error"
+                "Internal server error"
 
 
 
-        });
+        });
 
 
 
-    }
+    }
 
 
 
@@ -731,11 +731,11 @@ router.get(
 
 
 
-    "/participants",
+    "/participants",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -743,7 +743,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -751,23 +751,23 @@ router.get(
 
 
 
-            const tournamentId =
+            const tournamentId =
 
 
 
-                String(
+                String(
 
 
 
-                    req.query.tournamentId ||
+                    req.query.tournamentId ||
 
 
 
-                    ""
+                    ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -775,7 +775,7 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
@@ -783,27 +783,27 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -811,131 +811,131 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data,
+                data,
 
 
 
-                error
+                error
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
-                    )
+                    )
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        id,
+                        id,
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
-                        user_id,
+                        user_id,
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
-                        game_name,
+                        game_name,
 
 
 
-                        level,
+                        level,
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
-                        created_at
+                        created_at
 
 
 
-                    `)
+                    `)
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
-                        tournamentId
+                        tournamentId
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
-                        false
+                        false
 
 
 
-                    )
+                    )
 
 
 
-                    .order(
+                    .order(
 
 
 
-                        "created_at",
+                        "created_at",
 
 
 
-                        {
+                        {
 
 
 
-                            ascending: true
+                            ascending: true
 
 
 
-                        }
+                        }
 
 
 
-                    );
+                    );
 
 
 
@@ -943,7 +943,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -951,19 +951,19 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "PARTICIPANTS ERROR:",
+                    "PARTICIPANTS ERROR:",
 
 
 
-                    error
+                    error
 
 
 
-                );
+                );
 
 
 
@@ -971,23 +971,23 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: error.message
+                    error: error.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -995,23 +995,23 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
-                success: true,
+                success: true,
 
 
 
-                participants:
+                participants:
 
 
 
-                    data || []
+                    data || []
 
 
 
-            });
+            });
 
 
 
@@ -1019,7 +1019,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -1027,19 +1027,19 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "PARTICIPANTS EXCEPTION:",
+                "PARTICIPANTS EXCEPTION:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -1047,35 +1047,35 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -1107,253 +1107,253 @@ router.get(
 
 router.get(
 
-    "/my-matches",
+    "/my-matches",
 
-    async (req, res) => {
+    async (req, res) => {
 
-        try {
+        try {
 
-            const userId = getUserId(req);
+            const userId = getUserId(req);
 
 
 
-            if (!userId) {
+            if (!userId) {
 
-                return res.status(401).json({
+                return res.status(401).json({
 
-                    success: false,
+                    success: false,
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
-                    error: "User session not found."
+                    error: "User session not found."
 
-                });
+                });
 
-            }
+            }
 
 
 
-            const game = String(
+            const game = String(
 
-                req.query.game || ""
+                req.query.game || ""
 
-            ).trim();
+            ).trim();
 
 
 
-            const {
+            const {
 
-                data: entries,
+                data: entries,
 
-                error: entryError
+                error: entryError
 
-            } = await supabase
+            } = await supabase
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
-                .select("tournament_id")
+                .select("tournament_id")
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
-                .eq("cancelled", false);
+                .eq("cancelled", false);
 
 
 
-            if (entryError) {
+            if (entryError) {
 
-                console.error(
+                console.error(
 
-                    "MY MATCHES ENTRY ERROR:",
+                    "MY MATCHES ENTRY ERROR:",
 
-                    entryError
+                    entryError
 
-                );
+                );
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
-                    success: false,
+                    success: false,
 
-                    error: entryError.message
+                    error: entryError.message
 
-                });
+                });
 
-            }
+            }
 
 
 
-            const tournamentIds = [
+            const tournamentIds = [
 
-                ...new Set(
+                ...new Set(
 
-                    (entries || [])
+                    (entries || [])
 
-                        .map((row) => row.tournament_id)
+                        .map((row) => row.tournament_id)
 
-                        .filter(Boolean)
+                        .filter(Boolean)
 
-                        .map(String)
+                        .map(String)
 
-                )
+                )
 
-            ];
+            ];
 
 
 
-            if (!tournamentIds.length) {
+            if (!tournamentIds.length) {
 
-                return res.status(200).json({
+                return res.status(200).json({
 
-                    success: true,
+                    success: true,
 
-                    tournaments: []
+                    tournaments: []
 
-                });
+                });
 
-            }
+            }
 
 
 
-            let query = supabase
+            let query = supabase
 
-                .from("tournaments")
+                .from("tournaments")
 
-                .select(`
+                .select(`
 
-                    id,
+                    id,
 
-                    title,
+                    title,
 
-                    game,
+                    game,
 
-                    mode,
+                    mode,
 
-                    entry_fee,
+                    entry_fee,
 
-                    prize_pool,
+                    prize_pool,
 
-                    kill_reward,
+                    kill_reward,
 
-                    max_players,
+                    max_players,
 
-                    start_time,
+                    start_time,
 
-                    map,
+                    map,
 
-                    status,
+                    status,
 
-                    rules,
+                    rules,
 
-                    bonus_usable_percent
+                    bonus_usable_percent
 
-                `)
+                `)
 
-                .in("id", tournamentIds)
+                .in("id", tournamentIds)
 
-                .order("start_time", { ascending: true });
+                .order("start_time", { ascending: true });
 
 
 
-            if (game) {
+            if (game) {
 
-                query = query.eq("game", game);
+                query = query.eq("game", game);
 
-            }
+            }
 
 
 
-            const {
+            const {
 
-                data: tournaments,
+                data: tournaments,
 
-                error: tournamentError
+                error: tournamentError
 
-            } = await query;
+            } = await query;
 
 
 
-            if (tournamentError) {
+            if (tournamentError) {
 
-                console.error(
+                console.error(
 
-                    "MY MATCHES TOURNAMENT ERROR:",
+                    "MY MATCHES TOURNAMENT ERROR:",
 
-                    tournamentError
+                    tournamentError
 
-                );
+                );
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
-                    success: false,
+                    success: false,
 
-                    error: tournamentError.message
+                    error: tournamentError.message
 
-                });
+                });
 
-            }
+            }
 
 
 
-            const ids = (tournaments || [])
+            const ids = (tournaments || [])
 
-                .map((tournament) => tournament.id)
+                .map((tournament) => tournament.id)
 
-                .filter(Boolean);
+                .filter(Boolean);
 
 
 
-            const countMap = {};
+            const countMap = {};
 
 
 
-            if (ids.length) {
+            if (ids.length) {
 
-                const {
+                const {
 
-                    data: entryRows,
+                    data: entryRows,
 
-                    error: countError
+                    error: countError
 
-                } = await supabase
+                } = await supabase
 
-                    .from("tournament_entries")
+                    .from("tournament_entries")
 
-                    .select("tournament_id")
+                    .select("tournament_id")
 
-                    .in("tournament_id", ids)
+                    .in("tournament_id", ids)
 
-                    .eq("cancelled", false);
+                    .eq("cancelled", false);
 
 
 
-                if (countError) {
+                if (countError) {
 
-                    console.error(
+                    console.error(
 
-                        "MY MATCHES COUNT ERROR:",
+                        "MY MATCHES COUNT ERROR:",
 
-                        countError
+                        countError
 
-                    );
+                    );
 
-                } else {
+                } else {
 
-                    for (const row of entryRows || []) {
+                    for (const row of entryRows || []) {
 
-                        const key = String(row.tournament_id);
+                        const key = String(row.tournament_id);
 
-                        countMap[key] =
+                        countMap[key] =
 
-                            (countMap[key] || 0) + 1;
+                            (countMap[key] || 0) + 1;
 
-                    }
+                    }
 
-                }
+                }
 
-            }
+            }
 
             // ============================================================
             // LOAD RESULTS FOR CURRENT USER
@@ -1408,41 +1408,41 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
-                success: true,
+                success: true,
 
-                tournaments: result
+                tournaments: result
 
-            });
+            });
 
-        } catch (error) {
+        } catch (error) {
 
-            console.error(
+            console.error(
 
-                "MY MATCHES EXCEPTION:",
+                "MY MATCHES EXCEPTION:",
 
-                error
+                error
 
-            );
+            );
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
-                success: false,
+                success: false,
 
-                error:
+                error:
 
-                    error?.message ||
+                    error?.message ||
 
-                    "Internal server error"
+                    "Internal server error"
 
-            });
+            });
 
-        }
+        }
 
-    }
+    }
 
 );
 
@@ -1468,11 +1468,11 @@ router.get(
 
 
 
-    "/my-entry",
+    "/my-entry",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -1480,7 +1480,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -1488,11 +1488,11 @@ router.get(
 
 
 
-            const userId =
+            const userId =
 
 
 
-                getUserId(req);
+                getUserId(req);
 
 
 
@@ -1500,23 +1500,23 @@ router.get(
 
 
 
-            const tournamentId =
+            const tournamentId =
 
 
 
-                String(
+                String(
 
 
 
-                    req.query.tournamentId ||
+                    req.query.tournamentId ||
 
 
 
-                    ""
+                    ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -1524,7 +1524,7 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
@@ -1532,31 +1532,31 @@ router.get(
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "User session not found."
+                        "User session not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -1564,7 +1564,7 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
@@ -1572,27 +1572,27 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -1600,127 +1600,127 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data,
+                data,
 
 
 
-                error
+                error
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
-                    )
+                    )
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        id,
+                        id,
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
-                        user_id,
+                        user_id,
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
-                        game_name,
+                        game_name,
 
 
 
-                        level,
+                        level,
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
-                        created_at
+                        created_at
 
 
 
-                    `)
+                    `)
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
-                        tournamentId
+                        tournamentId
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
-                        userId
+                        userId
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
-                        false
+                        false
 
 
 
-                    )
+                    )
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -1728,7 +1728,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -1736,19 +1736,19 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "MY ENTRY ERROR:",
+                    "MY ENTRY ERROR:",
 
 
 
-                    error
+                    error
 
 
 
-                );
+                );
 
 
 
@@ -1756,23 +1756,23 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: error.message
+                    error: error.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -1780,31 +1780,31 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
-                success: true,
+                success: true,
 
 
 
-                entry:
+                entry:
 
 
 
-                    data || null,
+                    data || null,
 
 
 
-                joined:
+                joined:
 
 
 
-                    !!data
+                    !!data
 
 
 
-            });
+            });
 
 
 
@@ -1812,7 +1812,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -1820,19 +1820,19 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "MY ENTRY EXCEPTION:",
+                "MY ENTRY EXCEPTION:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -1840,35 +1840,35 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -1904,31 +1904,31 @@ router.get(
 
 
 
-    "/my-match",
+    "/my-match",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
-        try {
+        try {
 
 
 
-            const userId = getUserId(req);
+            const userId = getUserId(req);
 
 
 
-            const tournamentId = String(
+            const tournamentId = String(
 
 
 
-                req.query.tournamentId || ""
+                req.query.tournamentId || ""
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -1936,31 +1936,31 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
-                    error: "User session not found."
+                    error: "User session not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -1968,27 +1968,27 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: "Tournament ID is required."
+                    error: "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -1996,43 +1996,43 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: entry,
+                data: entry,
 
 
 
-                error: entryError
+                error: entryError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
-                .select("id")
+                .select("id")
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
 
 
-                .eq("cancelled", false)
+                .eq("cancelled", false)
 
 
 
-                .maybeSingle();
+                .maybeSingle();
 
 
 
@@ -2040,31 +2040,31 @@ router.get(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
-                console.error("MY MATCH ENTRY ERROR:", entryError);
+                console.error("MY MATCH ENTRY ERROR:", entryError);
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: entryError.message
+                    error: entryError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2072,31 +2072,31 @@ router.get(
 
 
 
-            if (!entry) {
+            if (!entry) {
 
 
 
-                return res.status(403).json({
+                return res.status(403).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "NOT_JOINED",
+                    code: "NOT_JOINED",
 
 
 
-                    error: "You have not joined this tournament."
+                    error: "You have not joined this tournament."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2104,43 +2104,43 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: match,
+                data: match,
 
 
 
-                error: matchError
+                error: matchError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("matches")
+                .from("matches")
 
 
 
-                .select("id,tournament_id,room_id,room_password")
+                .select("id,tournament_id,room_id,room_password")
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
-                .order("id", { ascending: false })
+                .order("id", { ascending: false })
 
 
 
-                .limit(1)
+                .limit(1)
 
 
 
-                .maybeSingle();
+                .maybeSingle();
 
 
 
@@ -2148,31 +2148,31 @@ router.get(
 
 
 
-            if (matchError) {
+            if (matchError) {
 
 
 
-                console.error("MY MATCH ERROR:", matchError);
+                console.error("MY MATCH ERROR:", matchError);
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: matchError.message
+                    error: matchError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2180,67 +2180,67 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
-                success: true,
+                success: true,
 
 
 
-                match: match || null,
+                match: match || null,
 
 
 
-                room_id: match?.room_id || null,
+                room_id: match?.room_id || null,
 
 
 
-                room_password: match?.room_password || null
+                room_password: match?.room_password || null
 
 
 
-            });
+            });
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
-            console.error("MY MATCH EXCEPTION:", error);
+            console.error("MY MATCH EXCEPTION:", error);
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -2276,31 +2276,31 @@ router.get(
 
 
 
-    "/my-results",
+    "/my-results",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
-        try {
+        try {
 
 
 
-            const userId = getUserId(req);
+            const userId = getUserId(req);
 
 
 
-            const tournamentId = String(
+            const tournamentId = String(
 
 
 
-                req.query.tournamentId || ""
+                req.query.tournamentId || ""
 
 
 
-            ).trim();
+            ).trim();
 
 
 
@@ -2308,31 +2308,31 @@ router.get(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
-                    error: "User session not found."
+                    error: "User session not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2340,27 +2340,27 @@ router.get(
 
 
 
-            if (!tournamentId) {
+            if (!tournamentId) {
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: "Tournament ID is required."
+                    error: "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2368,43 +2368,43 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: entry,
+                data: entry,
 
 
 
-                error: entryError
+                error: entryError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_entries")
+                .from("tournament_entries")
 
 
 
-                .select("id")
+                .select("id")
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
 
 
-                .eq("cancelled", false)
+                .eq("cancelled", false)
 
 
 
-                .maybeSingle();
+                .maybeSingle();
 
 
 
@@ -2412,31 +2412,31 @@ router.get(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
-                console.error("MY RESULTS ENTRY ERROR:", entryError);
+                console.error("MY RESULTS ENTRY ERROR:", entryError);
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error: entryError.message
+                    error: entryError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2444,31 +2444,31 @@ router.get(
 
 
 
-            if (!entry) {
+            if (!entry) {
 
 
 
-                return res.status(403).json({
+                return res.status(403).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "NOT_JOINED",
+                    code: "NOT_JOINED",
 
 
 
-                    error: "You have not joined this tournament."
+                    error: "You have not joined this tournament."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2476,27 +2476,27 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: results,
+                data: results,
 
 
 
-                error: resultsError
+                error: resultsError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_results")
+                .from("tournament_results")
 
 
 
-                .select(`
+                .select(`
                     id,
                     tournament_id,
                     match_id,
@@ -2508,47 +2508,15 @@ router.get(
 
 
 
-                .eq("tournament_id", tournamentId)
+                .eq("tournament_id", tournamentId)
 
 
 
-                .eq("user_id", userId)
+                .eq("user_id", userId)
 
 
 
-                .order("rank", { ascending: true });
-
-
-
-
-
-
-
-            if (resultsError) {
-
-
-
-                console.error("MY RESULTS ERROR:", resultsError);
-
-
-
-                return res.status(500).json({
-
-
-
-                    success: false,
-
-
-
-                    error: resultsError.message
-
-
-
-                });
-
-
-
-            }
+                .order("rank", { ascending: true });
 
 
 
@@ -2556,15 +2524,47 @@ router.get(
 
 
 
-            return res.status(200).json({
+            if (resultsError) {
 
 
 
-                success: true,
+                console.error("MY RESULTS ERROR:", resultsError);
 
 
 
-                tournamentId,
+                return res.status(500).json({
+
+
+
+                    success: false,
+
+
+
+                    error: resultsError.message
+
+
+
+                });
+
+
+
+            }
+
+
+
+
+
+
+
+            return res.status(200).json({
+
+
+
+                success: true,
+
+
+
+                tournamentId,
 
                 userId,
 
@@ -2574,47 +2574,47 @@ router.get(
 
 
 
-            });
+            });
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
-            console.error("MY RESULTS EXCEPTION:", error);
+            console.error("MY RESULTS EXCEPTION:", error);
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -2666,11 +2666,11 @@ router.post(
 
 
 
-    "/join",
+    "/join",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -2678,23 +2678,23 @@ router.post(
 
 
 
-        let originalDeposit = 0;
+        let originalDeposit = 0;
 
 
 
-        let originalBonus = 0;
+        let originalBonus = 0;
 
 
 
-        let originalWinning = 0;
+        let originalWinning = 0;
 
 
 
-        let walletUpdated = false;
+        let walletUpdated = false;
 
 
 
-        let userId = "";
+        let userId = "";
 
 
 
@@ -2702,7 +2702,7 @@ router.post(
 
 
 
-        try {
+        try {
 
 
 
@@ -2710,11 +2710,11 @@ router.post(
 
 
 
-            userId =
+            userId =
 
 
 
-                getUserId(req);
+                getUserId(req);
 
 
 
@@ -2722,27 +2722,27 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                tournamentId,
+                tournamentId,
 
 
 
-                gameName,
+                gameName,
 
 
 
-                uid,
+                uid,
 
 
 
-                level
+                level
 
 
 
-            } = req.body || {};
+            } = req.body || {};
 
 
 
@@ -2750,19 +2750,19 @@ router.post(
 
 
 
-            const cleanTournamentId =
+            const cleanTournamentId =
 
 
 
-                String(
+                String(
 
 
 
-                    tournamentId || ""
+                    tournamentId || ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -2770,19 +2770,19 @@ router.post(
 
 
 
-            const cleanGameName =
+            const cleanGameName =
 
 
 
-                String(
+                String(
 
 
 
-                    gameName || ""
+                    gameName || ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -2790,19 +2790,19 @@ router.post(
 
 
 
-            const cleanUid =
+            const cleanUid =
 
 
 
-                String(
+                String(
 
 
 
-                    uid || ""
+                    uid || ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -2810,11 +2810,11 @@ router.post(
 
 
 
-            const cleanLevel =
+            const cleanLevel =
 
 
 
-                Number(level);
+                Number(level);
 
 
 
@@ -2822,15 +2822,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // AUTH
+            // AUTH
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -2838,7 +2838,7 @@ router.post(
 
 
 
-            if (!userId) {
+            if (!userId) {
 
 
 
@@ -2846,31 +2846,31 @@ router.post(
 
 
 
-                return res.status(401).json({
+                return res.status(401).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "AUTH_REQUIRED",
+                    code: "AUTH_REQUIRED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "User session not found. Please login again."
+                        "User session not found. Please login again."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2878,15 +2878,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // VALIDATION
+            // VALIDATION
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -2894,7 +2894,7 @@ router.post(
 
 
 
-            if (!cleanTournamentId) {
+            if (!cleanTournamentId) {
 
 
 
@@ -2902,31 +2902,31 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "INVALID_TOURNAMENT",
+                    code: "INVALID_TOURNAMENT",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2934,7 +2934,7 @@ router.post(
 
 
 
-            if (!cleanGameName) {
+            if (!cleanGameName) {
 
 
 
@@ -2942,31 +2942,31 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "INVALID_GAME_NAME",
+                    code: "INVALID_GAME_NAME",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "In-Game Name is required."
+                        "In-Game Name is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -2974,7 +2974,7 @@ router.post(
 
 
 
-            if (!cleanUid) {
+            if (!cleanUid) {
 
 
 
@@ -2982,31 +2982,31 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "INVALID_UID",
+                    code: "INVALID_UID",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Free Fire UID is required."
+                        "Free Fire UID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3014,31 +3014,31 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                !Number.isInteger(
+                !Number.isInteger(
 
 
 
-                    cleanLevel
+                    cleanLevel
 
 
 
-                ) ||
+                ) ||
 
 
 
-                cleanLevel < 1 ||
+                cleanLevel < 1 ||
 
 
 
-                cleanLevel > 100
+                cleanLevel > 100
 
 
 
-            ) {
+            ) {
 
 
 
@@ -3046,31 +3046,31 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code: "INVALID_LEVEL",
+                    code: "INVALID_LEVEL",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Level must be between 1 and 100."
+                        "Level must be between 1 and 100."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3078,15 +3078,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // TOURNAMENT
+            // TOURNAMENT
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3094,99 +3094,99 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                data: tournament,
+                data: tournament,
 
 
 
-                error: tournamentError
+                error: tournamentError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournaments"
+                        "tournaments"
 
 
 
-                    )
+                    )
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        id,
+                        id,
 
 
 
-                        title,
+                        title,
 
 
 
-                        game,
+                        game,
 
 
 
-                        mode,
+                        mode,
 
 
 
-                        entry_fee,
+                        entry_fee,
 
 
 
-                        prize_pool,
+                        prize_pool,
 
 
 
-                        max_players,
+                        max_players,
 
 
 
-                        status,
+                        status,
 
 
 
-                        bonus_usable_percent
+                        bonus_usable_percent
 
 
 
-                    `)
+                    `)
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "id",
+                        "id",
 
 
 
-                        cleanTournamentId
+                        cleanTournamentId
 
 
 
-                    )
+                    )
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -3194,7 +3194,7 @@ router.post(
 
 
 
-            if (tournamentError) {
+            if (tournamentError) {
 
 
 
@@ -3202,19 +3202,19 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "TOURNAMENT FETCH ERROR:",
+                    "TOURNAMENT FETCH ERROR:",
 
 
 
-                    tournamentError
+                    tournamentError
 
 
 
-                );
+                );
 
 
 
@@ -3222,27 +3222,27 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        tournamentError.message
+                        tournamentError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3250,7 +3250,7 @@ router.post(
 
 
 
-            if (!tournament) {
+            if (!tournament) {
 
 
 
@@ -3258,35 +3258,35 @@ router.post(
 
 
 
-                return res.status(404).json({
+                return res.status(404).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "TOURNAMENT_NOT_FOUND",
+                        "TOURNAMENT_NOT_FOUND",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament not found."
+                        "Tournament not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3294,15 +3294,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // STATUS
+            // STATUS
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3310,27 +3310,27 @@ router.post(
 
 
 
-            const status =
+            const status =
 
 
 
-                String(
+                String(
 
 
 
-                    tournament.status || ""
+                    tournament.status || ""
 
 
 
-                )
+                )
 
 
 
-                    .trim()
+                    .trim()
 
 
 
-                    .toLowerCase();
+                    .toLowerCase();
 
 
 
@@ -3338,35 +3338,35 @@ router.post(
 
 
 
-            const allowedStatuses = [
+            const allowedStatuses = [
 
 
 
-                "",
+                "",
 
 
 
-                "upcoming",
+                "upcoming",
 
 
 
-                "open",
+                "open",
 
 
 
-                "active",
+                "active",
 
 
 
-                "live",
+                "live",
 
 
 
-                "scheduled"
+                "scheduled"
 
 
 
-            ];
+            ];
 
 
 
@@ -3374,23 +3374,23 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                !allowedStatuses.includes(
+                !allowedStatuses.includes(
 
 
 
-                    status
+                    status
 
 
 
-                )
+                )
 
 
 
-            ) {
+            ) {
 
 
 
@@ -3398,35 +3398,35 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "TOURNAMENT_CLOSED",
+                        "TOURNAMENT_CLOSED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "This tournament is not open for joining."
+                        "This tournament is not open for joining."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3434,15 +3434,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // ENTRY FEE
+            // ENTRY FEE
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3450,23 +3450,23 @@ router.post(
 
 
 
-            const entryFee =
+            const entryFee =
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
-                    tournament.entry_fee,
+                    tournament.entry_fee,
 
 
 
-                    0
+                    0
 
 
 
-                );
+                );
 
 
 
@@ -3474,7 +3474,7 @@ router.post(
 
 
 
-            if (entryFee < 0) {
+            if (entryFee < 0) {
 
 
 
@@ -3482,27 +3482,27 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Invalid tournament entry fee."
+                        "Invalid tournament entry fee."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3510,15 +3510,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // PLAYER LIMIT
+            // PLAYER LIMIT
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3526,27 +3526,27 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                tournament.max_players &&
+                tournament.max_players &&
 
 
 
-                Number(
+                Number(
 
 
 
-                    tournament.max_players
+                    tournament.max_players
 
 
 
-                ) > 0
+                ) > 0
 
 
 
-            ) {
+            ) {
 
 
 
@@ -3554,95 +3554,95 @@ router.post(
 
 
 
-                const {
+                const {
 
 
 
-                    count,
+                    count,
 
 
 
-                    error: countError
+                    error: countError
 
 
 
-                } =
+                } =
 
 
 
-                    await supabase
+                    await supabase
 
 
 
-                        .from(
+                        .from(
 
 
 
-                            "tournament_entries"
+                            "tournament_entries"
 
 
 
-                        )
+                        )
 
 
 
-                        .select(
+                        .select(
 
 
 
-                            "id",
+                            "id",
 
 
 
-                            {
+                            {
 
 
 
-                                count: "exact",
+                                count: "exact",
 
 
 
-                                head: true
+                                head: true
 
 
 
-                            }
+                            }
 
 
 
-                        )
+                        )
 
 
 
-                        .eq(
+                        .eq(
 
 
 
-                            "tournament_id",
+                            "tournament_id",
 
 
 
-                            cleanTournamentId
+                            cleanTournamentId
 
 
 
-                        )
+                        )
 
 
 
-                        .eq(
+                        .eq(
 
 
 
-                            "cancelled",
+                            "cancelled",
 
 
 
-                            false
+                            false
 
 
 
-                        );
+                        );
 
 
 
@@ -3650,7 +3650,7 @@ router.post(
 
 
 
-                if (countError) {
+                if (countError) {
 
 
 
@@ -3658,19 +3658,19 @@ router.post(
 
 
 
-                    console.error(
+                    console.error(
 
 
 
-                        "PLAYER COUNT ERROR:",
+                        "PLAYER COUNT ERROR:",
 
 
 
-                        countError
+                        countError
 
 
 
-                    );
+                    );
 
 
 
@@ -3678,27 +3678,27 @@ router.post(
 
 
 
-                    return res.status(500).json({
+                    return res.status(500).json({
 
 
 
-                        success: false,
+                        success: false,
 
 
 
-                        error:
+                        error:
 
 
 
-                            countError.message
+                            countError.message
 
 
 
-                    });
+                    });
 
 
 
-                }
+                }
 
 
 
@@ -3706,27 +3706,27 @@ router.post(
 
 
 
-                if (
+                if (
 
 
 
-                    (count || 0) >=
+                    (count || 0) >=
 
 
 
-                    Number(
+                    Number(
 
 
 
-                        tournament.max_players
+                        tournament.max_players
 
 
 
-                    )
+                    )
 
 
 
-                ) {
+                ) {
 
 
 
@@ -3734,39 +3734,39 @@ router.post(
 
 
 
-                    return res.status(400).json({
+                    return res.status(400).json({
 
 
 
-                        success: false,
+                        success: false,
 
 
 
-                        code:
+                        code:
 
 
 
-                            "TOURNAMENT_FULL",
+                            "TOURNAMENT_FULL",
 
 
 
-                        error:
+                        error:
 
 
 
-                            "Tournament is full."
+                            "Tournament is full."
 
 
 
-                    });
+                    });
 
 
 
-                }
+                }
 
 
 
-            }
+            }
 
 
 
@@ -3774,15 +3774,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // DUPLICATE CHECK
+            // DUPLICATE CHECK
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3790,91 +3790,91 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                data: existingEntry,
+                data: existingEntry,
 
 
 
-                error: existingError
+                error: existingError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
-                    )
+                    )
 
 
 
-                    .select("id")
+                    .select("id")
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
-                        cleanTournamentId
+                        cleanTournamentId
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
-                        userId
+                        userId
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
-                        false
+                        false
 
 
 
-                    )
+                    )
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -3882,7 +3882,7 @@ router.post(
 
 
 
-            if (existingError) {
+            if (existingError) {
 
 
 
@@ -3890,19 +3890,19 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "DUPLICATE CHECK ERROR:",
+                    "DUPLICATE CHECK ERROR:",
 
 
 
-                    existingError
+                    existingError
 
 
 
-                );
+                );
 
 
 
@@ -3910,27 +3910,27 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        existingError.message
+                        existingError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3938,7 +3938,7 @@ router.post(
 
 
 
-            if (existingEntry) {
+            if (existingEntry) {
 
 
 
@@ -3946,35 +3946,35 @@ router.post(
 
 
 
-                return res.status(409).json({
+                return res.status(409).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "ALREADY_JOINED",
+                        "ALREADY_JOINED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "You have already joined this tournament."
+                        "You have already joined this tournament."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -3982,15 +3982,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // WALLET
+            // WALLET
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -3998,71 +3998,71 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                data: wallet,
+                data: wallet,
 
 
 
-                error: walletError
+                error: walletError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from("wallet_balances")
+                    .from("wallet_balances")
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        user_id,
+                        user_id,
 
 
 
-                        deposit_balance,
+                        deposit_balance,
 
 
 
-                        bonus_balance,
+                        bonus_balance,
 
 
 
-                        winning_balance
+                        winning_balance
 
 
 
-                    `)
+                    `)
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
-                        userId
+                        userId
 
 
 
-                    )
+                    )
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -4070,7 +4070,7 @@ router.post(
 
 
 
-            if (walletError) {
+            if (walletError) {
 
 
 
@@ -4078,19 +4078,19 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "WALLET FETCH ERROR:",
+                    "WALLET FETCH ERROR:",
 
 
 
-                    walletError
+                    walletError
 
 
 
-                );
+                );
 
 
 
@@ -4098,27 +4098,27 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        walletError.message
+                        walletError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -4126,7 +4126,7 @@ router.post(
 
 
 
-            if (!wallet) {
+            if (!wallet) {
 
 
 
@@ -4134,35 +4134,35 @@ router.post(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "WALLET_NOT_FOUND",
+                        "WALLET_NOT_FOUND",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Wallet not found."
+                        "Wallet not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -4170,15 +4170,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // BALANCES
+            // BALANCES
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4186,19 +4186,19 @@ router.post(
 
 
 
-            let deposit =
+            let deposit =
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
-                    wallet.deposit_balance
+                    wallet.deposit_balance
 
 
 
-                );
+                );
 
 
 
@@ -4206,19 +4206,19 @@ router.post(
 
 
 
-            let bonus =
+            let bonus =
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
-                    wallet.bonus_balance
+                    wallet.bonus_balance
 
 
 
-                );
+                );
 
 
 
@@ -4226,19 +4226,19 @@ router.post(
 
 
 
-            let winning =
+            let winning =
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
-                    wallet.winning_balance
+                    wallet.winning_balance
 
 
 
-                );
+                );
 
 
 
@@ -4246,11 +4246,11 @@ router.post(
 
 
 
-            originalDeposit =
+            originalDeposit =
 
 
 
-                deposit;
+                deposit;
 
 
 
@@ -4258,11 +4258,11 @@ router.post(
 
 
 
-            originalBonus =
+            originalBonus =
 
 
 
-                bonus;
+                bonus;
 
 
 
@@ -4270,11 +4270,11 @@ router.post(
 
 
 
-            originalWinning =
+            originalWinning =
 
 
 
-                winning;
+                winning;
 
 
 
@@ -4282,19 +4282,19 @@ router.post(
 
 
 
-            const total =
+            const total =
 
 
 
-                deposit +
+                deposit +
 
 
 
-                bonus +
+                bonus +
 
 
 
-                winning;
+                winning;
 
 
 
@@ -4302,19 +4302,19 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                total <
+                total <
 
 
 
-                entryFee
+                entryFee
 
 
 
-            ) {
+            ) {
 
 
 
@@ -4322,35 +4322,35 @@ router.post(
 
 
 
-                return res.status(402).json({
+                return res.status(402).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "INSUFFICIENT_BALANCE",
+                        "INSUFFICIENT_BALANCE",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Insufficient wallet balance."
+                        "Insufficient wallet balance."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -4358,15 +4358,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // BONUS USABLE %
+            // BONUS USABLE %
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4374,23 +4374,23 @@ router.post(
 
 
 
-            let bonusPercent =
+            let bonusPercent =
 
 
 
-                cleanNumber(
+                cleanNumber(
 
 
 
-                    tournament.bonus_usable_percent,
+                    tournament.bonus_usable_percent,
 
 
 
-                    0
+                    0
 
 
 
-                );
+                );
 
 
 
@@ -4398,35 +4398,35 @@ router.post(
 
 
 
-            bonusPercent =
+            bonusPercent =
 
 
 
-                Math.max(
+                Math.max(
 
 
 
-                    0,
+                    0,
 
 
 
-                    Math.min(
+                    Math.min(
 
 
 
-                        100,
+                        100,
 
 
 
-                        bonusPercent
+                        bonusPercent
 
 
 
-                    )
+                    )
 
 
 
-                );
+                );
 
 
 
@@ -4434,27 +4434,27 @@ router.post(
 
 
 
-            const maxBonusUsable =
+            const maxBonusUsable =
 
 
 
-                entryFee *
+                entryFee *
 
 
 
-                (
+                (
 
 
 
-                    bonusPercent /
+                    bonusPercent /
 
 
 
-                    100
+                    100
 
 
 
-                );
+                );
 
 
 
@@ -4462,39 +4462,39 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // DEDUCTION ORDER
+            // DEDUCTION ORDER
 
 
 
-            //
+            //
 
 
 
-            // BONUS
+            // BONUS
 
 
 
-            // ↓
+            // ↓
 
 
 
-            // DEPOSIT
+            // DEPOSIT
 
 
 
-            // ↓
+            // ↓
 
 
 
-            // WINNING
+            // WINNING
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4502,11 +4502,11 @@ router.post(
 
 
 
-            let remaining =
+            let remaining =
 
 
 
-                entryFee;
+                entryFee;
 
 
 
@@ -4514,27 +4514,27 @@ router.post(
 
 
 
-            const bonusDeduction =
+            const bonusDeduction =
 
 
 
-                Math.min(
+                Math.min(
 
 
 
-                    bonus,
+                    bonus,
 
 
 
-                    maxBonusUsable,
+                    maxBonusUsable,
 
 
 
-                    remaining
+                    remaining
 
 
 
-                );
+                );
 
 
 
@@ -4542,11 +4542,11 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
-                bonusDeduction;
+                bonusDeduction;
 
 
 
@@ -4554,23 +4554,23 @@ router.post(
 
 
 
-            const depositDeduction =
+            const depositDeduction =
 
 
 
-                Math.min(
+                Math.min(
 
 
 
-                    deposit,
+                    deposit,
 
 
 
-                    remaining
+                    remaining
 
 
 
-                );
+                );
 
 
 
@@ -4578,11 +4578,11 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
-                depositDeduction;
+                depositDeduction;
 
 
 
@@ -4590,23 +4590,23 @@ router.post(
 
 
 
-            const winningDeduction =
+            const winningDeduction =
 
 
 
-                Math.min(
+                Math.min(
 
 
 
-                    winning,
+                    winning,
 
 
 
-                    remaining
+                    remaining
 
 
 
-                );
+                );
 
 
 
@@ -4614,11 +4614,11 @@ router.post(
 
 
 
-            remaining -=
+            remaining -=
 
 
 
-                winningDeduction;
+                winningDeduction;
 
 
 
@@ -4626,19 +4626,19 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                remaining >
+                remaining >
 
 
 
-                0.0001
+                0.0001
 
 
 
-            ) {
+            ) {
 
 
 
@@ -4646,35 +4646,35 @@ router.post(
 
 
 
-                return res.status(402).json({
+                return res.status(402).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "INSUFFICIENT_BALANCE",
+                        "INSUFFICIENT_BALANCE",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Insufficient usable wallet balance."
+                        "Insufficient usable wallet balance."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -4682,15 +4682,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // NEW BALANCES
+            // NEW BALANCES
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4698,31 +4698,31 @@ router.post(
 
 
 
-            const newDeposit =
+            const newDeposit =
 
 
 
-                Number(
+                Number(
 
 
 
-                    (
+                    (
 
 
 
-                        deposit -
+                        deposit -
 
 
 
-                        depositDeduction
+                        depositDeduction
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
-                );
+                );
 
 
 
@@ -4730,31 +4730,31 @@ router.post(
 
 
 
-            const newBonus =
+            const newBonus =
 
 
 
-                Number(
+                Number(
 
 
 
-                    (
+                    (
 
 
 
-                        bonus -
+                        bonus -
 
 
 
-                        bonusDeduction
+                        bonusDeduction
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
-                );
+                );
 
 
 
@@ -4762,31 +4762,31 @@ router.post(
 
 
 
-            const newWinning =
+            const newWinning =
 
 
 
-                Number(
+                Number(
 
 
 
-                    (
+                    (
 
 
 
-                        winning -
+                        winning -
 
 
 
-                        winningDeduction
+                        winningDeduction
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
-                );
+                );
 
 
 
@@ -4794,15 +4794,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // UPDATE WALLET
+            // UPDATE WALLET
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4810,39 +4810,39 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                error:
+                error:
 
 
 
-                    updateWalletError
+                    updateWalletError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from("wallet_balances")
+                    .from("wallet_balances")
 
 
 
-                    .update({
+                    .update({
 
 
 
-                        deposit_balance:
+                        deposit_balance:
 
 
 
-                            newDeposit,
+                            newDeposit,
 
 
 
@@ -4850,11 +4850,11 @@ router.post(
 
 
 
-                        bonus_balance:
+                        bonus_balance:
 
 
 
-                            newBonus,
+                            newBonus,
 
 
 
@@ -4862,11 +4862,11 @@ router.post(
 
 
 
-                        winning_balance:
+                        winning_balance:
 
 
 
-                            newWinning,
+                            newWinning,
 
 
 
@@ -4874,35 +4874,35 @@ router.post(
 
 
 
-                        updated_at:
+                        updated_at:
 
 
 
-                            new Date()
+                            new Date()
 
 
 
-                                .toISOString()
+                                .toISOString()
 
 
 
-                    })
+                    })
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "user_id",
+                        "user_id",
 
 
 
-                        userId
+                        userId
 
 
 
-                    );
+                    );
 
 
 
@@ -4910,7 +4910,7 @@ router.post(
 
 
 
-            if (updateWalletError) {
+            if (updateWalletError) {
 
 
 
@@ -4918,19 +4918,19 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "WALLET UPDATE ERROR:",
+                    "WALLET UPDATE ERROR:",
 
 
 
-                    updateWalletError
+                    updateWalletError
 
 
 
-                );
+                );
 
 
 
@@ -4938,35 +4938,35 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "WALLET_UPDATE_FAILED",
+                        "WALLET_UPDATE_FAILED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        updateWalletError.message
+                        updateWalletError.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -4974,7 +4974,7 @@ router.post(
 
 
 
-            walletUpdated = true;
+            walletUpdated = true;
 
 
 
@@ -4982,15 +4982,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // CREATE ENTRY
+            // CREATE ENTRY
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -4998,47 +4998,47 @@ router.post(
 
 
 
-            const {
+            const {
 
 
 
-                data: entry,
+                data: entry,
 
 
 
-                error: entryError
+                error: entryError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
-                    )
+                    )
 
 
 
-                    .insert({
+                    .insert({
 
 
 
-                        tournament_id:
+                        tournament_id:
 
 
 
-                            cleanTournamentId,
+                            cleanTournamentId,
 
 
 
@@ -5046,11 +5046,11 @@ router.post(
 
 
 
-                        user_id:
+                        user_id:
 
 
 
-                            userId,
+                            userId,
 
 
 
@@ -5058,11 +5058,11 @@ router.post(
 
 
 
-                        free_fire_uid:
+                        free_fire_uid:
 
 
 
-                            cleanUid,
+                            cleanUid,
 
 
 
@@ -5070,11 +5070,11 @@ router.post(
 
 
 
-                        game_name:
+                        game_name:
 
 
 
-                            cleanGameName,
+                            cleanGameName,
 
 
 
@@ -5082,11 +5082,11 @@ router.post(
 
 
 
-                        level:
+                        level:
 
 
 
-                            cleanLevel,
+                            cleanLevel,
 
 
 
@@ -5094,59 +5094,59 @@ router.post(
 
 
 
-                        cancelled:
+                        cancelled:
 
 
 
-                            false
+                            false
 
 
 
-                    })
+                    })
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        id,
+                        id,
 
 
 
-                        tournament_id,
+                        tournament_id,
 
 
 
-                        user_id,
+                        user_id,
 
 
 
-                        free_fire_uid,
+                        free_fire_uid,
 
 
 
-                        game_name,
+                        game_name,
 
 
 
-                        level,
+                        level,
 
 
 
-                        cancelled,
+                        cancelled,
 
 
 
-                        created_at
+                        created_at
 
 
 
-                    `)
+                    `)
 
 
 
-                    .single();
+                    .single();
 
 
 
@@ -5154,15 +5154,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // ENTRY FAILED → WALLET ROLLBACK
+            // ENTRY FAILED → WALLET ROLLBACK
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5170,7 +5170,7 @@ router.post(
 
 
 
-            if (entryError) {
+            if (entryError) {
 
 
 
@@ -5178,19 +5178,19 @@ router.post(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "TOURNAMENT ENTRY ERROR:",
+                    "TOURNAMENT ENTRY ERROR:",
 
 
 
-                    entryError
+                    entryError
 
 
 
-                );
+                );
 
 
 
@@ -5198,7 +5198,7 @@ router.post(
 
 
 
-                if (walletUpdated) {
+                if (walletUpdated) {
 
 
 
@@ -5206,39 +5206,39 @@ router.post(
 
 
 
-                    const {
+                    const {
 
 
 
-                        error:
+                        error:
 
 
 
-                            rollbackError
+                            rollbackError
 
 
 
-                    } =
+                    } =
 
 
 
-                        await supabase
+                        await supabase
 
 
 
-                            .from("wallet_balances")
+                            .from("wallet_balances")
 
 
 
-                            .update({
+                            .update({
 
 
 
-                                deposit_balance:
+                                deposit_balance:
 
 
 
-                                    originalDeposit,
+                                    originalDeposit,
 
 
 
@@ -5246,11 +5246,11 @@ router.post(
 
 
 
-                                bonus_balance:
+                                bonus_balance:
 
 
 
-                                    originalBonus,
+                                    originalBonus,
 
 
 
@@ -5258,11 +5258,11 @@ router.post(
 
 
 
-                                winning_balance:
+                                winning_balance:
 
 
 
-                                    originalWinning,
+                                    originalWinning,
 
 
 
@@ -5270,35 +5270,35 @@ router.post(
 
 
 
-                                updated_at:
+                                updated_at:
 
 
 
-                                    new Date()
+                                    new Date()
 
 
 
-                                        .toISOString()
+                                        .toISOString()
 
 
 
-                            })
+                            })
 
 
 
-                            .eq(
+                            .eq(
 
 
 
-                                "user_id",
+                                "user_id",
 
 
 
-                                userId
+                                userId
 
 
 
-                            );
+                            );
 
 
 
@@ -5306,7 +5306,7 @@ router.post(
 
 
 
-                    if (rollbackError) {
+                    if (rollbackError) {
 
 
 
@@ -5314,27 +5314,27 @@ router.post(
 
 
 
-                        console.error(
+                        console.error(
 
 
 
-                            "WALLET ROLLBACK ERROR:",
+                            "WALLET ROLLBACK ERROR:",
 
 
 
-                            rollbackError
+                            rollbackError
 
 
 
-                        );
+                        );
 
 
 
-                    }
+                    }
 
 
 
-                }
+                }
 
 
 
@@ -5342,39 +5342,39 @@ router.post(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "JOIN_FAILED",
+                        "JOIN_FAILED",
 
 
 
-                    error:
+                    error:
 
 
 
-                        entryError.message ||
+                        entryError.message ||
 
 
 
-                        "Unable to join tournament."
+                        "Unable to join tournament."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -5382,15 +5382,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // SUCCESS
+            // SUCCESS
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5398,35 +5398,35 @@ router.post(
 
 
 
-            const remainingBalance =
+            const remainingBalance =
 
 
 
-                Number(
+                Number(
 
 
 
-                    (
+                    (
 
 
 
-                        newDeposit +
+                        newDeposit +
 
 
 
-                        newBonus +
+                        newBonus +
 
 
 
-                        newWinning
+                        newWinning
 
 
 
-                    ).toFixed(2)
+                    ).toFixed(2)
 
 
 
-                );
+                );
 
 
 
@@ -5434,7 +5434,7 @@ router.post(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -5442,7 +5442,7 @@ router.post(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -5450,11 +5450,11 @@ router.post(
 
 
 
-                code:
+                code:
 
 
 
-                    "TOURNAMENT_JOINED",
+                    "TOURNAMENT_JOINED",
 
 
 
@@ -5462,11 +5462,11 @@ router.post(
 
 
 
-                message:
+                message:
 
 
 
-                    "Tournament joined successfully!",
+                    "Tournament joined successfully!",
 
 
 
@@ -5474,11 +5474,11 @@ router.post(
 
 
 
-                entryId:
+                entryId:
 
 
 
-                    entry?.id || null,
+                    entry?.id || null,
 
 
 
@@ -5486,11 +5486,11 @@ router.post(
 
 
 
-                tournamentId:
+                tournamentId:
 
 
 
-                    cleanTournamentId,
+                    cleanTournamentId,
 
 
 
@@ -5498,7 +5498,7 @@ router.post(
 
 
 
-                wallet: {
+                wallet: {
 
 
 
@@ -5506,11 +5506,11 @@ router.post(
 
 
 
-                    depositBalance:
+                    depositBalance:
 
 
 
-                        newDeposit,
+                        newDeposit,
 
 
 
@@ -5518,11 +5518,11 @@ router.post(
 
 
 
-                    bonusBalance:
+                    bonusBalance:
 
 
 
-                        newBonus,
+                        newBonus,
 
 
 
@@ -5530,11 +5530,11 @@ router.post(
 
 
 
-                    winningBalance:
+                    winningBalance:
 
 
 
-                        newWinning,
+                        newWinning,
 
 
 
@@ -5542,15 +5542,15 @@ router.post(
 
 
 
-                    totalBalance:
+                    totalBalance:
 
 
 
-                        remainingBalance
+                        remainingBalance
 
 
 
-                },
+                },
 
 
 
@@ -5558,7 +5558,7 @@ router.post(
 
 
 
-                deduction: {
+                deduction: {
 
 
 
@@ -5566,11 +5566,11 @@ router.post(
 
 
 
-                    entryFee:
+                    entryFee:
 
 
 
-                        entryFee,
+                        entryFee,
 
 
 
@@ -5578,23 +5578,23 @@ router.post(
 
 
 
-                    bonus:
+                    bonus:
 
 
 
-                        Number(
+                        Number(
 
 
 
-                            bonusDeduction
+                            bonusDeduction
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
-                        ),
+                        ),
 
 
 
@@ -5602,23 +5602,23 @@ router.post(
 
 
 
-                    deposit:
+                    deposit:
 
 
 
-                        Number(
+                        Number(
 
 
 
-                            depositDeduction
+                            depositDeduction
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
-                        ),
+                        ),
 
 
 
@@ -5626,31 +5626,31 @@ router.post(
 
 
 
-                    winning:
+                    winning:
 
 
 
-                        Number(
+                        Number(
 
 
 
-                            winningDeduction
+                            winningDeduction
 
 
 
-                                .toFixed(2)
+                                .toFixed(2)
 
 
 
-                        )
+                        )
 
 
 
-                }
+                }
 
 
 
-            });
+            });
 
 
 
@@ -5658,7 +5658,7 @@ router.post(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -5666,19 +5666,19 @@ router.post(
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "JOIN TOURNAMENT EXCEPTION:",
+                "JOIN TOURNAMENT EXCEPTION:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -5686,15 +5686,15 @@ router.post(
 
 
 
-            // =================================================
+            // =================================================
 
 
 
-            // SAFETY ROLLBACK
+            // SAFETY ROLLBACK
 
 
 
-            // =================================================
+            // =================================================
 
 
 
@@ -5702,19 +5702,19 @@ router.post(
 
 
 
-            if (
+            if (
 
 
 
-                walletUpdated &&
+                walletUpdated &&
 
 
 
-                userId
+                userId
 
 
 
-            ) {
+            ) {
 
 
 
@@ -5722,7 +5722,7 @@ router.post(
 
 
 
-                try {
+                try {
 
 
 
@@ -5730,23 +5730,23 @@ router.post(
 
 
 
-                    await supabase
+                    await supabase
 
 
 
-                        .from("wallet_balances")
+                        .from("wallet_balances")
 
 
 
-                        .update({
+                        .update({
 
 
 
-                            deposit_balance:
+                            deposit_balance:
 
 
 
-                                originalDeposit,
+                                originalDeposit,
 
 
 
@@ -5754,11 +5754,11 @@ router.post(
 
 
 
-                            bonus_balance:
+                            bonus_balance:
 
 
 
-                                originalBonus,
+                                originalBonus,
 
 
 
@@ -5766,11 +5766,11 @@ router.post(
 
 
 
-                            winning_balance:
+                            winning_balance:
 
 
 
-                                originalWinning,
+                                originalWinning,
 
 
 
@@ -5778,35 +5778,35 @@ router.post(
 
 
 
-                            updated_at:
+                            updated_at:
 
 
 
-                                new Date()
+                                new Date()
 
 
 
-                                    .toISOString()
+                                    .toISOString()
 
 
 
-                        })
+                        })
 
 
 
-                        .eq(
+                        .eq(
 
 
 
-                            "user_id",
+                            "user_id",
 
 
 
-                            userId
+                            userId
 
 
 
-                        );
+                        );
 
 
 
@@ -5814,15 +5814,15 @@ router.post(
 
 
 
-                } catch (
+                } catch (
 
 
 
-                    rollbackException
+                    rollbackException
 
 
 
-                ) {
+                ) {
 
 
 
@@ -5830,27 +5830,27 @@ router.post(
 
 
 
-                    console.error(
+                    console.error(
 
 
 
-                        "EXCEPTION ROLLBACK ERROR:",
+                        "EXCEPTION ROLLBACK ERROR:",
 
 
 
-                        rollbackException
+                        rollbackException
 
 
 
-                    );
+                    );
 
 
 
-                }
+                }
 
 
 
-            }
+            }
 
 
 
@@ -5858,43 +5858,43 @@ router.post(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                code:
+                code:
 
 
 
-                    "SERVER_ERROR",
+                    "SERVER_ERROR",
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
@@ -5938,6 +5938,79 @@ router.post(
 
 
 
+// ============================================================
+// GET BANNERS
+// GET /api/tournaments/banners?gameType=home
+// IMPORTANT: This route MUST come before /:id because "banners"
+// would otherwise be treated as a tournament UUID.
+// ============================================================
+
+router.get(
+    "/banners",
+    async (req, res) => {
+        try {
+            const gameType = String(
+                req.query.gameType || "home"
+            )
+                .trim()
+                .toLowerCase();
+
+            const {
+                data,
+                error
+            } = await supabase
+                .from("banners")
+                .select(`
+                    id,
+                    image_url,
+                    click_url,
+                    title,
+                    is_active,
+                    sort_order,
+                    created_at,
+                    game_type
+                `)
+                .eq("is_active", true)
+                .eq("game_type", gameType)
+                .order("sort_order", {
+                    ascending: true
+                })
+                .order("created_at", {
+                    ascending: false
+                });
+
+            if (error) {
+                console.error(
+                    "GET BANNERS ERROR:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error: error.message
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                banners: data || []
+            });
+        } catch (error) {
+            console.error(
+                "GET BANNERS EXCEPTION:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    error?.message ||
+                    "Internal server error"
+            });
+        }
+    }
+);
+
 // GET /api/tournaments/:id
 
 
@@ -5954,11 +6027,11 @@ router.get(
 
 
 
-    "/:id",
+    "/:id",
 
 
 
-    async (req, res) => {
+    async (req, res) => {
 
 
 
@@ -5966,7 +6039,7 @@ router.get(
 
 
 
-        try {
+        try {
 
 
 
@@ -5974,19 +6047,19 @@ router.get(
 
 
 
-            const id =
+            const id =
 
 
 
-                String(
+                String(
 
 
 
-                    req.params.id || ""
+                    req.params.id || ""
 
 
 
-                ).trim();
+                ).trim();
 
 
 
@@ -5994,7 +6067,7 @@ router.get(
 
 
 
-            if (!id) {
+            if (!id) {
 
 
 
@@ -6002,27 +6075,27 @@ router.get(
 
 
 
-                return res.status(400).json({
+                return res.status(400).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament ID is required."
+                        "Tournament ID is required."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -6030,115 +6103,115 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: tournament,
+                data: tournament,
 
 
 
-                error
+                error
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournaments"
+                        "tournaments"
 
 
 
-                    )
+                    )
 
 
 
-                    .select(`
+                    .select(`
 
 
 
-                        id,
+                        id,
 
 
 
-                        title,
+                        title,
 
 
 
-                        game,
+                        game,
 
 
 
-                        mode,
+                        mode,
 
 
 
-                        entry_fee,
+                        entry_fee,
 
 
 
-                        prize_pool,
+                        prize_pool,
 
 
 
-                        kill_reward,
+                        kill_reward,
 
 
 
-                        max_players,
+                        max_players,
 
 
 
-                        start_time,
+                        start_time,
 
 
 
-                        map,
+                        map,
 
 
 
-                        status,
+                        status,
 
 
 
-                        rules,
+                        rules,
 
 
 
-                        bonus_usable_percent
+                        bonus_usable_percent
 
 
 
-                    `)
+                    `)
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "id",
+                        "id",
 
 
 
-                        id
+                        id
 
 
 
-                    )
+                    )
 
 
 
-                    .maybeSingle();
+                    .maybeSingle();
 
 
 
@@ -6146,7 +6219,7 @@ router.get(
 
 
 
-            if (error) {
+            if (error) {
 
 
 
@@ -6154,19 +6227,19 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "GET TOURNAMENT ERROR:",
+                    "GET TOURNAMENT ERROR:",
 
 
 
-                    error
+                    error
 
 
 
-                );
+                );
 
 
 
@@ -6174,27 +6247,27 @@ router.get(
 
 
 
-                return res.status(500).json({
+                return res.status(500).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    error:
+                    error:
 
 
 
-                        error.message
+                        error.message
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -6202,7 +6275,7 @@ router.get(
 
 
 
-            if (!tournament) {
+            if (!tournament) {
 
 
 
@@ -6210,35 +6283,35 @@ router.get(
 
 
 
-                return res.status(404).json({
+                return res.status(404).json({
 
 
 
-                    success: false,
+                    success: false,
 
 
 
-                    code:
+                    code:
 
 
 
-                        "TOURNAMENT_NOT_FOUND",
+                        "TOURNAMENT_NOT_FOUND",
 
 
 
-                    error:
+                    error:
 
 
 
-                        "Tournament not found."
+                        "Tournament not found."
 
 
 
-                });
+                });
 
 
 
-            }
+            }
 
 
 
@@ -6246,95 +6319,95 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                count,
+                count,
 
 
 
-                error: countError
+                error: countError
 
 
 
-            } =
+            } =
 
 
 
-                await supabase
+                await supabase
 
 
 
-                    .from(
+                    .from(
 
 
 
-                        "tournament_entries"
+                        "tournament_entries"
 
 
 
-                    )
+                    )
 
 
 
-                    .select(
+                    .select(
 
 
 
-                        "id",
+                        "id",
 
 
 
-                        {
+                        {
 
 
 
-                            count: "exact",
+                            count: "exact",
 
 
 
-                            head: true
+                            head: true
 
 
 
-                        }
+                        }
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "tournament_id",
+                        "tournament_id",
 
 
 
-                        id
+                        id
 
 
 
-                    )
+                    )
 
 
 
-                    .eq(
+                    .eq(
 
 
 
-                        "cancelled",
+                        "cancelled",
 
 
 
-                        false
+                        false
 
 
 
-                    );
+                    );
 
 
 
@@ -6342,7 +6415,7 @@ router.get(
 
 
 
-            if (countError) {
+            if (countError) {
 
 
 
@@ -6350,23 +6423,23 @@ router.get(
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "SINGLE TOURNAMENT COUNT ERROR:",
+                    "SINGLE TOURNAMENT COUNT ERROR:",
 
 
 
-                    countError
+                    countError
 
 
 
-                );
+                );
 
 
 
-            }
+            }
 
 
 
@@ -6374,35 +6447,35 @@ router.get(
 
 
 
-            const {
+            const {
 
 
 
-                data: prizes,
+                data: prizes,
 
 
 
-                error: prizeError
+                error: prizeError
 
 
 
-            } = await supabase
+            } = await supabase
 
 
 
-                .from("tournament_prizes")
+                .from("tournament_prizes")
 
 
 
-                .select("rank,label,amount")
+                .select("rank,label,amount")
 
 
 
-                .eq("tournament_id", id)
+                .eq("tournament_id", id)
 
 
 
-                .order("rank", { ascending: true });
+                .order("rank", { ascending: true });
 
 
 
@@ -6410,27 +6483,27 @@ router.get(
 
 
 
-            if (prizeError) {
+            if (prizeError) {
 
 
 
-                console.error(
+                console.error(
 
 
 
-                    "PRIZE FETCH ERROR:",
+                    "PRIZE FETCH ERROR:",
 
 
 
-                    prizeError
+                    prizeError
 
 
 
-                );
+                );
 
 
 
-            }
+            }
 
 
 
@@ -6438,7 +6511,7 @@ router.get(
 
 
 
-            return res.status(200).json({
+            return res.status(200).json({
 
 
 
@@ -6446,7 +6519,7 @@ router.get(
 
 
 
-                success: true,
+                success: true,
 
 
 
@@ -6454,11 +6527,11 @@ router.get(
 
 
 
-                tournament: {
+                tournament: {
 
 
 
-                    ...tournament,
+                    ...tournament,
 
 
 
@@ -6466,11 +6539,11 @@ router.get(
 
 
 
-                    joined_count:
+                    joined_count:
 
 
 
-                        count || 0,
+                        count || 0,
 
 
 
@@ -6478,19 +6551,19 @@ router.get(
 
 
 
-                    prizes:
+                    prizes:
 
 
 
-                        prizes || []
+                        prizes || []
 
 
 
-                }
+                }
 
 
 
-            });
+            });
 
 
 
@@ -6498,7 +6571,7 @@ router.get(
 
 
 
-        } catch (error) {
+        } catch (error) {
 
 
 
@@ -6506,19 +6579,19 @@ router.get(
 
 
 
-            console.error(
+            console.error(
 
 
 
-                "GET SINGLE TOURNAMENT EXCEPTION:",
+                "GET SINGLE TOURNAMENT EXCEPTION:",
 
 
 
-                error
+                error
 
 
 
-            );
+            );
 
 
 
@@ -6526,35 +6599,35 @@ router.get(
 
 
 
-            return res.status(500).json({
+            return res.status(500).json({
 
 
 
-                success: false,
+                success: false,
 
 
 
-                error:
+                error:
 
 
 
-                    error?.message ||
+                    error?.message ||
 
 
 
-                    "Internal server error"
+                    "Internal server error"
 
 
 
-            });
+            });
 
 
 
-        }
+        }
 
 
 
-    }
+    }
 
 
 
