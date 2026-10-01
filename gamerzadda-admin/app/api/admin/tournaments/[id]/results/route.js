@@ -6,8 +6,6 @@ import fs from "fs";
 
 import path from "path";
 
-import crypto from "crypto";
-
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 
 import { getMessaging } from "firebase-admin/messaging";
@@ -66,164 +64,49 @@ async function requireAdmin(request) {
 
   try {
 
-    let token = "";
+    const sessionCookie =
+      request.cookies.get("gamerzadda_admin_session")?.value || "";
 
-    // Authorization header
-
-    const authorization =
-
-      request.headers.get("authorization") || "";
-
-    if (authorization.startsWith("Bearer ")) {
-
-      token = authorization.slice(7).trim();
-
-    }
-
-    // Primary admin session cookie used by the GAMERZADDA backend.
-    if (!token) {
-      token =
-        request.cookies.get(
-          "gamerzadda_admin_session"
-        )?.value || "";
-    }
-
-    // Backward compatibility with the old cookie.
-    if (!token) {
-      token =
-        request.cookies.get(
-          "gamerzadda_admin_access"
-        )?.value || "";
-    }
-
-    if (!token) {
-      console.log("RESULTS AUTH: No token found");
+    if (!sessionCookie) {
+      console.log("RESULTS AUTH: No admin session cookie");
       return null;
     }
 
-    // The current admin architecture uses the signed
-    // gamerzadda_admin_session cookie, not a Supabase access token.
-    const parts = token.split(".");
-    if (parts.length === 2) {
-      try {
-        const [encodedPayload, receivedSignature] = parts;
+    const apiBase =
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://api.gamerzadda.in";
 
-        const secret =
-          process.env.ADMIN_SESSION_SECRET;
-
-        if (secret) {
-          const expectedSignature = crypto
-            .createHmac("sha256", secret)
-            .update(encodedPayload)
-            .digest("base64url");
-
-          const receivedBuffer =
-            Buffer.from(receivedSignature);
-          const expectedBuffer =
-            Buffer.from(expectedSignature);
-
-          if (
-            receivedBuffer.length ===
-              expectedBuffer.length &&
-            crypto.timingSafeEqual(
-              receivedBuffer,
-              expectedBuffer
-            )
-          ) {
-            const payload = JSON.parse(
-              Buffer.from(
-                encodedPayload,
-                "base64url"
-              ).toString("utf8")
-            );
-
-            if (
-              payload?.userId &&
-              payload?.role === "admin" &&
-              payload?.expiresAt > Date.now()
-            ) {
-              const { data: admin, error: adminError } =
-                await supabaseAdmin
-                  .from("users")
-                  .select("id, role, status")
-                  .eq("id", payload.userId)
-                  .maybeSingle();
-
-              if (
-                !adminError &&
-                admin &&
-                admin.role === "admin" &&
-                String(admin.status || "active")
-                  .toLowerCase() === "active"
-              ) {
-                console.log(
-                  "RESULTS AUTH: Admin session verified",
-                  payload.userId
-                );
-                return payload.userId;
-              }
-            }
-          }
-        }
-      } catch (sessionError) {
-        console.error(
-          "RESULTS AUTH SESSION ERROR:",
-          sessionError
-        );
+    const response = await fetch(
+      `${apiBase}/api/admin/session`,
+      {
+        method: "GET",
+        headers: {
+          Cookie: `gamerzadda_admin_session=${sessionCookie}`,
+        },
+        cache: "no-store",
       }
-    }
+    );
 
-    // Backward compatibility: if the old cookie/header is
-    // actually a Supabase access token, verify it normally.
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await supabaseAdmin.auth.getUser(token);
+    const data = await response.json().catch(() => null);
 
-    if (authError || !authData?.user) {
-      console.log(
-        "RESULTS AUTH: Invalid token",
-        authError?.message
-      );
+    if (!response.ok || !data?.authenticated || !data?.admin) {
+      console.log("RESULTS AUTH: Backend admin session rejected", {
+        status: response.status,
+        authenticated: data?.authenticated,
+      });
       return null;
     }
 
-    const {
-      data: admin,
-      error: adminError,
-    } =
-      await supabaseAdmin
-        .from("users")
-        .select("id, role, status")
-        .eq("id", authData.user.id)
-        .maybeSingle();
+    console.log(
+      "RESULTS AUTH: Admin session verified",
+      data.admin.id
+    );
 
-    if (
-      adminError ||
-      !admin ||
-      admin.role !== "admin" ||
-      String(admin.status || "active").toLowerCase() !==
-        "active"
-    ) {
-      console.log(
-        "RESULTS AUTH: User is not active admin"
-      );
-      return null;
-    }
-
-    return authData.user.id;
+    return data.admin.id;
 
   } catch (error) {
 
-    console.error(
-
-      "RESULTS AUTH ERROR:",
-
-      error
-
-    );
-
+    console.error("RESULTS AUTH ERROR:", error);
     return null;
 
   }
@@ -348,6 +231,25 @@ function getFirebaseAdmin() {
 
 }
 
+function formatResultNotificationTitle(tournamentTitle) {
+
+  const raw = String(tournamentTitle || "Tournament").trim();
+
+  const match = raw.match(/^#([^\s-]+)\s*[-–—:]\s*(.+)$/);
+
+  if (match) {
+
+    const tournamentCode = `#${match[1]}`;
+    const cleanName = match[2].trim();
+
+    return `${cleanName} ${tournamentCode} 🏆 Results Are LIVE`;
+
+  }
+
+  return `${raw} 🏆 Results Are LIVE`;
+
+}
+
 async function sendTournamentResultNotifications({
 
   tournamentId,
@@ -450,31 +352,15 @@ async function sendTournamentResultNotifications({
 
           resultMap.get(String(user.id)) || 0;
 
-        if (winningAmount > 0) {
-
-          return {
-
-            token,
-
-            title: `🏆 You Won ₹${winningAmount}!`,
-
-            body:
-
-              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
-
-          };
-
-        }
-
         return {
 
           token,
 
-          title: "📊 Tournament Results Are Out",
+          title: formatResultNotificationTitle(tournamentTitle),
 
           body:
 
-            "Your tournament results are now available. Check your results now!",
+            "🎉 Your tournament results are now available. Open GAMERZADDA and check your rank, winnings & match details.",
 
         };
 
