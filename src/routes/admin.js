@@ -21,10 +21,13 @@ function getFirebaseAdmin() {
     try {
         const admin = require("firebase-admin");
 
-        if (admin.apps.length > 0) {
-            firebaseAdmin = admin;
-            return firebaseAdmin;
-        }
+        if (
+              typeof admin.getApps === "function" &&
+              admin.getApps().length > 0
+          ) {
+              firebaseAdmin = admin;
+              return firebaseAdmin;
+          }
 
         const serviceAccountPath =
             process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
