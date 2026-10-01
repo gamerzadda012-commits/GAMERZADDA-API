@@ -326,6 +326,19 @@ function getFirebaseAdmin() {
 
 }
 
+function formatResultNotificationTitle(tournamentTitle) {
+  const raw = String(tournamentTitle || "Tournament").trim();
+  const match = raw.match(/^#([^\s-]+)\s*-\s*(.+)$/);
+
+  if (match) {
+    const tournamentCode = `#${match[1]}`;
+    const cleanName = match[2].trim();
+    return `${cleanName} ${tournamentCode} 🏆 Results Are LIVE`;
+  }
+
+  return `${raw} 🏆 Results Are LIVE`;
+}
+
 async function sendTournamentResultNotifications({
 
   tournamentId,
@@ -424,36 +437,11 @@ async function sendTournamentResultNotifications({
 
         if (!token) return null;
 
-        const winningAmount =
-
-          resultMap.get(String(user.id)) || 0;
-
-        if (winningAmount > 0) {
-
-          return {
-
-            token,
-
-            title: `🏆 You Won ₹${winningAmount}!`,
-
-            body:
-
-              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
-
-          };
-
-        }
-
         return {
-
           token,
-
-          title: "📊 Tournament Results Are Out",
-
+          title: formatResultNotificationTitle(tournamentTitle),
           body:
-
-            "Your tournament results are now available. Check your results now!",
-
+            "🎉 Your tournament results are now available. Open GAMERZADDA and check your rank, winnings & match details.",
         };
 
       })
