@@ -61,11 +61,8 @@ function jsonError(message, status = 500) {
 }
 
 async function requireAdmin(request) {
-
   try {
-
-    const sessionCookie =
-      request.cookies.get("gamerzadda_admin_session")?.value || "";
+    const sessionCookie = request.cookies.get("gamerzadda_admin_session")?.value || "";
 
     if (!sessionCookie) {
       console.log("RESULTS AUTH: No admin session cookie");
@@ -97,20 +94,12 @@ async function requireAdmin(request) {
       return null;
     }
 
-    console.log(
-      "RESULTS AUTH: Admin session verified",
-      data.admin.id
-    );
-
+    console.log("RESULTS AUTH: Admin session verified", data.admin.id);
     return data.admin.id;
-
   } catch (error) {
-
     console.error("RESULTS AUTH ERROR:", error);
     return null;
-
   }
-
 }
 
 async function getTournament(tournamentId) {
@@ -231,25 +220,6 @@ function getFirebaseAdmin() {
 
 }
 
-function formatResultNotificationTitle(tournamentTitle) {
-
-  const raw = String(tournamentTitle || "Tournament").trim();
-
-  const match = raw.match(/^#([^\s-]+)\s*[-–—:]\s*(.+)$/);
-
-  if (match) {
-
-    const tournamentCode = `#${match[1]}`;
-    const cleanName = match[2].trim();
-
-    return `${cleanName} ${tournamentCode} 🏆 Results Are LIVE`;
-
-  }
-
-  return `${raw} 🏆 Results Are LIVE`;
-
-}
-
 async function sendTournamentResultNotifications({
 
   tournamentId,
@@ -352,15 +322,31 @@ async function sendTournamentResultNotifications({
 
           resultMap.get(String(user.id)) || 0;
 
+        if (winningAmount > 0) {
+
+          return {
+
+            token,
+
+            title: `🏆 You Won ₹${winningAmount}!`,
+
+            body:
+
+              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
+
+          };
+
+        }
+
         return {
 
           token,
 
-          title: formatResultNotificationTitle(tournamentTitle),
+          title: "📊 Tournament Results Are Out",
 
           body:
 
-            "🎉 Your tournament results are now available. Open GAMERZADDA and check your rank, winnings & match details.",
+            "Your tournament results are now available. Check your results now!",
 
         };
 
@@ -1696,6 +1682,197 @@ export async function POST(
 
       );
 
+    }
+
+
+    /* -----------------------------------------
+       CREDIT TO WINNING WALLET
+       -----------------------------------------
+       This happens before the match/tournament is
+       marked completed. If any credit fails, all
+       already-applied credits are rolled back and
+       the saved result rows are removed, so the
+       admin can safely retry.
+    ----------------------------------------- */
+
+    const winningRows = (savedRows || []).filter((row) => {
+      return (
+        String(row?.user_id || "").trim() &&
+        Number(row?.winning_amount || 0) > 0
+      );
+    });
+
+    const creditedWinners = [];
+
+    try {
+      for (const resultRow of winningRows) {
+        const userId = String(resultRow.user_id).trim();
+        const amount =
+          Math.round(
+            Number(resultRow.winning_amount || 0) * 100
+          ) / 100;
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+          continue;
+        }
+
+        const referenceId =
+          `tournament_result:${tournamentId}:${userId}`;
+
+        const {
+          data: wallet,
+          error: walletError,
+        } = await supabaseAdmin
+          .from("wallet_balances")
+          .select("winning_balance")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (walletError) {
+          throw new Error(
+            `Wallet lookup failed for ${userId}: ${walletError.message}`
+          );
+        }
+
+        if (!wallet) {
+          throw new Error(
+            `Wallet not found for ${userId}.`
+          );
+        }
+
+        const oldWinning =
+          Number(wallet.winning_balance || 0);
+
+        const newWinning =
+          Math.round(
+            (oldWinning + amount) * 100
+          ) / 100;
+
+        const {
+          data: updatedWallet,
+          error: walletUpdateError,
+        } = await supabaseAdmin
+          .from("wallet_balances")
+          .update({
+            winning_balance: newWinning,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .eq("winning_balance", oldWinning)
+          .select("winning_balance")
+          .maybeSingle();
+
+        if (walletUpdateError || !updatedWallet) {
+          throw new Error(
+            `Wallet update failed for ${userId}: ${
+              walletUpdateError?.message ||
+              "wallet changed concurrently"
+            }`
+          );
+        }
+
+        const {
+          error: transactionError,
+        } = await supabaseAdmin
+          .from("wallet_transactions")
+          .insert({
+            user_id: userId,
+            amount,
+            type: "tournament_winning",
+            description:
+              `Tournament winning ₹${amount} credited - ${tournamentId}`,
+            reference_id: referenceId,
+          });
+
+        if (transactionError) {
+          // Immediately restore this user's wallet.
+          await supabaseAdmin
+            .from("wallet_balances")
+            .update({
+              winning_balance: oldWinning,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId)
+            .eq("winning_balance", newWinning);
+
+          throw new Error(
+            `Wallet transaction failed for ${userId}: ${transactionError.message}`
+          );
+        }
+
+        creditedWinners.push({
+          userId,
+          amount,
+          oldWinning,
+          newWinning,
+          referenceId,
+        });
+
+        console.log(
+          "RESULT WINNING CREDITED:",
+          JSON.stringify({
+            tournamentId,
+            userId,
+            amount,
+            oldWinning,
+            newWinning,
+          })
+        );
+      }
+    } catch (walletCreditError) {
+      console.error(
+        "RESULT WINNING CREDIT ERROR:",
+        walletCreditError
+      );
+
+      // Roll back all previously credited winners.
+      for (const credited of creditedWinners) {
+        await supabaseAdmin
+          .from("wallet_transactions")
+          .delete()
+          .eq(
+            "reference_id",
+            credited.referenceId
+          )
+          .eq(
+            "user_id",
+            credited.userId
+          )
+          .eq(
+            "type",
+            "tournament_winning"
+          );
+
+        await supabaseAdmin
+          .from("wallet_balances")
+          .update({
+            winning_balance:
+              credited.oldWinning,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "user_id",
+            credited.userId
+          )
+          .eq(
+            "winning_balance",
+            credited.newWinning
+          );
+      }
+
+      // Remove the just-created result rows so the locked publish
+      // check does not permanently block a retry.
+      await supabaseAdmin
+        .from("tournament_results")
+        .delete()
+        .eq("tournament_id", tournamentId);
+
+      return jsonError(
+        walletCreditError?.message ||
+          "Unable to credit tournament winnings.",
+        500
+      );
     }
 
     /* -----------------------------------------
