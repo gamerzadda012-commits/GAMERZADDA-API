@@ -2773,6 +2773,332 @@ router.get(
 
 
 
+
+// ============================================================
+// GET MY TOURNAMENT RESULTS
+// GET /api/tournaments/my-results?tournamentId=UUID
+// ============================================================
+// Returns ALL published results for a tournament, but only when
+// the requesting user is an active participant.
+// ============================================================
+
+router.get(
+    "/my-results",
+    async (req, res) => {
+        try {
+            const userId = getUserId(req);
+
+            let tournamentId = String(
+                req.query.tournamentId || ""
+            ).trim();
+
+            if (!userId) {
+                return res.status(401).json({
+                    success: false,
+                    code: "AUTH_REQUIRED",
+                    error: "User session not found."
+                });
+            }
+
+            if (!tournamentId) {
+                return res.status(400).json({
+                    success: false,
+                    code: "INVALID_TOURNAMENT",
+                    error: "Tournament ID is required."
+                });
+            }
+
+            // Accept both UUID and visible tournament code/title.
+            const resolvedTournament =
+                await resolveTournamentId(tournamentId);
+
+            if (resolvedTournament.error) {
+                console.error(
+                    "MY RESULTS TOURNAMENT RESOLVE ERROR:",
+                    resolvedTournament.error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "TOURNAMENT_RESOLVE_FAILED",
+                    error: resolvedTournament.error.message
+                });
+            }
+
+            if (resolvedTournament.notFound) {
+                return res.status(404).json({
+                    success: false,
+                    code: "TOURNAMENT_NOT_FOUND",
+                    error: "Tournament not found."
+                });
+            }
+
+            tournamentId = resolvedTournament.id;
+
+            // --------------------------------------------------------
+            // 1. VERIFY THAT THE CURRENT USER JOINED
+            // --------------------------------------------------------
+            const {
+                data: myEntry,
+                error: myEntryError
+            } = await supabase
+                .from("tournament_entries")
+                .select("id,user_id,tournament_id,cancelled")
+                .eq("tournament_id", tournamentId)
+                .eq("user_id", userId)
+                .eq("cancelled", false)
+                .maybeSingle();
+
+            if (myEntryError) {
+                console.error(
+                    "MY RESULTS ENTRY ERROR:",
+                    myEntryError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "ENTRY_QUERY_FAILED",
+                    error: myEntryError.message
+                });
+            }
+
+            if (!myEntry) {
+                return res.status(403).json({
+                    success: false,
+                    code: "NOT_JOINED",
+                    error: "You have not joined this tournament."
+                });
+            }
+
+            // --------------------------------------------------------
+            // 2. LOAD ALL SAVED RESULTS
+            // --------------------------------------------------------
+            const {
+                data: resultRows,
+                error: resultsError
+            } = await supabase
+                .from("tournament_results")
+                .select(
+                    "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
+                )
+                .eq("tournament_id", tournamentId)
+                .order("rank", {
+                    ascending: true,
+                    nullsFirst: false
+                });
+
+            if (resultsError) {
+                console.error(
+                    "MY RESULTS QUERY ERROR:",
+                    resultsError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    code: "RESULTS_QUERY_FAILED",
+                    error: resultsError.message
+                });
+            }
+
+            const savedResults = resultRows || [];
+
+            // No results published yet.
+            if (savedResults.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    tournament_id: tournamentId,
+                    results: []
+                });
+            }
+
+            // --------------------------------------------------------
+            // 3. LOAD ENTRY/GAME DETAILS
+            // --------------------------------------------------------
+            const resultUserIds = [
+                ...new Set(
+                    savedResults
+                        .map((row) =>
+                            String(row.user_id || "").trim()
+                        )
+                        .filter(Boolean)
+                )
+            ];
+
+            let entries = [];
+
+            if (resultUserIds.length > 0) {
+                const {
+                    data: entryRows,
+                    error: entriesError
+                } = await supabase
+                    .from("tournament_entries")
+                    .select(
+                        "user_id,free_fire_uid,game_name,level,cancelled"
+                    )
+                    .eq("tournament_id", tournamentId)
+                    .eq("cancelled", false)
+                    .in("user_id", resultUserIds);
+
+                if (entriesError) {
+                    console.error(
+                        "MY RESULTS ENTRIES ERROR:",
+                        entriesError
+                    );
+
+                    return res.status(500).json({
+                        success: false,
+                        code: "RESULT_ENTRIES_QUERY_FAILED",
+                        error: entriesError.message
+                    });
+                }
+
+                entries = entryRows || [];
+            }
+
+            // --------------------------------------------------------
+            // 4. LOAD PROFILE DETAILS
+            // --------------------------------------------------------
+            let users = [];
+
+            if (resultUserIds.length > 0) {
+                const {
+                    data: userRows,
+                    error: usersError
+                } = await supabase
+                    .from("users")
+                    .select(
+                        "id,full_name,bio,avatar_url"
+                    )
+                    .in("id", resultUserIds);
+
+                if (usersError) {
+                    console.error(
+                        "MY RESULTS USERS ERROR:",
+                        usersError
+                    );
+
+                    return res.status(500).json({
+                        success: false,
+                        code: "RESULT_USERS_QUERY_FAILED",
+                        error: usersError.message
+                    });
+                }
+
+                users = userRows || [];
+            }
+
+            const entryMap = new Map(
+                entries.map((entry) => [
+                    String(entry.user_id),
+                    entry
+                ])
+            );
+
+            const userMap = new Map(
+                users.map((user) => [
+                    String(user.id),
+                    user
+                ])
+            );
+
+            // --------------------------------------------------------
+            // 5. MERGE RESULT + ENTRY + PROFILE
+            // --------------------------------------------------------
+            const results = savedResults.map((result) => {
+                const uid = String(
+                    result.user_id || ""
+                ).trim();
+
+                const entry = entryMap.get(uid);
+                const user = userMap.get(uid);
+
+                return {
+                    id: result.id || null,
+                    tournament_id:
+                        result.tournament_id || tournamentId,
+                    match_id:
+                        result.match_id || null,
+                    user_id: uid,
+
+                    rank:
+                        result.rank === null ||
+                        result.rank === undefined
+                            ? null
+                            : Number(result.rank),
+
+                    kills: Number(result.kills || 0),
+
+                    winning_amount:
+                        Number(
+                            result.winning_amount || 0
+                        ),
+
+                    // Android ResultsScreen fields
+                    real_name:
+                        String(
+                            user?.full_name || ""
+                        ).trim(),
+
+                    player_name:
+                        String(
+                            entry?.game_name || ""
+                        ).trim(),
+
+                    uid:
+                        String(
+                            entry?.free_fire_uid || ""
+                        ).trim(),
+
+                    level:
+                        Number(
+                            entry?.level || 0
+                        ),
+
+                    bio:
+                        String(
+                            user?.bio || ""
+                        ).trim(),
+
+                    profile_pic:
+                        String(
+                            user?.avatar_url || ""
+                        ).trim()
+                };
+            });
+
+            console.log(
+                "[MY RESULTS] Success",
+                JSON.stringify({
+                    tournamentId,
+                    requester: "present",
+                    resultCount: results.length
+                })
+            );
+
+            return res.status(200).json({
+                success: true,
+                tournament_id: tournamentId,
+                results
+            });
+
+        } catch (error) {
+            console.error(
+                "MY RESULTS EXCEPTION:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                code: "SERVER_ERROR",
+                error:
+                    error?.message ||
+                    "Internal server error"
+            });
+        }
+    }
+);
+
+
 // GET SINGLE TOURNAMENT
 
 //
