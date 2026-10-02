@@ -2080,10 +2080,6 @@ router.get(
 
 
 
-
-
-
-
 router.get(
 
 
@@ -2094,219 +2090,111 @@ router.get(
 
     async (req, res) => {
 
-
-
         try {
-
-
 
             const userId = getUserId(req);
 
-
-
             const tournamentId = String(
 
-
-
                 req.query.tournamentId || ""
-
-
 
             ).trim();
 
 
 
-
-
-
-
             if (!userId) {
-
-
 
                 return res.status(401).json({
 
-
-
                     success: false,
-
-
 
                     code: "AUTH_REQUIRED",
 
-
-
                     error: "User session not found."
-
-
 
                 });
 
-
-
             }
-
-
-
-
 
 
 
             if (!tournamentId) {
 
-
-
                 return res.status(400).json({
-
-
 
                     success: false,
 
-
-
                     error: "Tournament ID is required."
 
-
-
                 });
-
-
 
             }
 
 
 
-
-
-
-
             const {
-
-
 
                 data: entry,
 
-
-
                 error: entryError
-
-
 
             } = await supabase
 
-
-
                 .from("tournament_entries")
 
-
-
-                .select("id")
-
-
+                .select("id, user_id, free_fire_uid, game_name, level")
 
                 .eq("tournament_id", tournamentId)
 
-
-
                 .eq("user_id", userId)
 
-
-
                 .eq("cancelled", false)
-
-
 
                 .maybeSingle();
 
 
 
-
-
-
-
             if (entryError) {
-
-
 
                 console.error("MY RESULTS ENTRY ERROR:", entryError);
 
-
-
                 return res.status(500).json({
-
-
 
                     success: false,
 
-
-
                     error: entryError.message
-
-
 
                 });
 
-
-
             }
-
-
-
-
 
 
 
             if (!entry) {
 
-
-
                 return res.status(403).json({
-
-
 
                     success: false,
 
-
-
                     code: "NOT_JOINED",
-
-
 
                     error: "You have not joined this tournament."
 
-
-
                 });
-
-
 
             }
 
 
 
-
-
-
-
             const {
-
-
 
                 data: results,
 
-
-
                 error: resultsError
-
-
 
             } = await supabase
 
-
-
                 .from("tournament_results")
-
-
 
                 .select(`
                     id,
@@ -2318,73 +2206,110 @@ router.get(
                     winning_amount
                 `)
 
-
-
                 .eq("tournament_id", tournamentId)
 
-
-
                 .eq("user_id", userId)
-
-
 
                 .order("rank", { ascending: true });
 
 
 
-
-
-
-
             if (resultsError) {
-
-
 
                 console.error("MY RESULTS ERROR:", resultsError);
 
-
-
                 return res.status(500).json({
-
-
 
                     success: false,
 
-
-
                     error: resultsError.message
 
-
-
                 });
-
-
 
             }
 
 
 
+            // Load the current user's real profile details.
+            let userProfile = null;
 
+            const {
+
+                data: profile,
+
+                error: profileError
+
+            } = await supabase
+
+                .from("users")
+
+                .select(`
+                    id,
+                    full_name,
+                    bio,
+                    avatar_url
+                `)
+
+                .eq("id", userId)
+
+                .maybeSingle();
+
+
+
+            if (profileError) {
+
+                console.error("MY RESULTS PROFILE ERROR:", profileError);
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error: profileError.message
+
+                });
+
+            }
+
+
+
+            userProfile = profile || null;
+
+
+
+            // Merge tournament result + joined game profile + real user profile.
+            const mergedResults = (results || []).map((result) => ({
+
+                ...result,
+
+                real_name: String(userProfile?.full_name || "").trim(),
+
+                player_name: String(entry.game_name || "").trim(),
+
+                uid: String(entry.free_fire_uid || "").trim(),
+
+                free_fire_uid: String(entry.free_fire_uid || "").trim(),
+
+                level: Number(entry.level || 0),
+
+                bio: String(userProfile?.bio || "").trim(),
+
+                profile_pic: String(userProfile?.avatar_url || "").trim()
+
+            }));
 
 
 
             return res.status(200).json({
 
-
-
                 success: true,
-
-
 
                 tournamentId,
 
                 userId,
 
-                published: (results || []).length > 0,
+                published: mergedResults.length > 0,
 
-                results: results || []
-
-
+                results: mergedResults
 
             });
 
@@ -2392,49 +2317,25 @@ router.get(
 
         } catch (error) {
 
-
-
             console.error("MY RESULTS EXCEPTION:", error);
-
-
 
             return res.status(500).json({
 
-
-
                 success: false,
-
-
 
                 error:
 
-
-
                     error?.message ||
-
-
 
                     "Internal server error"
 
-
-
             });
-
-
 
         }
 
-
-
     }
 
-
-
 );
-
-
-
-
 
 
 
