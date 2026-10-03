@@ -478,26 +478,46 @@ router.post("/status", async (req, res) => {
                 .toUpperCase() ===
             "SUCCESS"
         ) {
-            // Repair/restore history if an older successful payment
-            // was credited but its history row is missing.
-            const { data: existingHistory } = await supabase
+            // Repair any old PENDING history row for an order that is
+            // already marked successful. This also fixes transactions
+            // created before the history-sync patch.
+            const {
+                data: successHistoryRows,
+                error: successHistoryFetchError
+            } = await supabase
                 .from("wallet_transactions")
-                .select("id, status")
+                .select("id, status, created_at")
                 .eq("reference_id", orderId)
                 .order("created_at", { ascending: false });
 
-            const historyRow = (existingHistory || [])[0];
+            if (successHistoryFetchError) {
+                console.error(
+                    "ALREADY SUCCESS HISTORY FETCH ERROR:",
+                    successHistoryFetchError
+                );
+            } else if (successHistoryRows?.length) {
+                const successfulRow =
+                    successHistoryRows.find(
+                        row => String(row.status).toUpperCase() === "SUCCESS"
+                    );
 
-            if (historyRow) {
+                if (!successfulRow) {
+                    await supabase
+                        .from("wallet_transactions")
+                        .update({
+                            status: "SUCCESS",
+                            type: "deposit",
+                            description: "Add Money",
+                            amount: Number(order.amount)
+                        })
+                        .eq("id", successHistoryRows[0].id);
+                }
+
                 await supabase
                     .from("wallet_transactions")
-                    .update({
-                        amount: Number(order.amount),
-                        type: "deposit",
-                        description: "Add Money",
-                        status: "SUCCESS"
-                    })
-                    .eq("id", historyRow.id);
+                    .delete()
+                    .eq("reference_id", orderId)
+                    .in("status", ["PENDING", "CANCELLED"]);
             } else {
                 await supabase
                     .from("wallet_transactions")
@@ -509,21 +529,6 @@ router.post("/status", async (req, res) => {
                         status: "SUCCESS",
                         reference_id: orderId
                     });
-            }
-
-            // Remove any stale temporary history rows for this
-            // already-successful order. Never touch the SUCCESS row.
-            const { error: staleHistoryCleanupError } = await supabase
-                .from("wallet_transactions")
-                .delete()
-                .eq("reference_id", orderId)
-                .in("status", ["PENDING", "CANCELLED"]);
-
-            if (staleHistoryCleanupError) {
-                console.error(
-                    "STALE HISTORY CLEANUP ERROR:",
-                    staleHistoryCleanupError
-                );
             }
 
             return res.json({
@@ -787,55 +792,54 @@ router.post("/status", async (req, res) => {
             });
         }
 
-        // ======================================================
-        // SAVE SUCCESSFUL TRANSACTION HISTORY
-        // ======================================================
-        // Keep the original PENDING history row and convert it to
-        // SUCCESS. This makes history independent of whether the
-        // wallet-credit RPC also writes a ledger row.
-        // If a SUCCESS row already exists, update/reuse it instead
-        // of creating a duplicate.
+        // ==============================================
+        // SUCCESSFUL TRANSACTION HISTORY
+        // ==============================================
+        // Keep the existing history row and convert it to SUCCESS.
+        // wallet_transactions does not contain a `utr` column, so do
+        // not write UTR into this table. The UTR is still passed to the
+        // successful-deposit RPC above.
         const {
-            data: existingHistoryRows,
-            error: historyFindError
+            data: existingTransactions,
+            error: transactionFetchError
         } = await supabase
             .from("wallet_transactions")
-            .select("id, status")
+            .select("id, status, created_at")
             .eq("reference_id", orderId)
             .order("created_at", { ascending: false });
 
-        if (historyFindError) {
+        if (transactionFetchError) {
             console.error(
-                "SUCCESS HISTORY FIND ERROR:",
-                historyFindError
+                "SUCCESS HISTORY FETCH ERROR:",
+                transactionFetchError
             );
         } else {
-            const successRow = (existingHistoryRows || []).find(
-                row => String(row.status || "").toUpperCase() === "SUCCESS"
-            );
+            const existingTransaction =
+                existingTransactions?.[0] || null;
 
-            const rowToUpdate = successRow || (existingHistoryRows || [])[0];
-
-            if (rowToUpdate) {
-                const { error: historyUpdateError } = await supabase
+            if (existingTransaction) {
+                const {
+                    error: transactionUpdateError
+                } = await supabase
                     .from("wallet_transactions")
                     .update({
-                        amount: expectedAmount,
+                        status: "SUCCESS",
                         type: "deposit",
                         description: "Add Money",
-                        status: "SUCCESS",
-                        ...(utr ? { utr } : {})
+                        amount: expectedAmount
                     })
-                    .eq("id", rowToUpdate.id);
+                    .eq("id", existingTransaction.id);
 
-                if (historyUpdateError) {
+                if (transactionUpdateError) {
                     console.error(
                         "SUCCESS HISTORY UPDATE ERROR:",
-                        historyUpdateError
+                        transactionUpdateError
                     );
                 }
             } else {
-                const { error: historyInsertError } = await supabase
+                const {
+                    error: transactionInsertError
+                } = await supabase
                     .from("wallet_transactions")
                     .insert({
                         user_id: order.user_id,
@@ -843,33 +847,32 @@ router.post("/status", async (req, res) => {
                         type: "deposit",
                         description: "Add Money",
                         status: "SUCCESS",
-                        reference_id: orderId,
-                        ...(utr ? { utr } : {})
+                        reference_id: orderId
                     });
 
-                if (historyInsertError) {
+                if (transactionInsertError) {
                     console.error(
                         "SUCCESS HISTORY INSERT ERROR:",
-                        historyInsertError
+                        transactionInsertError
                     );
                 }
             }
-        }
 
-        // Remove stale temporary rows after the SUCCESS row is
-        // confirmed/created. This prevents SUCCESS + PENDING
-        // duplicates from appearing in wallet history.
-        const { error: staleHistoryCleanupError } = await supabase
-            .from("wallet_transactions")
-            .delete()
-            .eq("reference_id", orderId)
-            .in("status", ["PENDING", "CANCELLED"]);
+            // Remove only extra temporary rows, never the successful row.
+            const {
+                error: duplicateCleanupError
+            } = await supabase
+                .from("wallet_transactions")
+                .delete()
+                .eq("reference_id", orderId)
+                .in("status", ["PENDING", "CANCELLED"]);
 
-        if (staleHistoryCleanupError) {
-            console.error(
-                "STALE HISTORY CLEANUP ERROR:",
-                staleHistoryCleanupError
-            );
+            if (duplicateCleanupError) {
+                console.error(
+                    "DUPLICATE HISTORY CLEANUP ERROR:",
+                    duplicateCleanupError
+                );
+            }
         }
 
         // ==============================================
