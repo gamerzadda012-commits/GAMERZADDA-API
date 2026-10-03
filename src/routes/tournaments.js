@@ -5089,27 +5089,95 @@ router.post(
 
             }
 
+            // =================================================
+            // CREATE WALLET TRANSACTION LOGS
+            // =================================================
+            // Record each wallet source used for this tournament fee.
 
+            const transactionRows = [
+                bonusDeduction > 0
+                    ? {
+                        user_id: userId,
+                        amount: -Number(bonusDeduction.toFixed(2)),
+                        type: "entry_fee",
+                        description: `Tournament entry fee (bonus) - ${tournament.title}`,
+                        reference_id: entry.id
+                    }
+                    : null,
+                depositDeduction > 0
+                    ? {
+                        user_id: userId,
+                        amount: -Number(depositDeduction.toFixed(2)),
+                        type: "entry_fee",
+                        description: `Tournament entry fee (deposit) - ${tournament.title}`,
+                        reference_id: entry.id
+                    }
+                    : null,
+                winningDeduction > 0
+                    ? {
+                        user_id: userId,
+                        amount: -Number(winningDeduction.toFixed(2)),
+                        type: "entry_fee",
+                        description: `Tournament entry fee (winning) - ${tournament.title}`,
+                        reference_id: entry.id
+                    }
+                    : null
+            ].filter(Boolean);
 
+            if (transactionRows.length > 0) {
+                const { error: transactionError } = await supabase
+                    .from("wallet_transactions")
+                    .insert(transactionRows);
 
+                if (transactionError) {
+                    console.error(
+                        "TOURNAMENT WALLET LOG ERROR:",
+                        transactionError
+                    );
 
+                    await supabase
+                        .from("tournament_entries")
+                        .delete()
+                        .eq("id", entry.id);
 
+                    const { error: transactionRollbackError } = await supabase
+                        .from("wallet_balances")
+                        .update({
+                            deposit_balance: originalDeposit,
+                            bonus_balance: originalBonus,
+                            winning_balance: originalWinning,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq("user_id", userId);
+
+                    if (transactionRollbackError) {
+                        console.error(
+                            "TRANSACTION LOG WALLET ROLLBACK ERROR:",
+                            transactionRollbackError
+                        );
+                    }
+
+                    return res.status(500).json({
+                        success: false,
+                        code: "TRANSACTION_LOG_FAILED",
+                        error: "Unable to record tournament wallet transaction."
+                    });
+                }
+
+                console.log(
+                    "TOURNAMENT WALLET LOG CREATED:",
+                    {
+                        userId,
+                        tournamentId: cleanTournamentId,
+                        entryId: entry.id,
+                        transactions: transactionRows.length
+                    }
+                );
+            }
 
             // =================================================
-
-
-
             // SUCCESS
-
-
-
             // =================================================
-
-
-
-
-
-
 
             const remainingBalance =
 
