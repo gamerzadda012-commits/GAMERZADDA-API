@@ -76,6 +76,7 @@ router.get("/:userId", async (req, res) => {
 
     return res.status(200).json({
       success: true,
+
       wallet: {
         user_id: data.user_id || userId,
 
@@ -143,7 +144,6 @@ router.get("/:userId/transactions", async (req, res) => {
       10
     );
 
-    // Safe defaults
     if (!Number.isFinite(page) || page < 1) {
       page = 1;
     }
@@ -165,16 +165,7 @@ router.get("/:userId/transactions", async (req, res) => {
     });
 
     // ----------------------------------------------------------
-    // Fetch ONE EXTRA transaction.
-    //
-    // Example:
-    // pageSize = 30
-    // Supabase range gets 31 rows.
-    //
-    // First 30 -> returned to Android
-    // 31st      -> tells us there are more.
-    //
-    // This prevents loading the complete transaction history.
+    // Fetch ONE EXTRA transaction
     // ----------------------------------------------------------
 
     const fetchLimit = pageSize + 1;
@@ -221,7 +212,6 @@ router.get("/:userId/transactions", async (req, res) => {
 
     const hasMore = rows.length > pageSize;
 
-    // Return ONLY requested page size
     const pageRows = rows.slice(
       0,
       pageSize
@@ -380,4 +370,204 @@ router.get("/:userId/transactions", async (req, res) => {
 });
 
 
+// ============================================================
+// CREATE WITHDRAWAL REQUEST
+//
+// POST /api/wallet/withdraw
+//
+// Body:
+// {
+//   "userId": "USER_UUID",
+//   "amount": 100,
+//   "upiId": "user@upi"
+// }
+//
+// Uses existing Supabase RPC:
+// create_withdrawal_request
+//
+// The existing RPC handles:
+// - Minimum ₹50
+// - Winning balance check
+// - Pending withdrawal check
+// - ₹5 / ₹10 service charge
+// - Winning balance deduction
+// - withdraw_requests insertion
+// - wallet_transactions insertion
+// ============================================================
+router.post("/withdraw", async (req, res) => {
+  try {
+    const userId = String(
+      req.body?.userId || ""
+    ).trim();
+
+    const upiId = String(
+      req.body?.upiId || ""
+    ).trim();
+
+    const amount = Number(
+      req.body?.amount
+    );
+
+    // ----------------------------------------------------------
+    // USER ID VALIDATION
+    // ----------------------------------------------------------
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required."
+      });
+    }
+
+    // ----------------------------------------------------------
+    // AMOUNT VALIDATION
+    // ----------------------------------------------------------
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid withdrawal amount is required."
+      });
+    }
+
+    // ----------------------------------------------------------
+    // UPI VALIDATION
+    // ----------------------------------------------------------
+
+    if (!upiId) {
+      return res.status(400).json({
+        success: false,
+        error: "UPI ID is required."
+      });
+    }
+
+    console.log(
+      "WITHDRAWAL REQUEST:",
+      {
+        userId,
+        amount,
+        upiId
+      }
+    );
+
+    // ----------------------------------------------------------
+    // CALL EXISTING SUPABASE RPC
+    // ----------------------------------------------------------
+
+    const { data, error } =
+      await supabase.rpc(
+        "create_withdrawal_request",
+        {
+          p_user_id: userId,
+          p_amount: amount,
+          p_upi_id: upiId
+        }
+      );
+
+    // ----------------------------------------------------------
+    // SUPABASE RPC ERROR
+    // ----------------------------------------------------------
+
+    if (error) {
+      console.error(
+        "WITHDRAWAL RPC ERROR:",
+        {
+          userId,
+          amount,
+          upiId,
+
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        }
+      );
+
+      return res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Unable to process withdrawal."
+      });
+    }
+
+    console.log(
+      "WITHDRAWAL RPC RESULT:",
+      data
+    );
+
+    // ----------------------------------------------------------
+    // RPC RETURNED FAILURE
+    // ----------------------------------------------------------
+
+    if (
+      !data ||
+      data.success !== true
+    ) {
+      return res.status(400).json({
+        success: false,
+        error:
+          data?.error ||
+          data?.message ||
+          "Unable to create withdrawal request."
+      });
+    }
+
+    // ----------------------------------------------------------
+    // SUCCESS
+    // ----------------------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        data.message ||
+        "Withdrawal request submitted successfully.",
+
+      withdrawal_id:
+        data.withdrawal_id ||
+        null,
+
+      amount:
+        cleanNumber(
+          data.amount,
+          amount
+        ),
+
+      service_charge:
+        cleanNumber(
+          data.service_charge
+        ),
+
+      net_amount:
+        cleanNumber(
+          data.net_amount
+        )
+    });
+
+  } catch (error) {
+    console.error(
+      "WITHDRAWAL EXCEPTION:",
+      {
+        message: error?.message,
+        stack: error?.stack
+      }
+    );
+
+    return res.status(500).json({
+      success: false,
+      error:
+        error?.message ||
+        "Internal server error."
+    });
+  }
+});
+
+
+// ============================================================
+// EXPORT ROUTER
+// ============================================================
 module.exports = router;
