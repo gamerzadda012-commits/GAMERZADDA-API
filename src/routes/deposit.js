@@ -478,6 +478,39 @@ router.post("/status", async (req, res) => {
                 .toUpperCase() ===
             "SUCCESS"
         ) {
+            // Repair/restore history if an older successful payment
+            // was credited but its history row is missing.
+            const { data: existingHistory } = await supabase
+                .from("wallet_transactions")
+                .select("id, status")
+                .eq("reference_id", orderId)
+                .order("created_at", { ascending: false });
+
+            const historyRow = (existingHistory || [])[0];
+
+            if (historyRow) {
+                await supabase
+                    .from("wallet_transactions")
+                    .update({
+                        amount: Number(order.amount),
+                        type: "deposit",
+                        description: "Add Money",
+                        status: "SUCCESS"
+                    })
+                    .eq("id", historyRow.id);
+            } else {
+                await supabase
+                    .from("wallet_transactions")
+                    .insert({
+                        user_id: order.user_id,
+                        amount: Number(order.amount),
+                        type: "deposit",
+                        description: "Add Money",
+                        status: "SUCCESS",
+                        reference_id: orderId
+                    });
+            }
+
             return res.json({
                 success: true,
                 paid: true,
@@ -739,22 +772,73 @@ router.post("/status", async (req, res) => {
             });
         }
 
-        // The successful-deposit RPC is the authoritative
-        // wallet ledger writer. Remove the temporary PENDING
-        // history row so the successful transaction is not duplicated.
+        // ======================================================
+        // SAVE SUCCESSFUL TRANSACTION HISTORY
+        // ======================================================
+        // Keep the original PENDING history row and convert it to
+        // SUCCESS. This makes history independent of whether the
+        // wallet-credit RPC also writes a ledger row.
+        // If a SUCCESS row already exists, update/reuse it instead
+        // of creating a duplicate.
         const {
-            error: pendingCleanupError
+            data: existingHistoryRows,
+            error: historyFindError
         } = await supabase
             .from("wallet_transactions")
-            .delete()
+            .select("id, status")
             .eq("reference_id", orderId)
-            .in("status", ["PENDING", "CANCELLED"]);
+            .order("created_at", { ascending: false });
 
-        if (pendingCleanupError) {
+        if (historyFindError) {
             console.error(
-                "PENDING TRANSACTION CLEANUP ERROR:",
-                pendingCleanupError
+                "SUCCESS HISTORY FIND ERROR:",
+                historyFindError
             );
+        } else {
+            const successRow = (existingHistoryRows || []).find(
+                row => String(row.status || "").toUpperCase() === "SUCCESS"
+            );
+
+            const rowToUpdate = successRow || (existingHistoryRows || [])[0];
+
+            if (rowToUpdate) {
+                const { error: historyUpdateError } = await supabase
+                    .from("wallet_transactions")
+                    .update({
+                        amount: expectedAmount,
+                        type: "deposit",
+                        description: "Add Money",
+                        status: "SUCCESS",
+                        ...(utr ? { utr } : {})
+                    })
+                    .eq("id", rowToUpdate.id);
+
+                if (historyUpdateError) {
+                    console.error(
+                        "SUCCESS HISTORY UPDATE ERROR:",
+                        historyUpdateError
+                    );
+                }
+            } else {
+                const { error: historyInsertError } = await supabase
+                    .from("wallet_transactions")
+                    .insert({
+                        user_id: order.user_id,
+                        amount: expectedAmount,
+                        type: "deposit",
+                        description: "Add Money",
+                        status: "SUCCESS",
+                        reference_id: orderId,
+                        ...(utr ? { utr } : {})
+                    });
+
+                if (historyInsertError) {
+                    console.error(
+                        "SUCCESS HISTORY INSERT ERROR:",
+                        historyInsertError
+                    );
+                }
+            }
         }
 
         // ==============================================
