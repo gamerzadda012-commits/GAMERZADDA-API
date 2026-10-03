@@ -33,9 +33,6 @@ router.get("/:userId", async (req, res) => {
       .limit(1)
       .maybeSingle();
 
-    // --------------------------------------------------------
-    // Supabase query error
-    // --------------------------------------------------------
     if (error) {
       console.error("WALLET SUPABASE ERROR:", {
         userId,
@@ -51,10 +48,6 @@ router.get("/:userId", async (req, res) => {
       });
     }
 
-    // --------------------------------------------------------
-    // Wallet row does NOT exist
-    // Do NOT silently return ₹0
-    // --------------------------------------------------------
     if (!data) {
       console.error(
         "WALLET ROW NOT FOUND FOR USER:",
@@ -68,14 +61,10 @@ router.get("/:userId", async (req, res) => {
       });
     }
 
-    // --------------------------------------------------------
-    // Read balances
-    // --------------------------------------------------------
     const deposit = cleanNumber(data.deposit_balance);
     const bonus = cleanNumber(data.bonus_balance);
     const winning = cleanNumber(data.winning_balance);
 
-    // Always calculate total from the three actual balances.
     const total = Number(
       (deposit + bonus + winning).toFixed(2)
     );
@@ -92,10 +81,13 @@ router.get("/:userId", async (req, res) => {
       success: true,
       wallet: {
         user_id: data.user_id || userId,
+
         deposit_balance: deposit,
         bonus_balance: bonus,
         winning_balance: winning,
+
         total_balance: total,
+
         created_at: data.created_at || null,
         updated_at: data.updated_at || null
       }
@@ -130,6 +122,11 @@ router.get("/:userId/transactions", async (req, res) => {
       });
     }
 
+    console.log(
+      "WALLET TRANSACTIONS REQUEST:",
+      userId
+    );
+
     const { data, error } = await supabase
       .from("wallet_transactions")
       .select("*")
@@ -139,11 +136,22 @@ router.get("/:userId/transactions", async (req, res) => {
       });
 
     if (error) {
-      console.error("WALLET TRANSACTIONS ERROR:", error);
+      console.error(
+        "WALLET TRANSACTIONS ERROR:",
+        {
+          userId,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        }
+      );
 
       return res.status(500).json({
         success: false,
-        error: error.message || "Unable to load transactions."
+        error:
+          error.message ||
+          "Unable to load transactions."
       });
     }
 
@@ -162,10 +170,17 @@ router.get("/:userId/transactions", async (req, res) => {
         "Wallet Transaction"
       ).trim();
 
+      const description = String(
+        item.description ||
+        title ||
+        "Wallet Transaction"
+      ).trim();
+
       const amount = cleanNumber(item.amount);
 
       const status = String(
-        item.status || "COMPLETED"
+        item.status ||
+        "COMPLETED"
       )
         .trim()
         .toUpperCase();
@@ -176,12 +191,13 @@ router.get("/:userId/transactions", async (req, res) => {
         item.orderId ||
         null;
 
+      const transactionId =
+        item.id ||
+        referenceId ||
+        `${userId}-${item.created_at || Date.now()}`;
+
       return {
-        id: String(
-          item.id ||
-          referenceId ||
-          `${userId}-${item.created_at || Date.now()}`
-        ),
+        id: String(transactionId),
 
         user_id: userId,
 
@@ -189,8 +205,7 @@ router.get("/:userId/transactions", async (req, res) => {
 
         title,
 
-        description:
-          item.description || title,
+        description,
 
         amount,
 
@@ -201,10 +216,12 @@ router.get("/:userId/transactions", async (req, res) => {
         orderId:
           item.order_id ||
           item.orderId ||
-          referenceId,
+          referenceId ||
+          null,
 
         utr:
-          item.utr || null,
+          item.utr ||
+          null,
 
         bonusPercent:
           cleanNumber(item.bonus_percent),
@@ -213,18 +230,30 @@ router.get("/:userId/transactions", async (req, res) => {
           cleanNumber(item.bonus_amount),
 
         createdAt:
-          item.created_at || null,
+          item.created_at ||
+          null,
 
         paidAt:
-          item.paid_at || null,
+          item.paid_at ||
+          null,
 
         processedAt:
-          item.processed_at || null,
+          item.processed_at ||
+          null,
 
         created_at:
-          item.created_at || null
+          item.created_at ||
+          null
       };
     });
+
+    console.log(
+      "WALLET TRANSACTIONS RESULT:",
+      {
+        userId,
+        count: transactions.length
+      }
+    );
 
     return res.status(200).json({
       success: true,
@@ -234,7 +263,10 @@ router.get("/:userId/transactions", async (req, res) => {
   } catch (error) {
     console.error(
       "WALLET TRANSACTIONS EXCEPTION:",
-      error
+      {
+        message: error?.message,
+        stack: error?.stack
+      }
     );
 
     return res.status(500).json({
