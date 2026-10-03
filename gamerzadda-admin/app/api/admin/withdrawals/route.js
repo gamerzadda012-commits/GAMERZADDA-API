@@ -1,22 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
 import fs from "fs";
 import path from "path";
-
-import {
-  getApps,
-  initializeApp,
-  cert,
-} from "firebase-admin/app";
-
-import {
-  getMessaging,
-} from "firebase-admin/messaging";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const runtime = "nodejs";
 
 /* =========================================================
    SUPABASE ADMIN
@@ -34,10 +24,10 @@ const supabaseAdmin = createClient(
 );
 
 /* =========================================================
-   FIREBASE
+   FIREBASE ADMIN
 ========================================================= */
 
-function getFirebaseAdmin() {
+function getFirebaseApp() {
   const existingApps = getApps();
 
   if (existingApps.length > 0) {
@@ -49,7 +39,7 @@ function getFirebaseAdmin() {
 
   if (!serviceAccountPath) {
     throw new Error(
-      "FIREBASE_SERVICE_ACCOUNT_PATH is not configured."
+      "FIREBASE_SERVICE_ACCOUNT_PATH is missing."
     );
   }
 
@@ -58,23 +48,28 @@ function getFirebaseAdmin() {
     serviceAccountPath
   );
 
+  console.log(
+    "WITHDRAWAL FIREBASE SERVICE ACCOUNT:",
+    fullPath
+  );
+
   if (!fs.existsSync(fullPath)) {
     throw new Error(
       `Firebase service account file not found: ${fullPath}`
     );
   }
 
-  let serviceAccount;
+  const serviceAccount = JSON.parse(
+    fs.readFileSync(fullPath, "utf8")
+  );
 
-  try {
-    serviceAccount = JSON.parse(
-      fs.readFileSync(fullPath, "utf8")
-    );
-  } catch (error) {
+  if (
+    !serviceAccount.project_id ||
+    !serviceAccount.client_email ||
+    !serviceAccount.private_key
+  ) {
     throw new Error(
-      `Firebase service account JSON is invalid: ${
-        error?.message || String(error)
-      }`
+      "Firebase service account JSON is invalid."
     );
   }
 
@@ -95,17 +90,33 @@ async function sendWithdrawalNotification({
   note,
 }) {
   try {
-    if (!userId) {
-      console.error(
-        "WITHDRAWAL NOTIFICATION: Missing user ID"
-      );
+    console.log(
+      "=========================================="
+    );
 
-      return {
-        success: false,
-        sent: 0,
-        reason: "Missing user ID.",
-      };
-    }
+    console.log(
+      "WITHDRAWAL NOTIFICATION START"
+    );
+
+    console.log(
+      "User ID:",
+      userId
+    );
+
+    console.log(
+      "Action:",
+      action
+    );
+
+    console.log(
+      "Amount:",
+      amount
+    );
+
+    console.log(
+      "Net Amount:",
+      netAmount
+    );
 
     /* -----------------------------------------------------
        GET USER FCM TOKEN
@@ -116,7 +127,9 @@ async function sendWithdrawalNotification({
       error: userError,
     } = await supabaseAdmin
       .from("users")
-      .select("id, fcm_token")
+      .select(
+        "id, email, fcm_token"
+      )
       .eq("id", userId)
       .maybeSingle();
 
@@ -135,8 +148,7 @@ async function sendWithdrawalNotification({
 
     if (!user) {
       console.error(
-        "WITHDRAWAL NOTIFICATION: USER NOT FOUND",
-        userId
+        "WITHDRAWAL NOTIFICATION: USER NOT FOUND"
       );
 
       return {
@@ -146,25 +158,32 @@ async function sendWithdrawalNotification({
       };
     }
 
-    const token = String(
-      user.fcm_token || ""
-    ).trim();
-
-    /* -----------------------------------------------------
-       BUILD MESSAGE
-    ----------------------------------------------------- */
-
-    const numericNetAmount = Number(
-      netAmount ?? amount ?? 0
+    console.log(
+      "User email:",
+      user.email || "N/A"
     );
 
-    const displayAmount =
-      Number.isFinite(numericNetAmount)
-        ? numericNetAmount.toFixed(2)
-        : "0.00";
+    const fcmToken =
+      String(
+        user.fcm_token || ""
+      ).trim();
 
-    let title = "";
-    let message = "";
+    console.log(
+      "FCM TOKEN FOUND:",
+      fcmToken ? "YES" : "NO"
+    );
+
+    /* -----------------------------------------------------
+       NOTIFICATION TEXT
+    ----------------------------------------------------- */
+
+    let title;
+    let message;
+
+    const displayAmount =
+      Number.isFinite(Number(netAmount))
+        ? Number(netAmount).toFixed(2)
+        : Number(amount || 0).toFixed(2);
 
     if (action === "approve") {
       title = "✅ Withdrawal Approved";
@@ -176,7 +195,7 @@ async function sendWithdrawalNotification({
       title = "❌ Withdrawal Rejected";
 
       message =
-        `Your withdrawal request of ₹${displayAmount} was rejected.`;
+        `Your withdrawal request of ₹${displayAmount} has been rejected.`;
 
       if (note) {
         message += ` Reason: ${note}`;
@@ -211,11 +230,17 @@ async function sendWithdrawalNotification({
           historyError
         );
       } else {
-        historyId = history?.id || null;
+        historyId =
+          history?.id || null;
+
+        console.log(
+          "NOTIFICATION HISTORY SAVED:",
+          historyId
+        );
       }
     } catch (historyException) {
       console.error(
-        "WITHDRAWAL NOTIFICATION HISTORY EXCEPTION:",
+        "NOTIFICATION HISTORY EXCEPTION:",
         historyException
       );
     }
@@ -224,17 +249,17 @@ async function sendWithdrawalNotification({
        NO FCM TOKEN
     ----------------------------------------------------- */
 
-    if (!token) {
-      console.log(
-        "WITHDRAWAL NOTIFICATION: User has no FCM token",
-        userId
+    if (!fcmToken) {
+      console.warn(
+        "WITHDRAWAL NOTIFICATION: NO FCM TOKEN"
       );
 
       return {
         success: true,
         sent: 0,
         historyId,
-        reason: "User has no FCM token.",
+        reason:
+          "Notification saved, but user has no FCM token.",
       };
     }
 
@@ -242,70 +267,113 @@ async function sendWithdrawalNotification({
        FIREBASE
     ----------------------------------------------------- */
 
-    const firebaseApp = getFirebaseAdmin();
-    const messaging = getMessaging(firebaseApp);
+    const firebaseApp =
+      getFirebaseApp();
+
+    const messaging =
+      getMessaging(firebaseApp);
+
+    console.log(
+      "FIREBASE INITIALIZED"
+    );
+
+    /* -----------------------------------------------------
+       SEND FCM
+    ----------------------------------------------------- */
 
     try {
-      await messaging.send({
-        token,
-
-        notification: {
-          title,
-          body: message,
-        },
-
-        data: {
-          type: "withdrawal",
-          withdrawal_action: action,
-          amount: String(amount ?? ""),
-          net_amount: String(netAmount ?? ""),
-          title,
-          body: message,
-          redirect_url: "/wallet",
-        },
-
-        android: {
-          priority: "high",
+      const response =
+        await messaging.send({
+          token: fcmToken,
 
           notification: {
-            channelId:
-              "gamerzadda_notifications",
-            sound: "default",
+            title,
+            body: message,
           },
-        },
-      });
+
+          data: {
+            type: "wallet",
+            event: "withdrawal",
+            action: action,
+            withdrawalStatus:
+              action === "approve"
+                ? "approved"
+                : "rejected",
+            amount: String(
+              amount ?? ""
+            ),
+            netAmount: String(
+              netAmount ?? ""
+            ),
+            redirectUrl: "/wallet",
+          },
+
+          android: {
+            priority: "high",
+
+            notification: {
+              channelId:
+                "gamerzadda_notifications",
+
+              sound: "default",
+
+              priority: "high",
+            },
+          },
+        });
 
       console.log(
-        "WITHDRAWAL FCM SENT:",
-        {
-          userId,
-          action,
-          historyId,
-        }
+        "=========================================="
+      );
+
+      console.log(
+        "WITHDRAWAL FCM SENT SUCCESSFULLY"
+      );
+
+      console.log(
+        "Firebase Message ID:",
+        response
+      );
+
+      console.log(
+        "=========================================="
       );
 
       return {
         success: true,
         sent: 1,
+        messageId: response,
         historyId,
       };
-    } catch (sendError) {
-      const errorCode =
-        sendError?.code || "";
-
-      const errorMessage =
-        sendError?.message ||
-        String(sendError);
+    } catch (fcmError) {
+      console.error(
+        "=========================================="
+      );
 
       console.error(
-        "WITHDRAWAL FCM SEND ERROR:",
-        errorCode,
-        errorMessage
+        "WITHDRAWAL FCM SEND ERROR"
+      );
+
+      console.error(
+        "Code:",
+        fcmError?.code
+      );
+
+      console.error(
+        "Message:",
+        fcmError?.message
+      );
+
+      console.error(
+        "=========================================="
       );
 
       /* ---------------------------------------------------
-         REMOVE INVALID TOKEN
+         INVALID TOKEN
       --------------------------------------------------- */
+
+      const errorCode =
+        fcmError?.code || "";
 
       if (
         errorCode ===
@@ -313,36 +381,33 @@ async function sendWithdrawalNotification({
         errorCode ===
           "messaging/invalid-registration-token"
       ) {
-        try {
-          await supabaseAdmin
-            .from("users")
-            .update({
-              fcm_token: null,
-            })
-            .eq("id", userId);
+        console.warn(
+          "FCM TOKEN INVALID — CLEARING TOKEN"
+        );
 
-          console.log(
-            "INVALID WITHDRAWAL FCM TOKEN CLEARED:",
+        await supabaseAdmin
+          .from("users")
+          .update({
+            fcm_token: null,
+          })
+          .eq(
+            "id",
             userId
           );
-        } catch (cleanupError) {
-          console.error(
-            "FCM TOKEN CLEANUP ERROR:",
-            cleanupError
-          );
-        }
       }
 
       return {
         success: false,
         sent: 0,
         historyId,
-        reason: errorMessage,
+        reason:
+          fcmError?.message ||
+          "FCM notification failed.",
       };
     }
   } catch (error) {
     console.error(
-      "WITHDRAWAL NOTIFICATION ERROR:",
+      "WITHDRAWAL NOTIFICATION EXCEPTION:",
       error
     );
 
@@ -351,7 +416,7 @@ async function sendWithdrawalNotification({
       sent: 0,
       reason:
         error?.message ||
-        String(error),
+        "Withdrawal notification failed.",
     };
   }
 }
@@ -363,30 +428,42 @@ async function sendWithdrawalNotification({
 async function requireAdmin(request) {
   try {
     const authorization =
-      request.headers.get("authorization") || "";
+      request.headers.get(
+        "authorization"
+      ) || "";
 
-    if (!authorization.startsWith("Bearer ")) {
+    if (
+      !authorization.startsWith(
+        "Bearer "
+      )
+    ) {
       return {
         ok: false,
-        error: "Missing authentication token.",
+        error:
+          "Missing authentication token.",
       };
     }
 
-    const token = authorization
-      .slice(7)
-      .trim();
+    const token =
+      authorization
+        .slice(7)
+        .trim();
 
     if (!token) {
       return {
         ok: false,
-        error: "Missing authentication token.",
+        error:
+          "Missing authentication token.",
       };
     }
 
     const {
       data: authData,
       error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
+    } =
+      await supabaseAdmin.auth.getUser(
+        token
+      );
 
     if (
       authError ||
@@ -394,20 +471,25 @@ async function requireAdmin(request) {
     ) {
       return {
         ok: false,
-        error: "Invalid or expired session.",
+        error:
+          "Invalid or expired session.",
       };
     }
 
-    const userId = authData.user.id;
+    const userId =
+      authData.user.id;
 
     const {
       data: adminUser,
       error: adminError,
-    } = await supabaseAdmin
-      .from("users")
-      .select("id, role, email")
-      .eq("id", userId)
-      .maybeSingle();
+    } =
+      await supabaseAdmin
+        .from("users")
+        .select(
+          "id, role, email"
+        )
+        .eq("id", userId)
+        .maybeSingle();
 
     if (adminError) {
       console.error(
@@ -422,7 +504,10 @@ async function requireAdmin(request) {
       };
     }
 
-    if (adminUser?.role !== "admin") {
+    if (
+      adminUser?.role !==
+      "admin"
+    ) {
       return {
         ok: false,
         error:
@@ -432,7 +517,8 @@ async function requireAdmin(request) {
 
     return {
       ok: true,
-      userId: adminUser.id,
+      userId:
+        adminUser.id,
     };
   } catch (error) {
     console.error(
@@ -442,7 +528,8 @@ async function requireAdmin(request) {
 
     return {
       ok: false,
-      error: "Authentication failed.",
+      error:
+        "Authentication failed.",
     };
   }
 }
@@ -451,10 +538,14 @@ async function requireAdmin(request) {
    GET WITHDRAWALS
 ========================================================= */
 
-export async function GET(request) {
+export async function GET(
+  request
+) {
   try {
     const admin =
-      await requireAdmin(request);
+      await requireAdmin(
+        request
+      );
 
     if (!admin.ok) {
       return NextResponse.json(
@@ -466,12 +557,16 @@ export async function GET(request) {
       );
     }
 
-    const { searchParams } =
-      new URL(request.url);
+    const {
+      searchParams,
+    } = new URL(
+      request.url
+    );
 
     const status = (
-      searchParams.get("status") ||
-      "pending"
+      searchParams.get(
+        "status"
+      ) || "pending"
     )
       .trim()
       .toLowerCase();
@@ -484,7 +579,9 @@ export async function GET(request) {
     ];
 
     if (
-      !allowedStatuses.includes(status)
+      !allowedStatuses.includes(
+        status
+      )
     ) {
       return NextResponse.json(
         {
@@ -496,36 +593,47 @@ export async function GET(request) {
       );
     }
 
-    let query = supabaseAdmin
-      .from("withdraw_requests")
-      .select(`
-        id,
-        user_id,
-        amount,
-        upi_id,
-        account_holder_name,
-        status,
-        service_charge,
-        net_amount,
-        admin_note,
-        created_at,
-        processed_at,
-        users (
-          email,
-          game_name,
-          free_fire_uid
+    let query =
+      supabaseAdmin
+        .from(
+          "withdraw_requests"
         )
-      `)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(100);
+        .select(
+          `
+          id,
+          user_id,
+          amount,
+          upi_id,
+          account_holder_name,
+          status,
+          service_charge,
+          net_amount,
+          admin_note,
+          created_at,
+          processed_at,
+          users (
+            email,
+            game_name,
+            free_fire_uid
+          )
+        `
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          }
+        )
+        .limit(100);
 
-    if (status !== "all") {
-      query = query.eq(
-        "status",
-        status
-      );
+    if (
+      status !== "all"
+    ) {
+      query =
+        query.eq(
+          "status",
+          status
+        );
     }
 
     const {
@@ -553,7 +661,8 @@ export async function GET(request) {
     return NextResponse.json(
       {
         success: true,
-        withdrawals: data || [],
+        withdrawals:
+          data || [],
       },
       {
         status: 200,
@@ -581,13 +690,17 @@ export async function GET(request) {
 }
 
 /* =========================================================
-   APPROVE / REJECT
+   APPROVE / REJECT WITHDRAWAL
 ========================================================= */
 
-export async function PATCH(request) {
+export async function PATCH(
+  request
+) {
   try {
     const admin =
-      await requireAdmin(request);
+      await requireAdmin(
+        request
+      );
 
     if (!admin.ok) {
       return NextResponse.json(
@@ -602,12 +715,14 @@ export async function PATCH(request) {
     let body;
 
     try {
-      body = await request.json();
+      body =
+        await request.json();
     } catch {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid JSON body.",
+          error:
+            "Invalid JSON body.",
         },
         { status: 400 }
       );
@@ -615,20 +730,26 @@ export async function PATCH(request) {
 
     const withdrawalId =
       String(
-        body?.withdrawalId || ""
+        body?.withdrawalId ||
+          ""
       ).trim();
 
     const action =
       String(
-        body?.action || ""
+        body?.action ||
+          ""
       )
         .trim()
         .toLowerCase();
 
     const note =
-      body?.note !== undefined &&
-      body?.note !== null
-        ? String(body.note).trim()
+      body?.note !==
+        undefined &&
+      body?.note !==
+        null
+        ? String(
+            body.note
+          ).trim()
         : "";
 
     if (!withdrawalId) {
@@ -643,9 +764,10 @@ export async function PATCH(request) {
     }
 
     if (
-      !["approve", "reject"].includes(
-        action
-      )
+      ![
+        "approve",
+        "reject",
+      ].includes(action)
     ) {
       return NextResponse.json(
         {
@@ -657,29 +779,40 @@ export async function PATCH(request) {
       );
     }
 
-    /* =====================================================
+    /* -----------------------------------------------------
        GET WITHDRAWAL
-    ===================================================== */
+    ----------------------------------------------------- */
 
     const {
       data: withdrawal,
-      error: withdrawalError,
-    } = await supabaseAdmin
-      .from("withdraw_requests")
-      .select(`
-        id,
-        user_id,
-        amount,
-        upi_id,
-        account_holder_name,
-        status,
-        service_charge,
-        net_amount
-      `)
-      .eq("id", withdrawalId)
-      .maybeSingle();
+      error:
+        withdrawalError,
+    } =
+      await supabaseAdmin
+        .from(
+          "withdraw_requests"
+        )
+        .select(
+          `
+          id,
+          user_id,
+          amount,
+          upi_id,
+          account_holder_name,
+          status,
+          service_charge,
+          net_amount
+        `
+        )
+        .eq(
+          "id",
+          withdrawalId
+        )
+        .maybeSingle();
 
-    if (withdrawalError) {
+    if (
+      withdrawalError
+    ) {
       console.error(
         "Withdrawal lookup error:",
         withdrawalError
@@ -720,23 +853,50 @@ export async function PATCH(request) {
       );
     }
 
-    /* =====================================================
-       PROCESS RPC
-    ===================================================== */
+    console.log(
+      "=========================================="
+    );
+
+    console.log(
+      "PROCESSING WITHDRAWAL"
+    );
+
+    console.log(
+      "Withdrawal ID:",
+      withdrawalId
+    );
+
+    console.log(
+      "User ID:",
+      withdrawal.user_id
+    );
+
+    console.log(
+      "Action:",
+      action
+    );
+
+    /* -----------------------------------------------------
+       PROCESS DATABASE WITHDRAWAL
+    ----------------------------------------------------- */
 
     const {
       data,
       error,
-    } = await supabaseAdmin.rpc(
-      "admin_process_withdrawal",
-      {
-        p_withdrawal_id:
-          withdrawalId,
-        p_action: action,
-        p_note:
-          note || null,
-      }
-    );
+    } =
+      await supabaseAdmin.rpc(
+        "admin_process_withdrawal",
+        {
+          p_withdrawal_id:
+            withdrawalId,
+
+          p_action:
+            action,
+
+          p_note:
+            note || null,
+        }
+      );
 
     if (error) {
       console.error(
@@ -762,7 +922,8 @@ export async function PATCH(request) {
 
     if (
       result &&
-      result.success === false
+      result.success ===
+        false
     ) {
       return NextResponse.json(
         {
@@ -776,34 +937,45 @@ export async function PATCH(request) {
       );
     }
 
-    /* =====================================================
+    console.log(
+      "WITHDRAWAL DATABASE PROCESSING SUCCESS"
+    );
+
+    /* -----------------------------------------------------
        SEND USER NOTIFICATION
+
        IMPORTANT:
-       Withdrawal is already successfully processed
-       before notification is attempted.
-    ===================================================== */
+       Notification failure DOES NOT rollback
+       the withdrawal.
+    ----------------------------------------------------- */
 
     const notification =
-      await sendWithdrawalNotification({
-        userId:
-          withdrawal.user_id,
-        action,
-        amount:
-          withdrawal.amount,
-        netAmount:
-          withdrawal.net_amount ??
-          withdrawal.amount,
-        note,
-      });
+      await sendWithdrawalNotification(
+        {
+          userId:
+            withdrawal.user_id,
+
+          action,
+
+          amount:
+            withdrawal.amount,
+
+          netAmount:
+            withdrawal.net_amount ??
+            withdrawal.amount,
+
+          note,
+        }
+      );
 
     console.log(
       "WITHDRAWAL NOTIFICATION RESULT:",
       notification
     );
 
-    /* =====================================================
-       FINAL RESPONSE
-    ===================================================== */
+    console.log(
+      "=========================================="
+    );
 
     return NextResponse.json(
       {
@@ -819,11 +991,14 @@ export async function PATCH(request) {
         notification: {
           success:
             notification.success,
+
           sent:
             notification.sent,
+
           historyId:
             notification.historyId ||
             null,
+
           reason:
             notification.reason ||
             null,
