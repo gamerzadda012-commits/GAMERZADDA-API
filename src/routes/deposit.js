@@ -511,6 +511,21 @@ router.post("/status", async (req, res) => {
                     });
             }
 
+            // Remove any stale temporary history rows for this
+            // already-successful order. Never touch the SUCCESS row.
+            const { error: staleHistoryCleanupError } = await supabase
+                .from("wallet_transactions")
+                .delete()
+                .eq("reference_id", orderId)
+                .in("status", ["PENDING", "CANCELLED"]);
+
+            if (staleHistoryCleanupError) {
+                console.error(
+                    "STALE HISTORY CLEANUP ERROR:",
+                    staleHistoryCleanupError
+                );
+            }
+
             return res.json({
                 success: true,
                 paid: true,
@@ -839,6 +854,22 @@ router.post("/status", async (req, res) => {
                     );
                 }
             }
+        }
+
+        // Remove stale temporary rows after the SUCCESS row is
+        // confirmed/created. This prevents SUCCESS + PENDING
+        // duplicates from appearing in wallet history.
+        const { error: staleHistoryCleanupError } = await supabase
+            .from("wallet_transactions")
+            .delete()
+            .eq("reference_id", orderId)
+            .in("status", ["PENDING", "CANCELLED"]);
+
+        if (staleHistoryCleanupError) {
+            console.error(
+                "STALE HISTORY CLEANUP ERROR:",
+                staleHistoryCleanupError
+            );
         }
 
         // ==============================================
