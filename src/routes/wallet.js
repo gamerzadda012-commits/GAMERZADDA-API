@@ -1,573 +1,851 @@
-const express = require("express");
-const router = express.Router();
-const supabase = require("../config/supabase");
+package com.gamerzadda.app.wallet
 
-function cleanNumber(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.gamerzadda.app.network.AuthApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+
+private val RED = Color(0xFFFF174F)
+private val BG = Color(0xFFF7F8FA)
+
+
+// ============================================================
+// WITHDRAW RESULT
+// ============================================================
+
+data class WithdrawResult(
+    val success: Boolean,
+    val message: String = "",
+    val error: String = ""
+)
+
+
+// ============================================================
+// WITHDRAW API
+// ============================================================
+
+object WithdrawApi {
+
+    private const val BASE_URL =
+        "https://api.gamerzadda.in"
+
+
+    // ========================================================
+    // CREATE WITHDRAWAL
+    // ========================================================
+
+    suspend fun createWithdrawal(
+        userId: String,
+        amount: Double,
+        upiId: String
+    ): WithdrawResult = withContext(Dispatchers.IO) {
+
+        try {
+
+            // ------------------------------------------------
+            // USER ID
+            // ------------------------------------------------
+
+            if (userId.isBlank()) {
+                return@withContext WithdrawResult(
+                    success = false,
+                    error = "User session not found."
+                )
+            }
+
+
+            // ------------------------------------------------
+            // MINIMUM AMOUNT
+            // ------------------------------------------------
+
+            if (amount < 50.0) {
+                return@withContext WithdrawResult(
+                    success = false,
+                    error = "Minimum withdrawal amount is ₹50."
+                )
+            }
+
+
+            // ------------------------------------------------
+            // DECIMAL VALIDATION
+            // Maximum 2 decimal places
+            // ------------------------------------------------
+
+            if (
+                amount * 100.0 !=
+                kotlin.math.round(amount * 100.0)
+            ) {
+                return@withContext WithdrawResult(
+                    success = false,
+                    error = "Amount can have maximum 2 decimal places."
+                )
+            }
+
+
+            // ------------------------------------------------
+            // CLEAN UPI
+            // ------------------------------------------------
+
+            val cleanUpi = upiId.trim()
+
+
+            // ------------------------------------------------
+            // UPI VALIDATION
+            // ------------------------------------------------
+
+            if (
+                !Regex(
+                    "^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+$"
+                ).matches(cleanUpi)
+            ) {
+                return@withContext WithdrawResult(
+                    success = false,
+                    error = "Enter a valid UPI ID."
+                )
+            }
+
+
+            // =================================================
+            // REQUEST BODY
+            //
+            // IMPORTANT:
+            // userId is now sent to backend.
+            // =================================================
+
+            val body =
+                JSONObject().apply {
+
+                    put(
+                        "userId",
+                        userId
+                    )
+
+                    put(
+                        "amount",
+                        amount
+                    )
+
+                    put(
+                        "upiId",
+                        cleanUpi
+                    )
+
+                }.toString()
+
+
+            // =================================================
+            // HTTP REQUEST
+            // =================================================
+
+            val request =
+                Request.Builder()
+                    .url(
+                        "$BASE_URL/api/wallet/withdraw"
+                    )
+                    .post(
+                        body.toRequestBody(
+                            "application/json; charset=utf-8"
+                                .toMediaType()
+                        )
+                    )
+                    .header(
+                        "Accept",
+                        "application/json"
+                    )
+                    .build()
+
+
+            // =================================================
+            // EXECUTE REQUEST
+            // =================================================
+
+            val response =
+                AuthApi.client
+                    .newCall(request)
+                    .execute()
+
+
+            response.use { res ->
+
+                // ------------------------------------------------
+                // READ RESPONSE
+                // ------------------------------------------------
+
+                val raw =
+                    res.body
+                        ?.string()
+                        .orEmpty()
+
+
+                // ------------------------------------------------
+                // EMPTY RESPONSE
+                // ------------------------------------------------
+
+                if (raw.isBlank()) {
+
+                    return@withContext WithdrawResult(
+                        success = false,
+                        error =
+                            "Server returned an empty response (${res.code})."
+                    )
+                }
+
+
+                // ------------------------------------------------
+                // PARSE JSON
+                // ------------------------------------------------
+
+                val json =
+                    try {
+                        JSONObject(raw)
+                    } catch (e: Exception) {
+
+                        return@withContext WithdrawResult(
+                            success = false,
+                            error =
+                                "Invalid server response (${res.code})."
+                        )
+                    }
+
+
+                // ------------------------------------------------
+                // HTTP ERROR
+                // ------------------------------------------------
+
+                if (!res.isSuccessful) {
+
+                    return@withContext WithdrawResult(
+                        success = false,
+                        error =
+                            json.optString(
+                                "error",
+                                if (res.code == 401) {
+
+                                    "Session expired. Please login again."
+
+                                } else {
+
+                                    "Withdrawal request failed."
+                                }
+                            )
+                    )
+                }
+
+
+                // ------------------------------------------------
+                // SUCCESS
+                // ------------------------------------------------
+
+                val success =
+                    json.optBoolean(
+                        "success",
+                        false
+                    )
+
+
+                if (!success) {
+
+                    return@withContext WithdrawResult(
+                        success = false,
+                        error =
+                            json.optString(
+                                "error",
+                                "Withdrawal failed."
+                            )
+                    )
+                }
+
+
+                // ------------------------------------------------
+                // SUCCESS RESPONSE
+                // ------------------------------------------------
+
+                WithdrawResult(
+                    success = true,
+
+                    message =
+                        json.optString(
+                            "message",
+                            "Withdrawal request submitted successfully."
+                        )
+                )
+            }
+
+        } catch (e: Exception) {
+
+            WithdrawResult(
+                success = false,
+                error =
+                    e.message
+                        ?: "Unable to submit withdrawal request."
+            )
+        }
+    }
 }
 
-// ============================================================
-// GET WALLET
-// GET /api/wallet/:userId
-// ============================================================
-router.get("/:userId", async (req, res) => {
-  try {
-    const userId = String(req.params.userId || "").trim();
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID is required."
-      });
-    }
-
-    console.log("WALLET REQUEST:", userId);
-
-    const { data, error } = await supabase
-      .from("wallet_balances")
-      .select(
-        "user_id, deposit_balance, bonus_balance, winning_balance, created_at, updated_at"
-      )
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error("WALLET SUPABASE ERROR:", {
-        userId,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
-
-      return res.status(500).json({
-        success: false,
-        error: error.message || "Unable to load wallet."
-      });
-    }
-
-    if (!data) {
-      console.error("WALLET ROW NOT FOUND FOR USER:", userId);
-
-      return res.status(404).json({
-        success: false,
-        error: "Wallet not found for this user.",
-        user_id: userId
-      });
-    }
-
-    const deposit = cleanNumber(data.deposit_balance);
-    const bonus = cleanNumber(data.bonus_balance);
-    const winning = cleanNumber(data.winning_balance);
-
-    const total = Number(
-      (deposit + bonus + winning).toFixed(2)
-    );
-
-    console.log("WALLET RESULT:", {
-      userId,
-      deposit,
-      bonus,
-      winning,
-      total
-    });
-
-    return res.status(200).json({
-      success: true,
-
-      wallet: {
-        user_id: data.user_id || userId,
-
-        deposit_balance: deposit,
-        bonus_balance: bonus,
-        winning_balance: winning,
-
-        total_balance: total,
-
-        created_at: data.created_at || null,
-        updated_at: data.updated_at || null
-      }
-    });
-
-  } catch (error) {
-    console.error("WALLET EXCEPTION:", {
-      message: error?.message,
-      stack: error?.stack
-    });
-
-    return res.status(500).json({
-      success: false,
-      error: error?.message || "Internal server error."
-    });
-  }
-});
-
 
 // ============================================================
-// GET WALLET TRANSACTIONS
-//
-// First 30:
-// GET /api/wallet/:userId/transactions
-//
-// Next 30:
-// GET /api/wallet/:userId/transactions?page=2
-//
-// Or explicitly:
-// GET /api/wallet/:userId/transactions?page=1&pageSize=30
-//
-// MAX PAGE SIZE = 30
+// WITHDRAW SCREEN
 // ============================================================
-router.get("/:userId/transactions", async (req, res) => {
-  try {
-    const userId = String(req.params.userId || "").trim();
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID is required."
-      });
+@Composable
+fun WithdrawScreen(
+    userId: String,
+    onBack: () -> Unit
+) {
+
+    // ========================================================
+    // STATES
+    // ========================================================
+
+    var amountText by remember {
+        mutableStateOf("")
     }
 
-    // ----------------------------------------------------------
-    // Pagination
-    // ----------------------------------------------------------
-
-    let page = Number.parseInt(
-      String(req.query.page || "1"),
-      10
-    );
-
-    let pageSize = Number.parseInt(
-      String(req.query.pageSize || "30"),
-      10
-    );
-
-    if (!Number.isFinite(page) || page < 1) {
-      page = 1;
+    var upiId by remember {
+        mutableStateOf("")
     }
 
-    if (!Number.isFinite(pageSize) || pageSize < 1) {
-      pageSize = 30;
+    var loading by remember {
+        mutableStateOf(false)
     }
 
-    // Never allow more than 30 transactions per request
-    pageSize = Math.min(pageSize, 30);
-
-    const offset = (page - 1) * pageSize;
-
-    console.log("WALLET TRANSACTIONS REQUEST:", {
-      userId,
-      page,
-      pageSize,
-      offset
-    });
-
-    // ----------------------------------------------------------
-    // Fetch ONE EXTRA transaction
-    // ----------------------------------------------------------
-
-    const fetchLimit = pageSize + 1;
-
-    const { data, error } = await supabase
-      .from("wallet_transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false
-      })
-      .range(
-        offset,
-        offset + fetchLimit - 1
-      );
-
-    if (error) {
-      console.error("WALLET TRANSACTIONS ERROR:", {
-        userId,
-        page,
-        pageSize,
-        offset,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
-
-      return res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          "Unable to load transactions."
-      });
+    var message by remember {
+        mutableStateOf("")
     }
 
-    const rows = Array.isArray(data)
-      ? data
-      : [];
-
-    // ----------------------------------------------------------
-    // Check whether another page exists
-    // ----------------------------------------------------------
-
-    const hasMore = rows.length > pageSize;
-
-    const pageRows = rows.slice(
-      0,
-      pageSize
-    );
-
-    // ----------------------------------------------------------
-    // Convert database rows to Android response format
-    // ----------------------------------------------------------
-
-    const transactions = pageRows.map((item) => {
-      const type = String(
-        item.type ||
-        item.transaction_type ||
-        "WALLET"
-      ).trim();
-
-      const title = String(
-        item.title ||
-        item.description ||
-        item.transaction_type ||
-        item.type ||
-        "Wallet Transaction"
-      ).trim();
-
-      const description = String(
-        item.description ||
-        title ||
-        "Wallet Transaction"
-      ).trim();
-
-      const amount = cleanNumber(
-        item.amount
-      );
-
-      const status = String(
-        item.status ||
-        "COMPLETED"
-      )
-        .trim()
-        .toUpperCase();
-
-      const referenceId =
-        item.reference_id ||
-        item.order_id ||
-        item.orderId ||
-        null;
-
-      const transactionId =
-        item.id ||
-        referenceId ||
-        `${userId}-${item.created_at || Date.now()}`;
-
-      return {
-        id: String(transactionId),
-
-        user_id: userId,
-
-        type,
-
-        title,
-
-        description,
-
-        amount,
-
-        status,
-
-        reference_id: referenceId,
-
-        orderId:
-          item.order_id ||
-          item.orderId ||
-          referenceId ||
-          null,
-
-        utr:
-          item.utr ||
-          null,
-
-        bonusPercent:
-          cleanNumber(
-            item.bonus_percent
-          ),
-
-        bonusAmount:
-          cleanNumber(
-            item.bonus_amount
-          ),
-
-        createdAt:
-          item.created_at ||
-          null,
-
-        paidAt:
-          item.paid_at ||
-          null,
-
-        processedAt:
-          item.processed_at ||
-          null,
-
-        created_at:
-          item.created_at ||
-          null
-      };
-    });
-
-    console.log(
-      "WALLET TRANSACTIONS RESULT:",
-      {
-        userId,
-        page,
-        pageSize,
-        offset,
-        count: transactions.length,
-        hasMore
-      }
-    );
-
-    // ----------------------------------------------------------
-    // Final response
-    // ----------------------------------------------------------
-
-    return res.status(200).json({
-      success: true,
-
-      transactions,
-
-      pagination: {
-        page,
-        pageSize,
-        count: transactions.length,
-        hasMore,
-        nextPage: hasMore
-          ? page + 1
-          : null
-      }
-    });
-
-  } catch (error) {
-    console.error(
-      "WALLET TRANSACTIONS EXCEPTION:",
-      {
-        message: error?.message,
-        stack: error?.stack
-      }
-    );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error?.message ||
-        "Internal server error."
-    });
-  }
-});
-
-
-// ============================================================
-// CREATE WITHDRAWAL REQUEST
-//
-// POST /api/wallet/withdraw
-//
-// Body:
-// {
-//   "userId": "USER_UUID",
-//   "amount": 100,
-//   "upiId": "user@upi"
-// }
-//
-// Uses existing Supabase RPC:
-// create_withdrawal_request
-//
-// The existing RPC handles:
-// - Minimum ₹50
-// - Winning balance check
-// - Pending withdrawal check
-// - ₹5 / ₹10 service charge
-// - Winning balance deduction
-// - withdraw_requests insertion
-// - wallet_transactions insertion
-// ============================================================
-router.post("/withdraw", async (req, res) => {
-  try {
-    const userId = String(
-      req.body?.userId || ""
-    ).trim();
-
-    const upiId = String(
-      req.body?.upiId || ""
-    ).trim();
-
-    const amount = Number(
-      req.body?.amount
-    );
-
-    // ----------------------------------------------------------
-    // USER ID VALIDATION
-    // ----------------------------------------------------------
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "User ID is required."
-      });
+    var error by remember {
+        mutableStateOf("")
     }
 
-    // ----------------------------------------------------------
-    // AMOUNT VALIDATION
-    // ----------------------------------------------------------
+    val scope =
+        rememberCoroutineScope()
 
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0
+
+    // ========================================================
+    // MAIN SCREEN
+    // ========================================================
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BG)
     ) {
-      return res.status(400).json({
-        success: false,
-        error: "Valid withdrawal amount is required."
-      });
-    }
 
-    // ----------------------------------------------------------
-    // UPI VALIDATION
-    // ----------------------------------------------------------
 
-    if (!upiId) {
-      return res.status(400).json({
-        success: false,
-        error: "UPI ID is required."
-      });
-    }
+        // ====================================================
+        // HEADER
+        // ====================================================
 
-    console.log(
-      "WITHDRAWAL REQUEST:",
-      {
-        userId,
-        amount,
-        upiId
-      }
-    );
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(RED)
+                .padding(
+                    horizontal = 18.dp,
+                    vertical = 18.dp
+                )
+        ) {
 
-    // ----------------------------------------------------------
-    // CALL EXISTING SUPABASE RPC
-    // ----------------------------------------------------------
+            Column {
 
-    const { data, error } =
-      await supabase.rpc(
-        "create_withdrawal_request",
-        {
-          p_user_id: userId,
-          p_amount: amount,
-          p_upi_id: upiId
+                // --------------------------------------------
+                // BACK
+                // --------------------------------------------
+
+                TextButton(
+                    onClick = {
+
+                        if (!loading) {
+                            onBack()
+                        }
+
+                    }
+                ) {
+
+                    Text(
+                        text = "‹  Back",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+
+                // --------------------------------------------
+                // TITLE
+                // --------------------------------------------
+
+                Text(
+                    text = "Withdraw",
+                    color = Color.White,
+                    fontSize = 27.sp,
+                    fontWeight = FontWeight.Black
+                )
+
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
+
+
+                // --------------------------------------------
+                // SUBTITLE
+                // --------------------------------------------
+
+                Text(
+                    text = "Withdraw your winning balance",
+                    color = Color.White.copy(.85f),
+                    fontSize = 12.sp
+                )
+            }
         }
-      );
 
-    // ----------------------------------------------------------
-    // SUPABASE RPC ERROR
-    // ----------------------------------------------------------
 
-    if (error) {
-      console.error(
-        "WITHDRAWAL RPC ERROR:",
-        {
-          userId,
-          amount,
-          upiId,
+        // ====================================================
+        // CONTENT
+        // ====================================================
 
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(
+                    rememberScrollState()
+                )
+                .padding(18.dp)
+        ) {
+
+
+            // =================================================
+            // AMOUNT TITLE
+            // =================================================
+
+            Text(
+                text = "Withdrawal Amount",
+                color = Color(0xFF374151),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+
+            // =================================================
+            // AMOUNT FIELD
+            // =================================================
+
+            OutlinedTextField(
+                value = amountText,
+
+                onValueChange = {
+
+                    if (
+                        it.isEmpty() ||
+                        it.matches(
+                            Regex(
+                                "^\\d{0,8}(\\.\\d{0,2})?$"
+                            )
+                        )
+                    ) {
+
+                        amountText = it
+
+                        error = ""
+
+                        message = ""
+                    }
+                },
+
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                singleLine = true,
+
+                label = {
+                    Text("Amount")
+                },
+
+                leadingIcon = {
+
+                    Text(
+                        text = "₹",
+                        color = RED,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType =
+                            KeyboardType.Decimal
+                    ),
+
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RED,
+                        unfocusedBorderColor =
+                            Color(0xFFE5E7EB)
+                    )
+            )
+
+
+            Spacer(
+                modifier = Modifier.height(18.dp)
+            )
+
+
+            // =================================================
+            // UPI TITLE
+            // =================================================
+
+            Text(
+                text = "UPI ID",
+                color = Color(0xFF374151),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
+
+
+            // =================================================
+            // UPI FIELD
+            // =================================================
+
+            OutlinedTextField(
+                value = upiId,
+
+                onValueChange = {
+
+                    upiId = it
+
+                    error = ""
+
+                    message = ""
+                },
+
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                singleLine = true,
+
+                label = {
+                    Text("example@upi")
+                },
+
+                keyboardOptions =
+                    KeyboardOptions(
+                        keyboardType =
+                            KeyboardType.Ascii
+                    ),
+
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RED,
+                        unfocusedBorderColor =
+                            Color(0xFFE5E7EB)
+                    )
+            )
+
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+
+            // =================================================
+            // MINIMUM INFO
+            // =================================================
+
+            Text(
+                text = "Minimum withdrawal: ₹50",
+                color = Color(0xFF6B7280),
+                fontSize = 12.sp
+            )
+
+
+            Spacer(
+                modifier = Modifier.height(18.dp)
+            )
+
+
+            // =================================================
+            // ERROR
+            // =================================================
+
+            if (error.isNotBlank()) {
+
+                Text(
+                    text = error,
+                    color = Color(0xFFDC2626),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+            }
+
+
+            // =================================================
+            // SUCCESS MESSAGE
+            // =================================================
+
+            if (message.isNotBlank()) {
+
+                Text(
+                    text = message,
+                    color = Color(0xFF15803D),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+            }
+
+
+            // =================================================
+            // WITHDRAW BUTTON
+            // =================================================
+
+            Button(
+
+                onClick = {
+
+                    // -----------------------------------------
+                    // PARSE AMOUNT
+                    // -----------------------------------------
+
+                    val amount =
+                        amountText.toDoubleOrNull()
+
+
+                    if (amount == null) {
+
+                        error =
+                            "Enter a valid amount."
+
+                        return@Button
+                    }
+
+
+                    // -----------------------------------------
+                    // MINIMUM AMOUNT
+                    // -----------------------------------------
+
+                    if (amount < 50.0) {
+
+                        error =
+                            "Minimum withdrawal amount is ₹50."
+
+                        return@Button
+                    }
+
+
+                    // -----------------------------------------
+                    // UPI REQUIRED
+                    // -----------------------------------------
+
+                    if (upiId.isBlank()) {
+
+                        error =
+                            "UPI ID is required."
+
+                        return@Button
+                    }
+
+
+                    // -----------------------------------------
+                    // USER SESSION
+                    // -----------------------------------------
+
+                    if (userId.isBlank()) {
+
+                        error =
+                            "User session not found."
+
+                        return@Button
+                    }
+
+
+                    // -----------------------------------------
+                    // START LOADING
+                    // -----------------------------------------
+
+                    loading = true
+
+                    error = ""
+
+                    message = ""
+
+
+                    // -----------------------------------------
+                    // API CALL
+                    // -----------------------------------------
+
+                    scope.launch {
+
+                        val result =
+                            WithdrawApi.createWithdrawal(
+
+                                userId =
+                                    userId,
+
+                                amount =
+                                    amount,
+
+                                upiId =
+                                    upiId
+                            )
+
+
+                        // -------------------------------------
+                        // STOP LOADING
+                        // -------------------------------------
+
+                        loading = false
+
+
+                        // -------------------------------------
+                        // SUCCESS
+                        // -------------------------------------
+
+                        if (result.success) {
+
+                            amountText = ""
+
+                            upiId = ""
+
+                            message =
+                                result.message.ifBlank {
+
+                                    "Withdrawal request submitted successfully."
+                                }
+
+                        } else {
+
+                            // ---------------------------------
+                            // ERROR
+                            // ---------------------------------
+
+                            error =
+                                result.error.ifBlank {
+
+                                    "Withdrawal request failed."
+                                }
+                        }
+                    }
+                },
+
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+
+                enabled =
+                    !loading,
+
+                shape =
+                    RoundedCornerShape(16.dp),
+
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = RED
+                    )
+
+            ) {
+
+                // =================================================
+                // LOADING
+                // =================================================
+
+                if (loading) {
+
+                    CircularProgressIndicator(
+                        modifier =
+                            Modifier.size(22.dp),
+
+                        color =
+                            Color.White,
+
+                        strokeWidth =
+                            2.5.dp
+                    )
+
+
+                    Spacer(
+                        modifier =
+                            Modifier.width(10.dp)
+                    )
+
+
+                    Text(
+                        text = "Submitting..."
+                    )
+
+                } else {
+
+                    // =============================================
+                    // NORMAL BUTTON
+                    // =============================================
+
+                    Text(
+                        text = "Request Withdrawal",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          "Unable to process withdrawal."
-      });
     }
-
-    console.log(
-      "WITHDRAWAL RPC RESULT:",
-      data
-    );
-
-    // ----------------------------------------------------------
-    // RPC RETURNED FAILURE
-    // ----------------------------------------------------------
-
-    if (
-      !data ||
-      data.success !== true
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          data?.error ||
-          data?.message ||
-          "Unable to create withdrawal request."
-      });
-    }
-
-    // ----------------------------------------------------------
-    // SUCCESS
-    // ----------------------------------------------------------
-
-    return res.status(200).json({
-      success: true,
-
-      message:
-        data.message ||
-        "Withdrawal request submitted successfully.",
-
-      withdrawal_id:
-        data.withdrawal_id ||
-        null,
-
-      amount:
-        cleanNumber(
-          data.amount,
-          amount
-        ),
-
-      service_charge:
-        cleanNumber(
-          data.service_charge
-        ),
-
-      net_amount:
-        cleanNumber(
-          data.net_amount
-        )
-    });
-
-  } catch (error) {
-    console.error(
-      "WITHDRAWAL EXCEPTION:",
-      {
-        message: error?.message,
-        stack: error?.stack
-      }
-    );
-
-    return res.status(500).json({
-      success: false,
-      error:
-        error?.message ||
-        "Internal server error."
-    });
-  }
-});
-
-
-// ============================================================
-// EXPORT ROUTER
-// ============================================================
-module.exports = router;
+}
