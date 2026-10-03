@@ -1,9 +1,10 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import AdminShell from "../AdminShell";
 import { supabase } from "../../../lib/supabase";
+
+const API_URL = "/api/admin/withdrawals";
 
 export default function Page() {
   const [withdrawals, setWithdrawals] = useState([]);
@@ -12,84 +13,135 @@ export default function Page() {
   const [processing, setProcessing] = useState(null);
   const [error, setError] = useState("");
 
-  async function getToken() {
-    const { data, error } = await supabase.auth.getSession();
+  // --------------------------------------------------
+  // AUTH
+  // --------------------------------------------------
 
-    if (error) {
-      console.error("SESSION ERROR:", error);
-      return "";
+  async function getAuthHeaders() {
+    const headers = {
+      Accept: "application/json",
+    };
+
+    try {
+      const { data } = await supabase.auth.getSession();
+
+      const token = data?.session?.access_token;
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (err) {
+      console.error("SUPABASE SESSION ERROR:", err);
     }
 
-    return data?.session?.access_token || "";
+    return headers;
   }
 
-  async function loadWithdrawals() {
+  // --------------------------------------------------
+  // LOAD WITHDRAWALS
+  // --------------------------------------------------
+
+  const loadWithdrawals = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const token = await getToken();
-
-      if (!token) {
-        window.location.href = "/admin/login";
-        return;
-      }
+      const headers = await getAuthHeaders();
 
       const response = await fetch(
-        `/api/admin/withdrawals?status=${encodeURIComponent(status)}`,
+        `${API_URL}?status=${encodeURIComponent(status)}`,
         {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
+          headers,
+          credentials: "include",
           cache: "no-store",
         }
       );
 
-      const data = await response.json();
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      console.log("WITHDRAWALS RESPONSE:", response.status, data);
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            data?.error ||
+              "Admin session expired. Please login again."
+          );
+        }
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.error ||
+              "You do not have admin permission."
+          );
+        }
+
         throw new Error(
-          data?.error || "Unable to load withdrawals."
+          data?.error ||
+            data?.message ||
+            `Unable to load withdrawals (${response.status}).`
         );
       }
 
-      setWithdrawals(
-        Array.isArray(data?.withdrawals)
-          ? data.withdrawals
-          : []
-      );
+      const list = Array.isArray(data?.withdrawals)
+        ? data.withdrawals
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      setWithdrawals(list);
     } catch (err) {
       console.error("WITHDRAWALS LOAD ERROR:", err);
-      setError(
-        err?.message || "Unable to load withdrawals."
-      );
+
       setWithdrawals([]);
+
+      setError(
+        err?.message ||
+          "Unable to load withdrawals."
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, [status]);
 
   useEffect(() => {
     loadWithdrawals();
-  }, [status]);
+  }, [loadWithdrawals]);
+
+  // --------------------------------------------------
+  // PROCESS WITHDRAWAL
+  // --------------------------------------------------
 
   async function processWithdrawal(withdrawal, action) {
-    if (processing) return;
+    if (!withdrawal?.id || processing) {
+      return;
+    }
 
     let note = "";
 
     if (action === "approve") {
-      const confirmed = window.confirm(
-        `Approve withdrawal of ₹${Number(
-          withdrawal.net_amount ??
-            withdrawal.amount ??
-            0
-        ).toFixed(2)} to ${withdrawal.upi_id}?`
+      const amount = Number(
+        withdrawal.net_amount ??
+          withdrawal.amount ??
+          0
       );
 
-      if (!confirmed) return;
+      const confirmed = window.confirm(
+        `Approve withdrawal of ₹${amount.toFixed(
+          2
+        )} to ${withdrawal.upi_id || "this UPI ID"}?`
+      );
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     if (action === "reject") {
@@ -97,53 +149,77 @@ export default function Page() {
         "Enter rejection reason:"
       );
 
-      if (enteredNote === null) return;
+      if (enteredNote === null) {
+        return;
+      }
 
       note = enteredNote.trim();
 
       if (!note) {
-        alert("Please enter a rejection reason.");
+        window.alert(
+          "Please enter a rejection reason."
+        );
         return;
       }
     }
 
     try {
       setProcessing(withdrawal.id);
+      setError("");
 
-      const token = await getToken();
+      const headers = await getAuthHeaders();
 
-      if (!token) {
-        window.location.href = "/admin/login";
-        return;
+      headers["Content-Type"] = "application/json";
+
+      const response = await fetch(API_URL, {
+        method: "PATCH",
+        headers,
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({
+          withdrawalId: withdrawal.id,
+          action,
+          note,
+        }),
+      });
+
+      let data = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
       }
 
-      const response = await fetch(
-        "/api/admin/withdrawals",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            withdrawalId: withdrawal.id,
-            action,
-            note,
-          }),
-        }
+      console.log(
+        "WITHDRAWAL PROCESS RESPONSE:",
+        response.status,
+        data
       );
 
-      const data = await response.json();
-
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            data?.error ||
+              "Admin session expired. Please login again."
+          );
+        }
+
+        if (response.status === 403) {
+          throw new Error(
+            data?.error ||
+              "You do not have admin permission."
+          );
+        }
+
         throw new Error(
           data?.error ||
+            data?.message ||
             "Unable to process withdrawal."
         );
       }
 
-      alert(
+      window.alert(
         action === "approve"
           ? "Withdrawal approved successfully ✅"
           : "Withdrawal rejected successfully ✅"
@@ -156,7 +232,7 @@ export default function Page() {
         err
       );
 
-      alert(
+      window.alert(
         err?.message ||
           "Something went wrong."
       );
@@ -165,12 +241,24 @@ export default function Page() {
     }
   }
 
+  // --------------------------------------------------
+  // HELPERS
+  // --------------------------------------------------
+
   function money(value) {
-    return `₹${Number(value || 0).toFixed(2)}`;
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return "₹0.00";
+    }
+
+    return `₹${number.toFixed(2)}`;
   }
 
   function formatDate(value) {
-    if (!value) return "-";
+    if (!value) {
+      return "-";
+    }
 
     const date = new Date(value);
 
@@ -187,24 +275,36 @@ export default function Page() {
     });
   }
 
-  function statusStyle(value) {
-    const s = String(value || "").toLowerCase();
+  function getUser(withdrawal) {
+    const user = withdrawal?.users;
 
-    if (s === "pending") {
+    if (Array.isArray(user)) {
+      return user[0] || {};
+    }
+
+    return user || {};
+  }
+
+  function statusStyle(value) {
+    const current = String(
+      value || ""
+    ).toLowerCase();
+
+    if (current === "pending") {
       return {
         background: "#fff7ed",
         color: "#c2410c",
       };
     }
 
-    if (s === "approved") {
+    if (current === "approved") {
       return {
         background: "#ecfdf5",
         color: "#047857",
       };
     }
 
-    if (s === "rejected") {
+    if (current === "rejected") {
       return {
         background: "#fef2f2",
         color: "#dc2626",
@@ -217,6 +317,10 @@ export default function Page() {
     };
   }
 
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
+
   return (
     <AdminShell title="Withdrawals">
       <div
@@ -224,8 +328,11 @@ export default function Page() {
           padding: "20px",
           maxWidth: "1400px",
           margin: "0 auto",
+          width: "100%",
+          boxSizing: "border-box",
         }}
       >
+        {/* HEADER */}
         <div
           style={{
             display: "flex",
@@ -242,6 +349,7 @@ export default function Page() {
                 margin: 0,
                 fontSize: "28px",
                 fontWeight: 800,
+                color: "#111827",
               }}
             >
               💸 Withdrawals
@@ -260,19 +368,25 @@ export default function Page() {
           <button
             type="button"
             onClick={loadWithdrawals}
+            disabled={loading}
             style={{
               border: "1px solid #e5e7eb",
               background: "#fff",
+              color: "#111827",
               borderRadius: "10px",
               padding: "10px 16px",
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: loading
+                ? "not-allowed"
+                : "pointer",
+              opacity: loading ? 0.6 : 1,
             }}
           >
             🔄 Refresh
           </button>
         </div>
 
+        {/* TABS */}
         <div
           style={{
             display: "flex",
@@ -316,6 +430,7 @@ export default function Page() {
           })}
         </div>
 
+        {/* ERROR */}
         {error && (
           <div
             style={{
@@ -328,43 +443,86 @@ export default function Page() {
               fontWeight: 600,
             }}
           >
-            {error}
+            <div>{error}</div>
+
+            <button
+              type="button"
+              onClick={loadWithdrawals}
+              style={{
+                marginTop: "10px",
+                border: "1px solid #fecaca",
+                background: "#fff",
+                color: "#b91c1c",
+                borderRadius: "8px",
+                padding: "7px 12px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Try Again
+            </button>
           </div>
         )}
 
+        {/* LOADING */}
         {loading ? (
           <div
             style={{
               background: "#fff",
               borderRadius: "16px",
-              padding: "60px 20px",
+              padding: "70px 20px",
               textAlign: "center",
               border: "1px solid #e5e7eb",
+              boxShadow:
+                "0 2px 8px rgba(0,0,0,0.04)",
             }}
           >
-            <div style={{ fontSize: "30px" }}>
+            <div
+              style={{
+                fontSize: "32px",
+                marginBottom: "10px",
+              }}
+            >
               ⏳
             </div>
 
-            <p style={{ color: "#6b7280" }}>
+            <p
+              style={{
+                color: "#6b7280",
+                margin: 0,
+              }}
+            >
               Loading withdrawals...
             </p>
           </div>
         ) : withdrawals.length === 0 ? (
+          /* EMPTY */
           <div
             style={{
               background: "#fff",
               borderRadius: "16px",
-              padding: "60px 20px",
+              padding: "70px 20px",
               textAlign: "center",
               border: "1px solid #e5e7eb",
+              boxShadow:
+                "0 2px 8px rgba(0,0,0,0.04)",
             }}
           >
-            <div style={{ fontSize: "50px" }}>
+            <div
+              style={{
+                fontSize: "52px",
+                marginBottom: "8px",
+              }}
+            >
               💸
             </div>
 
-            <h2 style={{ margin: "12px 0 6px" }}>
+            <h2
+              style={{
+                margin: "10px 0 6px",
+                color: "#111827",
+              }}
+            >
               No{" "}
               {status === "all"
                 ? ""
@@ -372,11 +530,17 @@ export default function Page() {
               withdrawals
             </h2>
 
-            <p style={{ color: "#6b7280" }}>
+            <p
+              style={{
+                color: "#6b7280",
+                margin: 0,
+              }}
+            >
               Withdrawal requests will appear here.
             </p>
           </div>
         ) : (
+          /* TABLE */
           <div
             style={{
               background: "#fff",
@@ -409,7 +573,9 @@ export default function Page() {
                   <th style={th}>UPI ID</th>
                   <th style={th}>Amount</th>
                   <th style={th}>Charge</th>
-                  <th style={th}>Net Amount</th>
+                  <th style={th}>
+                    Net Amount
+                  </th>
                   <th style={th}>Status</th>
                   <th style={th}>Date</th>
                   <th style={th}>Action</th>
@@ -418,11 +584,23 @@ export default function Page() {
 
               <tbody>
                 {withdrawals.map((withdrawal) => {
+                  const user =
+                    getUser(withdrawal);
+
                   const isProcessing =
                     processing === withdrawal.id;
 
                   const badge = statusStyle(
                     withdrawal.status
+                  );
+
+                  const amount = Number(
+                    withdrawal.amount || 0
+                  );
+
+                  const netAmount = Number(
+                    withdrawal.net_amount ??
+                      amount
                   );
 
                   return (
@@ -433,14 +611,16 @@ export default function Page() {
                           "1px solid #f0f0f0",
                       }}
                     >
+                      {/* USER */}
                       <td style={td}>
                         <div
                           style={{
                             fontWeight: 700,
+                            color: "#111827",
                           }}
                         >
-                          {withdrawal.users
-                            ?.game_name ||
+                          {user?.game_name ||
+                            user?.email ||
                             "User"}
                         </div>
 
@@ -449,15 +629,16 @@ export default function Page() {
                             fontSize: "12px",
                             color: "#6b7280",
                             marginTop: "3px",
+                            wordBreak:
+                              "break-all",
                           }}
                         >
-                          {withdrawal.users
-                            ?.email ||
-                            withdrawal.user_id}
+                          {user?.email ||
+                            withdrawal.user_id ||
+                            "-"}
                         </div>
 
-                        {withdrawal.users
-                          ?.free_fire_uid && (
+                        {user?.free_fire_uid && (
                           <div
                             style={{
                               fontSize: "12px",
@@ -466,15 +647,12 @@ export default function Page() {
                             }}
                           >
                             UID:{" "}
-                            {
-                              withdrawal
-                                .users
-                                .free_fire_uid
-                            }
+                            {user.free_fire_uid}
                           </div>
                         )}
                       </td>
 
+                      {/* ACCOUNT HOLDER */}
                       <td style={td}>
                         <strong>
                           {withdrawal.account_holder_name ||
@@ -482,12 +660,14 @@ export default function Page() {
                         </strong>
                       </td>
 
+                      {/* UPI */}
                       <td style={td}>
                         <span
                           style={{
                             fontFamily:
                               "monospace",
                             fontWeight: 600,
+                            color: "#111827",
                           }}
                         >
                           {withdrawal.upi_id ||
@@ -495,6 +675,7 @@ export default function Page() {
                         </span>
                       </td>
 
+                      {/* AMOUNT */}
                       <td style={td}>
                         <strong>
                           {money(
@@ -503,25 +684,25 @@ export default function Page() {
                         </strong>
                       </td>
 
+                      {/* CHARGE */}
                       <td style={td}>
                         {money(
                           withdrawal.service_charge
                         )}
                       </td>
 
+                      {/* NET */}
                       <td style={td}>
                         <strong
                           style={{
                             color: "#047857",
                           }}
                         >
-                          {money(
-                            withdrawal.net_amount ??
-                              withdrawal.amount
-                          )}
+                          {money(netAmount)}
                         </strong>
                       </td>
 
+                      {/* STATUS */}
                       <td style={td}>
                         <span
                           style={{
@@ -537,12 +718,16 @@ export default function Page() {
                             fontWeight: 800,
                             textTransform:
                               "uppercase",
+                            whiteSpace:
+                              "nowrap",
                           }}
                         >
-                          {withdrawal.status}
+                          {withdrawal.status ||
+                            "unknown"}
                         </span>
                       </td>
 
+                      {/* DATE */}
                       <td
                         style={{
                           ...td,
@@ -556,13 +741,18 @@ export default function Page() {
                         )}
                       </td>
 
+                      {/* ACTION */}
                       <td style={td}>
-                        {withdrawal.status ===
+                        {String(
+                          withdrawal.status
+                        ).toLowerCase() ===
                         "pending" ? (
                           <div
                             style={{
                               display: "flex",
                               gap: "7px",
+                              alignItems:
+                                "center",
                             }}
                           >
                             <button
@@ -594,6 +784,8 @@ export default function Page() {
                                   isProcessing
                                     ? 0.6
                                     : 1,
+                                whiteSpace:
+                                  "nowrap",
                               }}
                             >
                               {isProcessing
@@ -630,6 +822,8 @@ export default function Page() {
                                   isProcessing
                                     ? 0.6
                                     : 1,
+                                whiteSpace:
+                                  "nowrap",
                               }}
                             >
                               {isProcessing
@@ -660,6 +854,10 @@ export default function Page() {
   );
 }
 
+// --------------------------------------------------
+// TABLE STYLES
+// --------------------------------------------------
+
 const th = {
   padding: "14px 12px",
   textAlign: "left",
@@ -674,4 +872,3 @@ const td = {
   padding: "15px 12px",
   verticalAlign: "middle",
 };
-EOF
