@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,7 +16,7 @@ export default function Page() {
     const { data, error } = await supabase.auth.getSession();
 
     if (error) {
-      console.error("SUPABASE SESSION ERROR:", error);
+      console.error("SESSION ERROR:", error);
       return "";
     }
 
@@ -225,7 +226,6 @@ export default function Page() {
           margin: "0 auto",
         }}
       >
-        {/* HEADER */}
         <div
           style={{
             display: "flex",
@@ -258,8 +258,8 @@ export default function Page() {
           </div>
 
           <button
-            onClick={loadWithdrawals}
             type="button"
+            onClick={loadWithdrawals}
             style={{
               border: "1px solid #e5e7eb",
               background: "#fff",
@@ -273,7 +273,6 @@ export default function Page() {
           </button>
         </div>
 
-        {/* TABS */}
         <div
           style={{
             display: "flex",
@@ -317,7 +316,6 @@ export default function Page() {
           })}
         </div>
 
-        {/* ERROR */}
         {error && (
           <div
             style={{
@@ -334,7 +332,6 @@ export default function Page() {
           </div>
         )}
 
-        {/* LOADING */}
         {loading ? (
           <div
             style={{
@@ -345,26 +342,15 @@ export default function Page() {
               border: "1px solid #e5e7eb",
             }}
           >
-            <div
-              style={{
-                fontSize: "30px",
-                marginBottom: "10px",
-              }}
-            >
+            <div style={{ fontSize: "30px" }}>
               ⏳
             </div>
 
-            <p
-              style={{
-                color: "#6b7280",
-                margin: 0,
-              }}
-            >
+            <p style={{ color: "#6b7280" }}>
               Loading withdrawals...
             </p>
           </div>
         ) : withdrawals.length === 0 ? (
-          /* EMPTY */
           <div
             style={{
               background: "#fff",
@@ -374,19 +360,11 @@ export default function Page() {
               border: "1px solid #e5e7eb",
             }}
           >
-            <div
-              style={{
-                fontSize: "50px",
-              }}
-            >
+            <div style={{ fontSize: "50px" }}>
               💸
             </div>
 
-            <h2
-              style={{
-                margin: "12px 0 6px",
-              }}
-            >
+            <h2 style={{ margin: "12px 0 6px" }}>
               No{" "}
               {status === "all"
                 ? ""
@@ -394,17 +372,11 @@ export default function Page() {
               withdrawals
             </h2>
 
-            <p
-              style={{
-                color: "#6b7280",
-                margin: 0,
-              }}
-            >
+            <p style={{ color: "#6b7280" }}>
               Withdrawal requests will appear here.
             </p>
           </div>
         ) : (
-          /* TABLE */
           <div
             style={{
               background: "#fff",
@@ -431,7 +403,9 @@ export default function Page() {
                   }}
                 >
                   <th style={th}>User</th>
-                  <th style={th}>Account Holder</th>
+                  <th style={th}>
+                    Account Holder
+                  </th>
                   <th style={th}>UPI ID</th>
                   <th style={th}>Amount</th>
                   <th style={th}>Charge</th>
@@ -459,7 +433,6 @@ export default function Page() {
                           "1px solid #f0f0f0",
                       }}
                     >
-                      {/* USER */}
                       <td style={td}>
                         <div
                           style={{
@@ -502,7 +475,6 @@ export default function Page() {
                         )}
                       </td>
 
-                      {/* ACCOUNT HOLDER */}
                       <td style={td}>
                         <strong>
                           {withdrawal.account_holder_name ||
@@ -510,7 +482,6 @@ export default function Page() {
                         </strong>
                       </td>
 
-                      {/* UPI */}
                       <td style={td}>
                         <span
                           style={{
@@ -524,7 +495,6 @@ export default function Page() {
                         </span>
                       </td>
 
-                      {/* AMOUNT */}
                       <td style={td}>
                         <strong>
                           {money(
@@ -533,14 +503,12 @@ export default function Page() {
                         </strong>
                       </td>
 
-                      {/* SERVICE CHARGE */}
                       <td style={td}>
                         {money(
                           withdrawal.service_charge
                         )}
                       </td>
 
-                      {/* NET */}
                       <td style={td}>
                         <strong
                           style={{
@@ -554,7 +522,6 @@ export default function Page() {
                         </strong>
                       </td>
 
-                      {/* STATUS */}
                       <td style={td}>
                         <span
                           style={{
@@ -576,7 +543,6 @@ export default function Page() {
                         </span>
                       </td>
 
-                      {/* DATE */}
                       <td
                         style={{
                           ...td,
@@ -590,7 +556,6 @@ export default function Page() {
                         )}
                       </td>
 
-                      {/* ACTION */}
                       <td style={td}>
                         {withdrawal.status ===
                         "pending" ? (
@@ -709,3 +674,4 @@ const td = {
   padding: "15px 12px",
   verticalAlign: "middle",
 };
+EOF
