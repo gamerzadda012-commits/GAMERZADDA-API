@@ -150,6 +150,43 @@ router.post("/create", async (req, res) => {
         }
 
         // ==============================================
+        // SAVE PENDING WALLET TRANSACTION
+        // ==============================================
+        // This creates the history entry immediately.
+        // It will be updated on payment result.
+        const {
+            error: pendingTransactionError
+        } = await supabase
+            .from("wallet_transactions")
+            .insert({
+                user_id: userId,
+                amount: depositAmount,
+                type: "deposit",
+                description: "Add Money",
+                status: "PENDING",
+                reference_id: orderId
+            });
+
+        if (pendingTransactionError) {
+            console.error(
+                "PENDING TRANSACTION INSERT ERROR:",
+                pendingTransactionError
+            );
+
+            // Do not leave a deposit order without its history row.
+            await supabase
+                .from("deposit_orders")
+                .delete()
+                .eq("order_id", orderId);
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    "Unable to create wallet transaction"
+            });
+        }
+
+        // ==============================================
         // PAY0 CREATE ORDER
         // ==============================================
 
@@ -247,6 +284,15 @@ router.post("/create", async (req, res) => {
                     orderId
                 );
 
+            await supabase
+                .from("wallet_transactions")
+                .update({
+                    status: "FAILED",
+                    description: "Add Money - Payment setup failed"
+                })
+                .eq("reference_id", orderId)
+                .eq("status", "PENDING");
+
             return res.status(502).json({
                 success: false,
                 error:
@@ -272,6 +318,15 @@ router.post("/create", async (req, res) => {
                     "order_id",
                     orderId
                 );
+
+            await supabase
+                .from("wallet_transactions")
+                .update({
+                    status: "FAILED",
+                    description: "Add Money - Payment setup failed"
+                })
+                .eq("reference_id", orderId)
+                .eq("status", "PENDING");
 
             return res.status(502).json({
                 success: false,
@@ -303,6 +358,15 @@ router.post("/create", async (req, res) => {
                     "order_id",
                     orderId
                 );
+
+            await supabase
+                .from("wallet_transactions")
+                .update({
+                    status: "FAILED",
+                    description: "Add Money - Payment setup failed"
+                })
+                .eq("reference_id", orderId)
+                .eq("status", "PENDING");
 
             return res.status(502).json({
                 success: false,
@@ -518,6 +582,49 @@ router.post("/status", async (req, res) => {
         if (
             txnStatus !== "SUCCESS"
         ) {
+            const historyStatus =
+                txnStatus === "CANCELLED" ||
+                txnStatus === "CANCELED"
+                    ? "CANCELLED"
+                    : txnStatus === "FAILED" ||
+                      txnStatus === "FAILURE" ||
+                      txnStatus === "DECLINED" ||
+                      txnStatus === "REJECTED"
+                        ? "FAILED"
+                        : "PENDING";
+
+            const historyDescription =
+                historyStatus === "CANCELLED"
+                    ? "Add Money - Payment cancelled"
+                    : historyStatus === "FAILED"
+                        ? "Add Money - Payment failed"
+                        : "Add Money - Payment pending";
+
+            await supabase
+                .from("deposit_orders")
+                .update({
+                    status:
+                        txnStatus ||
+                        "PENDING"
+                })
+                .eq(
+                    "order_id",
+                    orderId
+                )
+                .neq(
+                    "status",
+                    "SUCCESS"
+                );
+
+            await supabase
+                .from("wallet_transactions")
+                .update({
+                    status: historyStatus,
+                    description: historyDescription
+                })
+                .eq("reference_id", orderId)
+                .eq("status", "PENDING");
+
             return res.json({
                 success: true,
                 paid: false,
@@ -560,6 +667,15 @@ router.post("/status", async (req, res) => {
                     "order_id",
                     orderId
                 );
+
+            await supabase
+                .from("wallet_transactions")
+                .update({
+                    status: "FAILED",
+                    description: "Add Money - Amount mismatch"
+                })
+                .eq("reference_id", orderId)
+                .eq("status", "PENDING");
 
             return res.status(400).json({
                 success: false,
@@ -623,6 +739,24 @@ router.post("/status", async (req, res) => {
             });
         }
 
+        // The successful-deposit RPC is the authoritative
+        // wallet ledger writer. Remove the temporary PENDING
+        // history row so the successful transaction is not duplicated.
+        const {
+            error: pendingCleanupError
+        } = await supabase
+            .from("wallet_transactions")
+            .delete()
+            .eq("reference_id", orderId)
+            .in("status", ["PENDING", "CANCELLED"]);
+
+        if (pendingCleanupError) {
+            console.error(
+                "PENDING TRANSACTION CLEANUP ERROR:",
+                pendingCleanupError
+            );
+        }
+
         // ==============================================
         // FINAL RESPONSE
         // ==============================================
@@ -657,6 +791,100 @@ router.post("/status", async (req, res) => {
             error:
                 error?.message ||
                 "Internal server error"
+        });
+    }
+});
+
+
+// ======================================================
+// CANCEL DEPOSIT
+// POST /api/deposit/cancel
+// ======================================================
+
+router.post("/cancel", async (req, res) => {
+    try {
+        const orderId = String(req.body?.orderId || "").trim();
+
+        if (!orderId) {
+            return res.status(400).json({
+                success: false,
+                error: "Order ID is required"
+            });
+        }
+
+        const {
+            data: order,
+            error: orderError
+        } = await supabase
+            .from("deposit_orders")
+            .select("id, order_id, user_id, amount, status")
+            .eq("order_id", orderId)
+            .maybeSingle();
+
+        if (orderError) {
+            return res.status(500).json({
+                success: false,
+                error: orderError.message
+            });
+        }
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                error: "Deposit order not found"
+            });
+        }
+
+        // Never cancel a deposit that is already successful.
+        if (String(order.status).toUpperCase() === "SUCCESS") {
+            return res.json({
+                success: true,
+                cancelled: false,
+                orderId,
+                status: "SUCCESS"
+            });
+        }
+
+        // Keep the local order available for final gateway verification.
+        // A user cancelling the screen does not prove that the gateway
+        // cancelled the payment; the gateway may still complete it.
+        const {
+            error: transactionError
+        } = await supabase
+            .from("wallet_transactions")
+            .update({
+                status: "CANCELLED",
+                description: "Add Money - Payment cancelled"
+            })
+            .eq("reference_id", orderId)
+            .eq("status", "PENDING");
+
+        if (transactionError) {
+            console.error(
+                "CANCEL TRANSACTION UPDATE ERROR:",
+                transactionError
+            );
+        }
+
+        return res.json({
+            success: true,
+            cancelled: true,
+            orderId,
+            amount: Number(order.amount),
+            status: "CANCELLED"
+        });
+
+    } catch (error) {
+        console.error(
+            "DEPOSIT CANCEL ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Unable to cancel deposit"
         });
     }
 });

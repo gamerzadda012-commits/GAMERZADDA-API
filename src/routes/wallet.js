@@ -49,10 +49,7 @@ router.get("/:userId", async (req, res) => {
     }
 
     if (!data) {
-      console.error(
-        "WALLET ROW NOT FOUND FOR USER:",
-        userId
-      );
+      console.error("WALLET ROW NOT FOUND FOR USER:", userId);
 
       return res.status(404).json({
         success: false,
@@ -109,7 +106,17 @@ router.get("/:userId", async (req, res) => {
 
 // ============================================================
 // GET WALLET TRANSACTIONS
+//
+// First 30:
 // GET /api/wallet/:userId/transactions
+//
+// Next 30:
+// GET /api/wallet/:userId/transactions?page=2
+//
+// Or explicitly:
+// GET /api/wallet/:userId/transactions?page=1&pageSize=30
+//
+// MAX PAGE SIZE = 30
 // ============================================================
 router.get("/:userId/transactions", async (req, res) => {
   try {
@@ -122,10 +129,55 @@ router.get("/:userId/transactions", async (req, res) => {
       });
     }
 
-    console.log(
-      "WALLET TRANSACTIONS REQUEST:",
-      userId
+    // ----------------------------------------------------------
+    // Pagination
+    // ----------------------------------------------------------
+
+    let page = Number.parseInt(
+      String(req.query.page || "1"),
+      10
     );
+
+    let pageSize = Number.parseInt(
+      String(req.query.pageSize || "30"),
+      10
+    );
+
+    // Safe defaults
+    if (!Number.isFinite(page) || page < 1) {
+      page = 1;
+    }
+
+    if (!Number.isFinite(pageSize) || pageSize < 1) {
+      pageSize = 30;
+    }
+
+    // Never allow more than 30 transactions per request
+    pageSize = Math.min(pageSize, 30);
+
+    const offset = (page - 1) * pageSize;
+
+    console.log("WALLET TRANSACTIONS REQUEST:", {
+      userId,
+      page,
+      pageSize,
+      offset
+    });
+
+    // ----------------------------------------------------------
+    // Fetch ONE EXTRA transaction.
+    //
+    // Example:
+    // pageSize = 30
+    // Supabase range gets 31 rows.
+    //
+    // First 30 -> returned to Android
+    // 31st      -> tells us there are more.
+    //
+    // This prevents loading the complete transaction history.
+    // ----------------------------------------------------------
+
+    const fetchLimit = pageSize + 1;
 
     const { data, error } = await supabase
       .from("wallet_transactions")
@@ -133,19 +185,23 @@ router.get("/:userId/transactions", async (req, res) => {
       .eq("user_id", userId)
       .order("created_at", {
         ascending: false
-      });
+      })
+      .range(
+        offset,
+        offset + fetchLimit - 1
+      );
 
     if (error) {
-      console.error(
-        "WALLET TRANSACTIONS ERROR:",
-        {
-          userId,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        }
-      );
+      console.error("WALLET TRANSACTIONS ERROR:", {
+        userId,
+        page,
+        pageSize,
+        offset,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
 
       return res.status(500).json({
         success: false,
@@ -155,7 +211,27 @@ router.get("/:userId/transactions", async (req, res) => {
       });
     }
 
-    const transactions = (data || []).map((item) => {
+    const rows = Array.isArray(data)
+      ? data
+      : [];
+
+    // ----------------------------------------------------------
+    // Check whether another page exists
+    // ----------------------------------------------------------
+
+    const hasMore = rows.length > pageSize;
+
+    // Return ONLY requested page size
+    const pageRows = rows.slice(
+      0,
+      pageSize
+    );
+
+    // ----------------------------------------------------------
+    // Convert database rows to Android response format
+    // ----------------------------------------------------------
+
+    const transactions = pageRows.map((item) => {
       const type = String(
         item.type ||
         item.transaction_type ||
@@ -176,7 +252,9 @@ router.get("/:userId/transactions", async (req, res) => {
         "Wallet Transaction"
       ).trim();
 
-      const amount = cleanNumber(item.amount);
+      const amount = cleanNumber(
+        item.amount
+      );
 
       const status = String(
         item.status ||
@@ -224,10 +302,14 @@ router.get("/:userId/transactions", async (req, res) => {
           null,
 
         bonusPercent:
-          cleanNumber(item.bonus_percent),
+          cleanNumber(
+            item.bonus_percent
+          ),
 
         bonusAmount:
-          cleanNumber(item.bonus_amount),
+          cleanNumber(
+            item.bonus_amount
+          ),
 
         createdAt:
           item.created_at ||
@@ -251,13 +333,32 @@ router.get("/:userId/transactions", async (req, res) => {
       "WALLET TRANSACTIONS RESULT:",
       {
         userId,
-        count: transactions.length
+        page,
+        pageSize,
+        offset,
+        count: transactions.length,
+        hasMore
       }
     );
 
+    // ----------------------------------------------------------
+    // Final response
+    // ----------------------------------------------------------
+
     return res.status(200).json({
       success: true,
-      transactions
+
+      transactions,
+
+      pagination: {
+        page,
+        pageSize,
+        count: transactions.length,
+        hasMore,
+        nextPage: hasMore
+          ? page + 1
+          : null
+      }
     });
 
   } catch (error) {
