@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import AdminShell from "../AdminShell";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../../../lib/supabase";
 
 export default function Page() {
   const [withdrawals, setWithdrawals] = useState([]);
