@@ -19,6 +19,7 @@ const statsRouter = require("./routes/stats");
 const profileRouter = require("./routes/profile");
 const spinRouter = require("./routes/spin");
 const supportRouter = require("./routes/support");
+const notificationsRouter = require("./routes/notifications");
 
 const app = express();
 
@@ -189,6 +190,31 @@ app.use(
 app.use(
     "/api/profile",
     profileRouter
+);
+
+// ===============================
+// NOTIFICATIONS
+//
+// notifications.js contains:
+//
+// GET    /:userId
+// PATCH  /:userId/read-all
+// PATCH  /:userId/:notificationId/read
+// DELETE /:userId/:notificationId
+// POST   /fcm-token
+//
+// Final:
+//
+// GET    /api/notifications/:userId
+// PATCH  /api/notifications/:userId/read-all
+// PATCH  /api/notifications/:userId/:notificationId/read
+// DELETE /api/notifications/:userId/:notificationId
+// POST   /api/notifications/fcm-token
+// ===============================
+
+app.use(
+    "/api/notifications",
+    notificationsRouter
 );
 
 // ===============================
