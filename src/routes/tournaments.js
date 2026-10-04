@@ -16,6 +16,14 @@ const router = express.Router();
 
 const supabase = require("../config/supabase");
 
+const {
+    checkUserRestriction,
+    restrictionResponse,
+    getUserGameLimit,
+    gameRestrictionKey
+} = require("../utils/userRestrictions");
+
+
 
 
 
@@ -3008,12 +3016,167 @@ router.post(
 
 
             // =================================================
+            // USER RESTRICTION + DAILY GAME LIMIT
+            // =================================================
+
+            const fullAppCheck = await checkUserRestriction(
+                userId,
+                null
+            );
+
+            if (fullAppCheck.restricted) {
+                return restrictionResponse(
+                    res,
+                    fullAppCheck.feature,
+                    fullAppCheck.restriction
+                );
+            }
+
+            const restrictionGame = gameRestrictionKey(
+                tournament.game
+            );
+
+            if (restrictionGame) {
+                const gameRestriction = await checkUserRestriction(
+                    userId,
+                    restrictionGame
+                );
+
+                if (gameRestriction.restricted) {
+                    return restrictionResponse(
+                        res,
+                        gameRestriction.feature,
+                        gameRestriction.restriction
+                    );
+                }
+
+                const gameLimit = await getUserGameLimit(
+                    userId,
+                    restrictionGame
+                );
+
+                if (gameLimit) {
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+
+                    const tomorrowStart = new Date(todayStart);
+                    tomorrowStart.setDate(
+                        tomorrowStart.getDate() + 1
+                    );
+
+                    const {
+                        data: todayEntries,
+                        error: todayEntriesError
+                    } = await supabase
+                        .from("tournament_entries")
+                        .select("tournament_id, created_at")
+                        .eq("user_id", userId)
+                        .eq("cancelled", false)
+                        .gte(
+                            "created_at",
+                            todayStart.toISOString()
+                        )
+                        .lt(
+                            "created_at",
+                            tomorrowStart.toISOString()
+                        );
+
+                    if (todayEntriesError) {
+                        console.error(
+                            "DAILY GAME LIMIT ENTRY ERROR:",
+                            todayEntriesError
+                        );
+
+                        return res.status(500).json({
+                            success: false,
+                            code: "DAILY_LIMIT_CHECK_FAILED",
+                            error: "Unable to check your daily game limit."
+                        });
+                    }
+
+                    const joinedTournamentIds = [
+                        ...new Set(
+                            (todayEntries || [])
+                                .map((entry) => entry.tournament_id)
+                                .filter(Boolean)
+                                .map(String)
+                        )
+                    ];
+
+                    let todayGameJoinCount = 0;
+
+                    if (joinedTournamentIds.length > 0) {
+                        const {
+                            data: joinedTournaments,
+                            error: joinedTournamentsError
+                        } = await supabase
+                            .from("tournaments")
+                            .select("id, game")
+                            .in("id", joinedTournamentIds);
+
+                        if (joinedTournamentsError) {
+                            console.error(
+                                "DAILY GAME LIMIT TOURNAMENT ERROR:",
+                                joinedTournamentsError
+                            );
+
+                            return res.status(500).json({
+                                success: false,
+                                code: "DAILY_LIMIT_CHECK_FAILED",
+                                error: "Unable to check your daily game limit."
+                            });
+                        }
+
+                        todayGameJoinCount = (joinedTournaments || [])
+                            .filter(
+                                (item) =>
+                                    gameRestrictionKey(item.game) ===
+                                    restrictionGame
+                            )
+                            .length;
+                    }
+
+                    const dailyLimit = Number(
+                        gameLimit.daily_limit
+                    );
+
+                    if (
+                        Number.isFinite(dailyLimit) &&
+                        dailyLimit >= 0 &&
+                        todayGameJoinCount >= dailyLimit
+                    ) {
+                        const gameNames = {
+                            freefire: "Free Fire",
+                            freefiremax: "Free Fire MAX",
+                            clashsquad: "Clash Squad",
+                            lonewolf: "Lone Wolf"
+                        };
+
+                        const displayGame =
+                            gameNames[restrictionGame] ||
+                            "This game";
+
+                        return res.status(403).json({
+                            success: false,
+                            code: "DAILY_GAME_LIMIT_REACHED",
+                            feature: restrictionGame,
+                            daily_limit: dailyLimit,
+                            joined_today: todayGameJoinCount,
+                            error:
+                                `${displayGame} daily join limit reached. ` +
+                                `You can join maximum ${dailyLimit} tournament(s) per day.`
+                        });
+                    }
+                }
+            }
+
+
+
+            // =================================================
 
 
 
             // STATUS
-
-
 
             // =================================================
 

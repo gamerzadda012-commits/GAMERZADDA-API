@@ -1,1181 +1,2422 @@
 const express = require("express");
+
 const multer = require("multer");
+
 const path = require("path");
+
 const crypto = require("crypto");
+
 const fs = require("fs");
 
+
+
 const router = express.Router();
+
 const supabase = require("../config/supabase");
 
-// ======================================================
-// CONFIG
+const {
+    checkUserRestriction,
+    restrictionResponse
+} = require("../utils/userRestrictions");
+
+async function enforceSupportRestriction(userId, res) {
+    const restrictionCheck = await checkUserRestriction(userId, "support");
+
+    if (restrictionCheck.restricted) {
+        return restrictionResponse(
+            res,
+            restrictionCheck.feature,
+            restrictionCheck.restriction
+        );
+    }
+
+    return null;
+}
+
+
+
 // ======================================================
 
+// CONFIG
+
+// ======================================================
+
+
+
 const UPLOAD_DIR = path.join(
-    __dirname,
-    "..",
-    "..",
-    "uploads",
-    "support"
+
+    __dirname,
+
+    "..",
+
+    "..",
+
+    "uploads",
+
+    "support"
+
 );
+
+
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
+
+
 const ALLOWED_MIME_TYPES = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
 
-    "video/mp4",
-    "video/webm",
-    "video/quicktime",
+    "image/jpeg",
 
-    "application/pdf"
+    "image/png",
+
+    "image/webp",
+
+    "image/gif",
+
+
+
+    "video/mp4",
+
+    "video/webm",
+
+    "video/quicktime",
+
+
+
+    "application/pdf"
+
 ]);
 
+
+
 // ======================================================
+
 // CREATE UPLOAD DIRECTORY
+
 // ======================================================
+
+
 
 fs.mkdirSync(UPLOAD_DIR, {
-    recursive: true
+
+    recursive: true
+
 });
 
+
+
 // ======================================================
+
 // MULTER STORAGE
+
 // ======================================================
+
+
 
 const storage = multer.diskStorage({
 
-    destination: function (req, file, cb) {
-        cb(null, UPLOAD_DIR);
-    },
 
-    filename: function (req, file, cb) {
 
-        const ext = path
-            .extname(file.originalname || "")
-            .toLowerCase();
+    destination: function (req, file, cb) {
 
-        const safeExt =
-            ext && ext.length <= 10
-                ? ext
-                : "";
+        cb(null, UPLOAD_DIR);
 
-        const uniqueName =
-            `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${safeExt}`;
+    },
 
-        cb(null, uniqueName);
-    }
+
+
+    filename: function (req, file, cb) {
+
+
+
+        const ext = path
+
+            .extname(file.originalname || "")
+
+            .toLowerCase();
+
+
+
+        const safeExt =
+
+            ext && ext.length <= 10
+
+                ? ext
+
+                : "";
+
+
+
+        const uniqueName =
+
+            `${Date.now()}-${crypto.randomBytes(12).toString("hex")}${safeExt}`;
+
+
+
+        cb(null, uniqueName);
+
+    }
+
 });
+
+
 
 const upload = multer({
 
-    storage,
 
-    limits: {
-        fileSize: MAX_FILE_SIZE,
-        files: 1
-    },
 
-    fileFilter: function (req, file, cb) {
+    storage,
 
-        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
 
-            return cb(
-                new Error(
-                    "Unsupported file type. Allowed: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV and PDF."
-                )
-            );
-        }
 
-        cb(null, true);
-    }
+    limits: {
+
+        fileSize: MAX_FILE_SIZE,
+
+        files: 1
+
+    },
+
+
+
+    fileFilter: function (req, file, cb) {
+
+
+
+        if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+
+
+
+            return cb(
+
+                new Error(
+
+                    "Unsupported file type. Allowed: JPG, PNG, WEBP, GIF, MP4, WEBM, MOV and PDF."
+
+                )
+
+            );
+
+        }
+
+
+
+        cb(null, true);
+
+    }
+
 });
 
+
+
 // ======================================================
+
 // HELPERS
+
 // ======================================================
+
+
 
 function getAttachmentUrl(req, filename) {
 
-    return `https://api.gamerzadda.in/uploads/support/${encodeURIComponent(
-        filename
-    )}`;
+
+
+    return `https\://api.gamerzadda.in/uploads/support/${encodeURIComponent(
+
+        filename
+
+    )}`;
+
 }
+
+
 
 function deleteUploadedFile(file) {
 
-    if (!file?.path) {
-        return;
-    }
 
-    try {
 
-        if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path);
-        }
+    if (!file?.path) {
 
-    } catch (error) {
+        return;
 
-        console.error(
-            "UPLOAD CLEANUP ERROR:",
-            error
-        );
-    }
+    }
+
+
+
+    try {
+
+
+
+        if (fs.existsSync(file.path)) {
+
+            fs.unlinkSync(file.path);
+
+        }
+
+
+
+    } catch (error) {
+
+
+
+        console.error(
+
+            "UPLOAD CLEANUP ERROR:",
+
+            error
+
+        );
+
+    }
+
 }
+
+
 
 // Stable human-friendly ticket ID derived from the conversation UUID.
+
 // No database schema change is required.
+
 function getTicketId(conversationId) {
-    const clean = String(conversationId || "")
-        .replace(/[^a-fA-F0-9]/g, "")
-        .toUpperCase();
 
-    const seed = clean || "0";
-    const value = parseInt(seed.slice(0, 5), 16) % 100000;
+    const clean = String(conversationId || "")
 
-    return `#GZ-${String(value).padStart(5, "0")}`;
+        .replace(/[^a-fA-F0-9]/g, "")
+
+        .toUpperCase();
+
+
+
+    const seed = clean || "0";
+
+    const value = parseInt(seed.slice(0, 5), 16) % 100000;
+
+
+
+    return `#GZ-${String(value).padStart(5, "0")}`;
+
 }
 
+
+
 // ======================================================
+
 // VERIFY OPEN CONVERSATION
+
 // ======================================================
+
+
 
 async function verifyOpenConversation(
-    userId,
-    conversationId
+
+    userId,
+
+    conversationId
+
 ) {
 
-    const {
-        data: conversation,
-        error
-    } = await supabase
-        .from("support_conversations")
-        .select(
-            "id, user_id, status, created_at, updated_at"
-        )
-        .eq("id", conversationId)
-        .eq("user_id", userId)
-        .maybeSingle();
 
-    if (error) {
-        throw error;
-    }
 
-    if (!conversation) {
+    const {
 
-        return {
-            ok: false,
-            status: 404,
-            error: "Support conversation not found."
-        };
-    }
+        data: conversation,
 
-    if (conversation.status !== "open") {
+        error
 
-        return {
-            ok: false,
-            status: 400,
-            error: "This support conversation is closed."
-        };
-    }
+    } = await supabase
 
-    return {
-        ok: true,
-        conversation
-    };
+        .from("support_conversations")
+
+        .select(
+
+            "id, user_id, status, created_at, updated_at"
+
+        )
+
+        .eq("id", conversationId)
+
+        .eq("user_id", userId)
+
+        .maybeSingle();
+
+
+
+    if (error) {
+
+        throw error;
+
+    }
+
+
+
+    if (!conversation) {
+
+
+
+        return {
+
+            ok: false,
+
+            status: 404,
+
+            error: "Support conversation not found."
+
+        };
+
+    }
+
+
+
+    if (conversation.status !== "open") {
+
+
+
+        return {
+
+            ok: false,
+
+            status: 400,
+
+            error: "This support conversation is closed."
+
+        };
+
+    }
+
+
+
+    return {
+
+        ok: true,
+
+        conversation
+
+    };
+
 }
 
+
+
 // ======================================================
+
 // GET USER SUPPORT CONVERSATIONS
+
 // GET /api/support/:userId
+
 // ======================================================
+
+
 
 router.get("/:userId", async (req, res) => {
 
-    try {
 
-        const userId =
-            String(
-                req.params.userId || ""
-            ).trim();
 
-        if (!userId) {
+    try {
 
-            return res.status(400).json({
-                success: false,
-                error: "User ID is required."
-            });
+
+
+        const userId =
+
+            String(
+
+                req.params.userId || ""
+
+            ).trim();
+
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
+
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
 
-        const {
-            data,
-            error
-        } = await supabase
-            .from("support_conversations")
-            .select("*")
-            .eq("user_id", userId)
-            .order("updated_at", {
-                ascending: false
-            });
 
-        if (error) {
 
-            console.error(
-                "SUPPORT CONVERSATIONS ERROR:",
-                error
-            );
+        if (!userId) {
 
-            return res.status(500).json({
-                success: false,
-                error: error.message
-            });
-        }
 
-        return res.json({
-            success: true,
-            conversations: data || []
-        });
 
-    } catch (error) {
+            return res.status(400).json({
 
-        console.error(
-            "SUPPORT GET ERROR:",
-            error
-        );
+                success: false,
 
-        return res.status(500).json({
-            success: false,
-            error:
-                error.message ||
-                "Internal server error."
-        });
-    }
+                error: "User ID is required."
+
+            });
+
+        }
+
+
+
+        const {
+
+            data,
+
+            error
+
+        } = await supabase
+
+            .from("support_conversations")
+
+            .select("*")
+
+            .eq("user_id", userId)
+
+            .order("updated_at", {
+
+                ascending: false
+
+            });
+
+
+
+        if (error) {
+
+
+
+            console.error(
+
+                "SUPPORT CONVERSATIONS ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error: error.message
+
+            });
+
+        }
+
+
+
+        return res.json({
+
+            success: true,
+
+            conversations: data || []
+
+        });
+
+
+
+    } catch (error) {
+
+
+
+        console.error(
+
+            "SUPPORT GET ERROR:",
+
+            error
+
+        );
+
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            error:
+
+                error.message ||
+
+                "Internal server error."
+
+        });
+
+    }
+
 });
 
+
+
 // ======================================================
+
 // GET MESSAGES
+
 // GET /api/support/:userId/:conversationId
+
 // ======================================================
+
+
 
 router.get(
-    "/:userId/:conversationId",
-    async (req, res) => {
 
-        try {
+    "/:userId/:conversationId",
 
-            const userId =
-                String(
-                    req.params.userId || ""
-                ).trim();
+    async (req, res) => {
 
-            const conversationId =
-                String(
-                    req.params.conversationId || ""
-                ).trim();
 
-            if (!userId || !conversationId) {
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "User ID and conversation ID are required."
-                });
-            }
+        try {
 
-            const {
-                data: conversation,
-                error: conversationError
-            } = await supabase
-                .from("support_conversations")
-                .select(
-                    "id, user_id, status, created_at, updated_at"
-                )
-                .eq("id", conversationId)
-                .eq("user_id", userId)
-                .maybeSingle();
 
-            if (conversationError) {
 
-                console.error(
-                    "SUPPORT CONVERSATION CHECK ERROR:",
-                    conversationError
-                );
+            const userId =
 
-                return res.status(500).json({
-                    success: false,
-                    error: conversationError.message
-                });
-            }
+                String(
 
-            if (!conversation) {
+                    req.params.userId || ""
 
-                return res.status(404).json({
-                    success: false,
-                    error:
-                        "Support conversation not found."
-                });
-            }
+                ).trim();
 
-            const {
-                data: messages,
-                error: messagesError
-            } = await supabase
-                .from("support_messages")
-                .select("*")
-                .eq(
-                    "conversation_id",
-                    conversationId
-                )
-                .order("created_at", {
-                    ascending: true
-                });
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
 
-            if (messagesError) {
-
-                console.error(
-                    "SUPPORT MESSAGES ERROR:",
-                    messagesError
-                );
-
-                return res.status(500).json({
-                    success: false,
-                    error: messagesError.message
-                });
-            }
-
-            return res.json({
-                success: true,
-                conversation,
-                messages: messages || []
-            });
-
-        } catch (error) {
-
-            console.error(
-                "SUPPORT MESSAGE GET ERROR:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                error:
-                    error.message ||
-                    "Internal server error."
-            });
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
-    }
+
+
+
+            const conversationId =
+
+                String(
+
+                    req.params.conversationId || ""
+
+                ).trim();
+
+
+
+            if (!userId || !conversationId) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "User ID and conversation ID are required."
+
+                });
+
+            }
+
+
+
+            const {
+
+                data: conversation,
+
+                error: conversationError
+
+            } = await supabase
+
+                .from("support_conversations")
+
+                .select(
+
+                    "id, user_id, status, created_at, updated_at"
+
+                )
+
+                .eq("id", conversationId)
+
+                .eq("user_id", userId)
+
+                .maybeSingle();
+
+
+
+            if (conversationError) {
+
+
+
+                console.error(
+
+                    "SUPPORT CONVERSATION CHECK ERROR:",
+
+                    conversationError
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error: conversationError.message
+
+                });
+
+            }
+
+
+
+            if (!conversation) {
+
+
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    error:
+
+                        "Support conversation not found."
+
+                });
+
+            }
+
+
+
+            const {
+
+                data: messages,
+
+                error: messagesError
+
+            } = await supabase
+
+                .from("support_messages")
+
+                .select("*")
+
+                .eq(
+
+                    "conversation_id",
+
+                    conversationId
+
+                )
+
+                .order("created_at", {
+
+                    ascending: true
+
+                });
+
+
+
+            if (messagesError) {
+
+
+
+                console.error(
+
+                    "SUPPORT MESSAGES ERROR:",
+
+                    messagesError
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error: messagesError.message
+
+                });
+
+            }
+
+
+
+            return res.json({
+
+                success: true,
+
+                conversation,
+
+                messages: messages || []
+
+            });
+
+
+
+        } catch (error) {
+
+
+
+            console.error(
+
+                "SUPPORT MESSAGE GET ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "Internal server error."
+
+            });
+
+        }
+
+    }
+
 );
 
+
+
 // ======================================================
+
 // CREATE CONVERSATION
+
 // POST /api/support/:userId
+
 // ======================================================
+
+
 
 router.post("/:userId", async (req, res) => {
 
-    try {
 
-        const userId =
-            String(
-                req.params.userId || ""
-            ).trim();
 
-        const category =
-            String(
-                req.body?.category ||
-                "general"
-            ).trim();
+    try {
 
-        if (!userId) {
 
-            return res.status(400).json({
-                success: false,
-                error: "User ID is required."
-            });
+
+        const userId =
+
+            String(
+
+                req.params.userId || ""
+
+            ).trim();
+
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
+
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
 
-        const {
-            data: user,
-            error: userError
-        } = await supabase
-            .from("users")
-            .select("id")
-            .eq("id", userId)
-            .maybeSingle();
 
-        if (userError) {
 
-            console.error(
-                "SUPPORT USER CHECK ERROR:",
-                userError
-            );
+        const category =
 
-            return res.status(500).json({
-                success: false,
-                error: userError.message
-            });
-        }
+            String(
 
-        if (!user) {
+                req.body?.category ||
 
-            return res.status(404).json({
-                success: false,
-                error: "User not found."
-            });
-        }
+                "general"
 
-        const {
-            data: existingConversation,
-            error: existingError
-        } = await supabase
-            .from("support_conversations")
-            .select("*")
-            .eq("user_id", userId)
-            .eq("status", "open")
-            .order("updated_at", {
-                ascending: false
-            })
-            .limit(1)
-            .maybeSingle();
+            ).trim();
 
-        if (existingError) {
 
-            console.error(
-                "SUPPORT EXISTING CONVERSATION ERROR:",
-                existingError
-            );
 
-            return res.status(500).json({
-                success: false,
-                error: existingError.message
-            });
-        }
+        if (!userId) {
 
-        if (existingConversation) {
 
-            return res.json({
-                success: true,
-                conversation:
-                    existingConversation,
-                existing: true
-            });
-        }
 
-        const {
-            data: conversation,
-            error: createError
-        } = await supabase
-            .from("support_conversations")
-            .insert({
-                user_id: userId,
-                status: "open"
-            })
-            .select("*")
-            .single();
+            return res.status(400).json({
 
-        if (createError) {
+                success: false,
 
-            console.error(
-                "SUPPORT CREATE CONVERSATION ERROR:",
-                createError
-            );
+                error: "User ID is required."
 
-            return res.status(500).json({
-                success: false,
-                error: createError.message
-            });
-        }
+            });
 
-        // The welcome message is created only when the first real
-        // user action creates the ticket.
-        const ticketId =
-            getTicketId(conversation.id);
+        }
 
-        const welcomeMessage =
-            `Welcome to GAMERZADDA Support! 👋\n\n` +
-            `Your support ticket ${ticketId} has been created.\n\n` +
-            `Please describe your issue clearly so our support team can help you as quickly as possible. You can contact us for app issues, tournament problems, payment/deposit issues, withdrawal issues, account problems, rewards, or any other GAMERZADDA-related issue.\n\n` +
-            `If required, you can also attach a screenshot, video, or PDF as proof. Please make sure the attachment is clear and relevant to your issue.\n\n` +
-            `Please do not send multiple messages for the same issue. Send all important details in one place and wait for our support team to respond.\n\n` +
-            `Our team will review your ticket and reply here. Thank you for contacting GAMERZADDA Support. ❤️`;
 
-        const {
-            error: welcomeError
-        } = await supabase
-            .from("support_messages")
-            .insert({
-                conversation_id: conversation.id,
-                sender_id: userId,
-                sender_type: "admin",
-                message: welcomeMessage,
-                attachment_url: null,
-                attachment_name: null,
-                attachment_type: null,
-                attachment_size: null
-            });
 
-        if (welcomeError) {
-            console.error(
-                "SUPPORT WELCOME MESSAGE ERROR:",
-                welcomeError
-            );
+        const {
 
-            await supabase
-                .from("support_conversations")
-                .delete()
-                .eq("id", conversation.id)
-                .eq("user_id", userId);
+            data: user,
 
-            return res.status(500).json({
-                success: false,
-                error:
-                    welcomeError.message ||
-                    "Unable to initialize support ticket."
-            });
-        }
+            error: userError
 
-        return res.status(201).json({
-            success: true,
-            conversation,
-            ticketId,
-            existing: false
-        });
+        } = await supabase
 
-    } catch (error) {
+            .from("users")
 
-        console.error(
-            "SUPPORT CREATE API ERROR:",
-            error
-        );
+            .select("id")
 
-        return res.status(500).json({
-            success: false,
-            error:
-                error.message ||
-                "Internal server error."
-        });
-    }
+            .eq("id", userId)
+
+            .maybeSingle();
+
+
+
+        if (userError) {
+
+
+
+            console.error(
+
+                "SUPPORT USER CHECK ERROR:",
+
+                userError
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error: userError.message
+
+            });
+
+        }
+
+
+
+        if (!user) {
+
+
+
+            return res.status(404).json({
+
+                success: false,
+
+                error: "User not found."
+
+            });
+
+        }
+
+
+
+        const {
+
+            data: existingConversation,
+
+            error: existingError
+
+        } = await supabase
+
+            .from("support_conversations")
+
+            .select("*")
+
+            .eq("user_id", userId)
+
+            .eq("status", "open")
+
+            .order("updated_at", {
+
+                ascending: false
+
+            })
+
+            .limit(1)
+
+            .maybeSingle();
+
+
+
+        if (existingError) {
+
+
+
+            console.error(
+
+                "SUPPORT EXISTING CONVERSATION ERROR:",
+
+                existingError
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error: existingError.message
+
+            });
+
+        }
+
+
+
+        if (existingConversation) {
+
+
+
+            return res.json({
+
+                success: true,
+
+                conversation:
+
+                    existingConversation,
+
+                existing: true
+
+            });
+
+        }
+
+
+
+        const {
+
+            data: conversation,
+
+            error: createError
+
+        } = await supabase
+
+            .from("support_conversations")
+
+            .insert({
+
+                user_id: userId,
+
+                status: "open"
+
+            })
+
+            .select("*")
+
+            .single();
+
+
+
+        if (createError) {
+
+
+
+            console.error(
+
+                "SUPPORT CREATE CONVERSATION ERROR:",
+
+                createError
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error: createError.message
+
+            });
+
+        }
+
+
+
+        // The welcome message is created only when the first real
+
+        // user action creates the ticket.
+
+        const ticketId =
+
+            getTicketId(conversation.id);
+
+
+
+        const welcomeMessage =
+
+            `Welcome to GAMERZADDA Support! 👋\n\n` +
+
+            `Your support ticket ${ticketId} has been created.\n\n` +
+
+            `Please describe your issue clearly so our support team can help you as quickly as possible. You can contact us for app issues, tournament problems, payment/deposit issues, withdrawal issues, account problems, rewards, or any other GAMERZADDA-related issue.\n\n` +
+
+            `If required, you can also attach a screenshot, video, or PDF as proof. Please make sure the attachment is clear and relevant to your issue.\n\n` +
+
+            `Please do not send multiple messages for the same issue. Send all important details in one place and wait for our support team to respond.\n\n` +
+
+            `Our team will review your ticket and reply here. Thank you for contacting GAMERZADDA Support. ❤️`;
+
+
+
+        const {
+
+            error: welcomeError
+
+        } = await supabase
+
+            .from("support_messages")
+
+            .insert({
+
+                conversation_id: conversation.id,
+
+                sender_id: userId,
+
+                sender_type: "admin",
+
+                message: welcomeMessage,
+
+                attachment_url: null,
+
+                attachment_name: null,
+
+                attachment_type: null,
+
+                attachment_size: null
+
+            });
+
+
+
+        if (welcomeError) {
+
+            console.error(
+
+                "SUPPORT WELCOME MESSAGE ERROR:",
+
+                welcomeError
+
+            );
+
+
+
+            await supabase
+
+                .from("support_conversations")
+
+                .delete()
+
+                .eq("id", conversation.id)
+
+                .eq("user_id", userId);
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    welcomeError.message ||
+
+                    "Unable to initialize support ticket."
+
+            });
+
+        }
+
+
+
+        return res.status(201).json({
+
+            success: true,
+
+            conversation,
+
+            ticketId,
+
+            existing: false
+
+        });
+
+
+
+    } catch (error) {
+
+
+
+        console.error(
+
+            "SUPPORT CREATE API ERROR:",
+
+            error
+
+        );
+
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            error:
+
+                error.message ||
+
+                "Internal server error."
+
+        });
+
+    }
+
 });
 
+
+
 // ======================================================
+
 // SEND TEXT MESSAGE
+
 // POST /api/support/:userId/:conversationId/message
+
 // ======================================================
+
+
 
 router.post(
-    "/:userId/:conversationId/message",
-    async (req, res) => {
 
-        try {
+    "/:userId/:conversationId/message",
 
-            const userId =
-                String(
-                    req.params.userId || ""
-                ).trim();
+    async (req, res) => {
 
-            const conversationId =
-                String(
-                    req.params.conversationId || ""
-                ).trim();
 
-            const message =
-                String(
-                    req.body?.message || ""
-                ).trim();
 
-            if (!userId || !conversationId) {
+        try {
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "User ID and conversation ID are required."
-                });
-            }
 
-            if (!message) {
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "Message cannot be empty."
-                });
-            }
+            const userId =
 
-            if (message.length > 5000) {
+                String(
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "Message is too long."
-                });
-            }
+                    req.params.userId || ""
 
-            const verification =
-                await verifyOpenConversation(
-                    userId,
-                    conversationId
-                );
+                ).trim();
 
-            if (!verification.ok) {
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
 
-                return res.status(
-                    verification.status
-                ).json({
-                    success: false,
-                    error:
-                        verification.error
-                });
-            }
-
-            const {
-                data: newMessage,
-                error: messageError
-            } = await supabase
-                .from("support_messages")
-                .insert({
-
-                    conversation_id:
-                        conversationId,
-
-                    sender_id:
-                        userId,
-
-                    sender_type:
-                        "user",
-
-                    message:
-                        message,
-
-                    attachment_url:
-                        null,
-
-                    attachment_name:
-                        null,
-
-                    attachment_type:
-                        null,
-
-                    attachment_size:
-                        null
-                })
-                .select("*")
-                .single();
-
-            if (messageError) {
-
-                console.error(
-                    "SUPPORT MESSAGE INSERT ERROR:",
-                    messageError
-                );
-
-                return res.status(500).json({
-                    success: false,
-                    error:
-                        messageError.message
-                });
-            }
-
-            await supabase
-                .from("support_conversations")
-                .update({
-                    updated_at:
-                        new Date().toISOString()
-                })
-                .eq(
-                    "id",
-                    conversationId
-                );
-
-            return res.status(201).json({
-                success: true,
-                message: newMessage
-            });
-
-        } catch (error) {
-
-            console.error(
-                "SUPPORT SEND MESSAGE ERROR:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                error:
-                    error.message ||
-                    "Internal server error."
-            });
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
-    }
+
+
+
+            const conversationId =
+
+                String(
+
+                    req.params.conversationId || ""
+
+                ).trim();
+
+
+
+            const message =
+
+                String(
+
+                    req.body?.message || ""
+
+                ).trim();
+
+
+
+            if (!userId || !conversationId) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "User ID and conversation ID are required."
+
+                });
+
+            }
+
+
+
+            if (!message) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "Message cannot be empty."
+
+                });
+
+            }
+
+
+
+            if (message.length > 5000) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "Message is too long."
+
+                });
+
+            }
+
+
+
+            const verification =
+
+                await verifyOpenConversation(
+
+                    userId,
+
+                    conversationId
+
+                );
+
+
+
+            if (!verification.ok) {
+
+
+
+                return res.status(
+
+                    verification.status
+
+                ).json({
+
+                    success: false,
+
+                    error:
+
+                        verification.error
+
+                });
+
+            }
+
+
+
+            const {
+
+                data: newMessage,
+
+                error: messageError
+
+            } = await supabase
+
+                .from("support_messages")
+
+                .insert({
+
+
+
+                    conversation_id:
+
+                        conversationId,
+
+
+
+                    sender_id:
+
+                        userId,
+
+
+
+                    sender_type:
+
+                        "user",
+
+
+
+                    message:
+
+                        message,
+
+
+
+                    attachment_url:
+
+                        null,
+
+
+
+                    attachment_name:
+
+                        null,
+
+
+
+                    attachment_type:
+
+                        null,
+
+
+
+                    attachment_size:
+
+                        null
+
+                })
+
+                .select("*")
+
+                .single();
+
+
+
+            if (messageError) {
+
+
+
+                console.error(
+
+                    "SUPPORT MESSAGE INSERT ERROR:",
+
+                    messageError
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error:
+
+                        messageError.message
+
+                });
+
+            }
+
+
+
+            await supabase
+
+                .from("support_conversations")
+
+                .update({
+
+                    updated_at:
+
+                        new Date().toISOString()
+
+                })
+
+                .eq(
+
+                    "id",
+
+                    conversationId
+
+                );
+
+
+
+            return res.status(201).json({
+
+                success: true,
+
+                message: newMessage
+
+            });
+
+
+
+        } catch (error) {
+
+
+
+            console.error(
+
+                "SUPPORT SEND MESSAGE ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "Internal server error."
+
+            });
+
+        }
+
+    }
+
 );
 
+
+
 // ======================================================
+
 // UPLOAD ATTACHMENT
+
 // POST /api/support/:userId/:conversationId/upload
+
 //
+
 // multipart/form-data
+
 // field: file
+
 // optional field: message
+
 // ======================================================
+
+
 
 router.post(
-    "/:userId/:conversationId/upload",
 
-    async (req, res, next) => {
+    "/:userId/:conversationId/upload",
 
-        try {
 
-            const userId =
-                String(
-                    req.params.userId || ""
-                ).trim();
 
-            const conversationId =
-                String(
-                    req.params.conversationId || ""
-                ).trim();
+    async (req, res, next) => {
 
-            if (!userId || !conversationId) {
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "User ID and conversation ID are required."
-                });
-            }
 
-            const verification =
-                await verifyOpenConversation(
-                    userId,
-                    conversationId
-                );
+        try {
 
-            if (!verification.ok) {
 
-                return res.status(
-                    verification.status
-                ).json({
-                    success: false,
-                    error:
-                        verification.error
-                });
-            }
 
-            next();
+            const userId =
 
-        } catch (error) {
+                String(
 
-            console.error(
-                "SUPPORT UPLOAD VERIFY ERROR:",
-                error
-            );
+                    req.params.userId || ""
 
-            return res.status(500).json({
-                success: false,
-                error:
-                    error.message ||
-                    "Unable to verify support conversation."
-            });
+                ).trim();
+
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
+
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
-    },
 
-    upload.single("file"),
 
-    async (req, res) => {
 
-        try {
+            const conversationId =
 
-            const userId =
-                String(
-                    req.params.userId || ""
-                ).trim();
+                String(
 
-            const conversationId =
-                String(
-                    req.params.conversationId || ""
-                ).trim();
+                    req.params.conversationId || ""
 
-            if (!req.file) {
+                ).trim();
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "Please select a file."
-                });
-            }
 
-            // IMPORTANT:
-            // Database message column is NOT NULL.
-            // A valid placeholder is used when there is no text message.
-            const message =
-                String(
-                    req.body?.message || ""
-                ).trim();
 
-            if (message.length > 5000) {
+            if (!userId || !conversationId) {
 
-                deleteUploadedFile(
-                    req.file
-                );
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "Message is too long."
-                });
-            }
 
-            const attachmentUrl =
-                getAttachmentUrl(
-                    req,
-                    req.file.filename
-                );
+                return res.status(400).json({
 
-            const {
-                data: newMessage,
-                error: messageError
-            } = await supabase
-                .from("support_messages")
-                .insert({
+                    success: false,
 
-                    conversation_id:
-                        conversationId,
+                    error:
 
-                    sender_id:
-                        userId,
+                        "User ID and conversation ID are required."
 
-                    sender_type:
-                        "user",
+                });
 
-                    // NEVER NULL
-                    message:
-                        message || "[Attachment]",
+            }
 
-                    attachment_url:
-                        attachmentUrl,
 
-                    attachment_name:
-                        req.file.originalname,
 
-                    attachment_type:
-                        req.file.mimetype,
+            const verification =
 
-                    attachment_size:
-                        req.file.size
-                })
-                .select("*")
-                .single();
+                await verifyOpenConversation(
 
-            if (messageError) {
+                    userId,
 
-                deleteUploadedFile(
-                    req.file
-                );
+                    conversationId
 
-                console.error(
-                    "SUPPORT ATTACHMENT DB ERROR:",
-                    messageError
-                );
+                );
 
-                return res.status(500).json({
-                    success: false,
-                    error:
-                        messageError.message
-                });
-            }
 
-            await supabase
-                .from("support_conversations")
-                .update({
-                    updated_at:
-                        new Date().toISOString()
-                })
-                .eq(
-                    "id",
-                    conversationId
-                );
 
-            return res.status(201).json({
+            if (!verification.ok) {
 
-                success: true,
 
-                message:
-                    newMessage,
 
-                attachment: {
+                return res.status(
 
-                    url:
-                        attachmentUrl,
+                    verification.status
 
-                    name:
-                        req.file.originalname,
+                ).json({
 
-                    type:
-                        req.file.mimetype,
+                    success: false,
 
-                    size:
-                        req.file.size
-                }
-            });
+                    error:
 
-        } catch (error) {
+                        verification.error
 
-            if (req.file) {
+                });
 
-                deleteUploadedFile(
-                    req.file
-                );
-            }
+            }
 
-            console.error(
-                "SUPPORT ATTACHMENT UPLOAD ERROR:",
-                error
-            );
 
-            return res.status(500).json({
-                success: false,
-                error:
-                    error.message ||
-                    "Unable to upload attachment."
-            });
+
+            next();
+
+
+
+        } catch (error) {
+
+
+
+            console.error(
+
+                "SUPPORT UPLOAD VERIFY ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "Unable to verify support conversation."
+
+            });
+
+        }
+
+    },
+
+
+
+    upload.single("file"),
+
+
+
+    async (req, res) => {
+
+
+
+        try {
+
+
+
+            const userId =
+
+                String(
+
+                    req.params.userId || ""
+
+                ).trim();
+
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
+
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
-    }
+
+
+
+            const conversationId =
+
+                String(
+
+                    req.params.conversationId || ""
+
+                ).trim();
+
+
+
+            if (!req.file) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "Please select a file."
+
+                });
+
+            }
+
+
+
+            // IMPORTANT:
+
+            // Database message column is NOT NULL.
+
+            // A valid placeholder is used when there is no text message.
+
+            const message =
+
+                String(
+
+                    req.body?.message || ""
+
+                ).trim();
+
+
+
+            if (message.length > 5000) {
+
+
+
+                deleteUploadedFile(
+
+                    req.file
+
+                );
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "Message is too long."
+
+                });
+
+            }
+
+
+
+            const attachmentUrl =
+
+                getAttachmentUrl(
+
+                    req,
+
+                    req.file.filename
+
+                );
+
+
+
+            const {
+
+                data: newMessage,
+
+                error: messageError
+
+            } = await supabase
+
+                .from("support_messages")
+
+                .insert({
+
+
+
+                    conversation_id:
+
+                        conversationId,
+
+
+
+                    sender_id:
+
+                        userId,
+
+
+
+                    sender_type:
+
+                        "user",
+
+
+
+                    // NEVER NULL
+
+                    message:
+
+                        message || "[Attachment]",
+
+
+
+                    attachment_url:
+
+                        attachmentUrl,
+
+
+
+                    attachment_name:
+
+                        req.file.originalname,
+
+
+
+                    attachment_type:
+
+                        req.file.mimetype,
+
+
+
+                    attachment_size:
+
+                        req.file.size
+
+                })
+
+                .select("*")
+
+                .single();
+
+
+
+            if (messageError) {
+
+
+
+                deleteUploadedFile(
+
+                    req.file
+
+                );
+
+
+
+                console.error(
+
+                    "SUPPORT ATTACHMENT DB ERROR:",
+
+                    messageError
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error:
+
+                        messageError.message
+
+                });
+
+            }
+
+
+
+            await supabase
+
+                .from("support_conversations")
+
+                .update({
+
+                    updated_at:
+
+                        new Date().toISOString()
+
+                })
+
+                .eq(
+
+                    "id",
+
+                    conversationId
+
+                );
+
+
+
+            return res.status(201).json({
+
+
+
+                success: true,
+
+
+
+                message:
+
+                    newMessage,
+
+
+
+                attachment: {
+
+
+
+                    url:
+
+                        attachmentUrl,
+
+
+
+                    name:
+
+                        req.file.originalname,
+
+
+
+                    type:
+
+                        req.file.mimetype,
+
+
+
+                    size:
+
+                        req.file.size
+
+                }
+
+            });
+
+
+
+        } catch (error) {
+
+
+
+            if (req.file) {
+
+
+
+                deleteUploadedFile(
+
+                    req.file
+
+                );
+
+            }
+
+
+
+            console.error(
+
+                "SUPPORT ATTACHMENT UPLOAD ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "Unable to upload attachment."
+
+            });
+
+        }
+
+    }
+
 );
 
+
+
 // ======================================================
+
 // MULTER / UPLOAD ERROR HANDLER
+
 // ======================================================
+
+
 
 router.use(
-    (
-        error,
-        req,
-        res,
-        next
-    ) => {
 
-        if (
-            error instanceof multer.MulterError
-        ) {
+    (
 
-            if (
-                error.code ===
-                "LIMIT_FILE_SIZE"
-            ) {
+        error,
 
-                return res.status(413).json({
-                    success: false,
-                    error:
-                        "File is too large. Maximum size is 50 MB."
-                });
-            }
+        req,
 
-            return res.status(400).json({
-                success: false,
-                error:
-                    error.message ||
-                    "File upload failed."
-            });
-        }
+        res,
 
-        if (error) {
+        next
 
-            return res.status(400).json({
-                success: false,
-                error:
-                    error.message ||
-                    "File upload failed."
-            });
-        }
+    ) => {
 
-        next();
-    }
+
+
+        if (
+
+            error instanceof multer.MulterError
+
+        ) {
+
+
+
+            if (
+
+                error.code ===
+
+                "LIMIT_FILE_SIZE"
+
+            ) {
+
+
+
+                return res.status(413).json({
+
+                    success: false,
+
+                    error:
+
+                        "File is too large. Maximum size is 50 MB."
+
+                });
+
+            }
+
+
+
+            return res.status(400).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "File upload failed."
+
+            });
+
+        }
+
+
+
+        if (error) {
+
+
+
+            return res.status(400).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "File upload failed."
+
+            });
+
+        }
+
+
+
+        next();
+
+    }
+
 );
 
+
+
 // ======================================================
+
 // CLOSE / UPDATE CONVERSATION
+
 // PATCH /api/support/:userId/:conversationId
+
 // ======================================================
+
+
 
 router.patch(
-    "/:userId/:conversationId",
-    async (req, res) => {
 
-        try {
+    "/:userId/:conversationId",
 
-            const userId =
-                String(
-                    req.params.userId || ""
-                ).trim();
+    async (req, res) => {
 
-            const conversationId =
-                String(
-                    req.params.conversationId || ""
-                ).trim();
 
-            const status =
-                String(
-                    req.body?.status || ""
-                )
-                    .trim()
-                    .toLowerCase();
 
-            if (
-                !["open", "closed"].includes(
-                    status
-                )
-            ) {
+        try {
 
-                return res.status(400).json({
-                    success: false,
-                    error:
-                        "Status must be open or closed."
-                });
-            }
 
-            const {
-                data: currentConversation,
-                error: currentError
-            } = await supabase
-                .from("support_conversations")
-                .select("id, user_id, status")
-                .eq("id", conversationId)
-                .eq("user_id", userId)
-                .maybeSingle();
 
-            if (currentError) {
-                console.error(
-                    "SUPPORT CURRENT STATUS ERROR:",
-                    currentError
-                );
+            const userId =
 
-                return res.status(500).json({
-                    success: false,
-                    error: currentError.message
-                });
-            }
+                String(
 
-            if (!currentConversation) {
-                return res.status(404).json({
-                    success: false,
-                    error: "Support conversation not found."
-                });
-            }
+                    req.params.userId || ""
 
-            const {
-                data,
-                error
-            } = await supabase
-                .from("support_conversations")
-                .update({
+                ).trim();
 
-                    status,
+        const restrictionResponseResult = await enforceSupportRestriction(userId, res);
 
-                    updated_at:
-                        new Date().toISOString()
-                })
-                .eq(
-                    "id",
-                    conversationId
-                )
-                .eq(
-                    "user_id",
-                    userId
-                )
-                .select("*")
-                .maybeSingle();
-
-            if (error) {
-
-                console.error(
-                    "SUPPORT STATUS UPDATE ERROR:",
-                    error
-                );
-
-                return res.status(500).json({
-                    success: false,
-                    error:
-                        error.message
-                });
-            }
-
-            if (!data) {
-
-                return res.status(404).json({
-                    success: false,
-                    error:
-                        "Support conversation not found."
-                });
-            }
-
-            if (
-                status === "closed" &&
-                currentConversation.status === "open"
-            ) {
-                const ticketId =
-                    getTicketId(conversationId);
-
-                const resolutionMessage =
-                    `Your GAMERZADDA support ticket ${ticketId} has been marked as resolved. ✅\n\n` +
-                    `If your issue is still not resolved or you need help with a different issue, please open Support again and send a new message. A new ticket will be created for you.`;
-
-                const {
-                    error: resolutionError
-                } = await supabase
-                    .from("support_messages")
-                    .insert({
-                        conversation_id:
-                            conversationId,
-                        sender_id:
-                            userId,
-                        sender_type:
-                            "admin",
-                        message:
-                            resolutionMessage,
-                        attachment_url:
-                            null,
-                        attachment_name:
-                            null,
-                        attachment_type:
-                            null,
-                        attachment_size:
-                            null
-                    });
-
-                if (resolutionError) {
-                    console.error(
-                        "SUPPORT RESOLUTION MESSAGE ERROR:",
-                        resolutionError
-                    );
-                }
-            }
-
-            return res.json({
-                success: true,
-                conversation: data
-            });
-
-        } catch (error) {
-
-            console.error(
-                "SUPPORT CLOSE ERROR:",
-                error
-            );
-
-            return res.status(500).json({
-                success: false,
-                error:
-                    error.message ||
-                    "Internal server error."
-            });
+        if (restrictionResponseResult) {
+            return restrictionResponseResult;
         }
-    }
+
+
+
+            const conversationId =
+
+                String(
+
+                    req.params.conversationId || ""
+
+                ).trim();
+
+
+
+            const status =
+
+                String(
+
+                    req.body?.status || ""
+
+                )
+
+                    .trim()
+
+                    .toLowerCase();
+
+
+
+            if (
+
+                !["open", "closed"].includes(
+
+                    status
+
+                )
+
+            ) {
+
+
+
+                return res.status(400).json({
+
+                    success: false,
+
+                    error:
+
+                        "Status must be open or closed."
+
+                });
+
+            }
+
+
+
+            const {
+
+                data: currentConversation,
+
+                error: currentError
+
+            } = await supabase
+
+                .from("support_conversations")
+
+                .select("id, user_id, status")
+
+                .eq("id", conversationId)
+
+                .eq("user_id", userId)
+
+                .maybeSingle();
+
+
+
+            if (currentError) {
+
+                console.error(
+
+                    "SUPPORT CURRENT STATUS ERROR:",
+
+                    currentError
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error: currentError.message
+
+                });
+
+            }
+
+
+
+            if (!currentConversation) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    error: "Support conversation not found."
+
+                });
+
+            }
+
+
+
+            const {
+
+                data,
+
+                error
+
+            } = await supabase
+
+                .from("support_conversations")
+
+                .update({
+
+
+
+                    status,
+
+
+
+                    updated_at:
+
+                        new Date().toISOString()
+
+                })
+
+                .eq(
+
+                    "id",
+
+                    conversationId
+
+                )
+
+                .eq(
+
+                    "user_id",
+
+                    userId
+
+                )
+
+                .select("*")
+
+                .maybeSingle();
+
+
+
+            if (error) {
+
+
+
+                console.error(
+
+                    "SUPPORT STATUS UPDATE ERROR:",
+
+                    error
+
+                );
+
+
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error:
+
+                        error.message
+
+                });
+
+            }
+
+
+
+            if (!data) {
+
+
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    error:
+
+                        "Support conversation not found."
+
+                });
+
+            }
+
+
+
+            if (
+
+                status === "closed" &&
+
+                currentConversation.status === "open"
+
+            ) {
+
+                const ticketId =
+
+                    getTicketId(conversationId);
+
+
+
+                const resolutionMessage =
+
+                    `Your GAMERZADDA support ticket ${ticketId} has been marked as resolved. ✅\n\n` +
+
+                    `If your issue is still not resolved or you need help with a different issue, please open Support again and send a new message. A new ticket will be created for you.`;
+
+
+
+                const {
+
+                    error: resolutionError
+
+                } = await supabase
+
+                    .from("support_messages")
+
+                    .insert({
+
+                        conversation_id:
+
+                            conversationId,
+
+                        sender_id:
+
+                            userId,
+
+                        sender_type:
+
+                            "admin",
+
+                        message:
+
+                            resolutionMessage,
+
+                        attachment_url:
+
+                            null,
+
+                        attachment_name:
+
+                            null,
+
+                        attachment_type:
+
+                            null,
+
+                        attachment_size:
+
+                            null
+
+                    });
+
+
+
+                if (resolutionError) {
+
+                    console.error(
+
+                        "SUPPORT RESOLUTION MESSAGE ERROR:",
+
+                        resolutionError
+
+                    );
+
+                }
+
+            }
+
+
+
+            return res.json({
+
+                success: true,
+
+                conversation: data
+
+            });
+
+
+
+        } catch (error) {
+
+
+
+            console.error(
+
+                "SUPPORT CLOSE ERROR:",
+
+                error
+
+            );
+
+
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+
+                    error.message ||
+
+                    "Internal server error."
+
+            });
+
+        }
+
+    }
+
 );
 
+
+
 // ======================================================
+
 // EXPORT
+
 // ======================================================
+
+
 
 module.exports = router;

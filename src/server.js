@@ -18,6 +18,7 @@ const referralsRouter = require("./routes/referrals");
 const statsRouter = require("./routes/stats");
 const profileRouter = require("./routes/profile");
 const spinRouter = require("./routes/spin");
+const scratchCardRouter = require("./routes/scratchCard");
 const supportRouter = require("./routes/support");
 const notificationsRouter = require("./routes/notifications");
 
@@ -25,15 +26,6 @@ const app = express();
 
 // ===============================
 // SUPPORT UPLOADS
-// ===============================
-// Files stored in:
-// /var/www/gamerzadda-api/uploads/
-//
-// Public URL:
-// https://api.gamerzadda.in/uploads/...
-//
-// IMPORTANT:
-// This must be BEFORE the 404 handler.
 // ===============================
 
 app.use(
@@ -194,22 +186,6 @@ app.use(
 
 // ===============================
 // NOTIFICATIONS
-//
-// notifications.js contains:
-//
-// GET    /:userId
-// PATCH  /:userId/read-all
-// PATCH  /:userId/:notificationId/read
-// DELETE /:userId/:notificationId
-// POST   /fcm-token
-//
-// Final:
-//
-// GET    /api/notifications/:userId
-// PATCH  /api/notifications/:userId/read-all
-// PATCH  /api/notifications/:userId/:notificationId/read
-// DELETE /api/notifications/:userId/:notificationId
-// POST   /api/notifications/fcm-token
 // ===============================
 
 app.use(
@@ -237,25 +213,26 @@ app.use(
 );
 
 // ===============================
-// SUPPORT
+// SCRATCH CARD
 //
-// support.js contains:
+// scratchCard.js contains:
 //
-// GET    /:userId
-// GET    /:userId/:conversationId
-// POST   /:userId
-// POST   /:userId/:conversationId/message
-// POST   /:userId/:conversationId/upload
-// PATCH  /:userId/:conversationId
+// GET  /scratch-card/:userId
+// POST /scratch-card/:userId/claim
 //
 // Final:
 //
-// GET    /api/support/:userId
-// GET    /api/support/:userId/:conversationId
-// POST   /api/support/:userId
-// POST   /api/support/:userId/:conversationId/message
-// POST   /api/support/:userId/:conversationId/upload
-// PATCH  /api/support/:userId/:conversationId
+// GET  /api/scratch-card/:userId
+// POST /api/scratch-card/:userId/claim
+// ===============================
+
+app.use(
+    "/api",
+    scratchCardRouter
+);
+
+// ===============================
+// SUPPORT
 // ===============================
 
 app.use(
