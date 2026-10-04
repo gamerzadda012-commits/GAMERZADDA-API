@@ -1,66 +1,25 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
 
-import fs from "fs";
-import path from "path";
+const {
+  createClient,
+} = require("@supabase/supabase-js");
 
-import {
+const {
   getApps,
   initializeApp,
   cert,
-} from "firebase-admin/app";
+} = require("firebase-admin/app");
 
-import {
+const {
   getMessaging,
-} from "firebase-admin/messaging";
+} = require("firebase-admin/messaging");
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+const router = express.Router();
 
 /* =========================================================
    HELPERS
-========================================================= */
-
-function json(data, status = 200) {
-  return NextResponse.json(data, { status });
-}
-
-function unauthorized() {
-  return json(
-    {
-      success: false,
-      error: "Unauthorized",
-    },
-    401
-  );
-}
-
-function apiError(error) {
-  console.error(
-    "NOTIFICATION API ERROR:",
-    error
-  );
-
-  return json(
-    {
-      success: false,
-      error:
-        error?.message ||
-        String(error) ||
-        "Internal server error",
-      message:
-        error?.message ||
-        String(error) ||
-        "Internal server error",
-    },
-    500
-  );
-}
-
-/* =========================================================
-   SUPABASE SERVICE ROLE CLIENT
 ========================================================= */
 
 function getSupabaseAdminClient() {
@@ -75,25 +34,35 @@ function getSupabaseAdminClient() {
       "SUPABASE SERVICE ROLE CONFIG MISSING",
       {
         hasUrl: Boolean(url),
-        hasServiceRoleKey: Boolean(
-          serviceKey
-        ),
+        hasServiceRoleKey: Boolean(serviceKey),
       }
     );
 
     return null;
   }
 
-  return createClient(
-    url,
-    serviceKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
+  return createClient(url, serviceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+function errorResponse(res, error, status = 500) {
+  console.error("NOTIFICATION API ERROR:", error);
+
+  return res.status(status).json({
+    success: false,
+    error:
+      error?.message ||
+      String(error) ||
+      "Internal server error",
+    message:
+      error?.message ||
+      String(error) ||
+      "Internal server error",
+  });
 }
 
 /* =========================================================
@@ -110,9 +79,11 @@ function getFirebaseAdmin() {
   const serviceAccountPath =
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
 
-  /* -------------------------------------------------------
-     SERVICE ACCOUNT JSON FILE
-  ------------------------------------------------------- */
+  /*
+   * -------------------------------------------------------
+   * SERVICE ACCOUNT JSON FILE
+   * -------------------------------------------------------
+   */
 
   if (serviceAccountPath) {
     const fullPath = path.resolve(
@@ -134,13 +105,12 @@ function getFirebaseAdmin() {
     let serviceAccount;
 
     try {
-      serviceAccount =
-        JSON.parse(
-          fs.readFileSync(
-            fullPath,
-            "utf8"
-          )
-        );
+      serviceAccount = JSON.parse(
+        fs.readFileSync(
+          fullPath,
+          "utf8"
+        )
+      );
     } catch (error) {
       throw new Error(
         `Firebase service account JSON is invalid: ${
@@ -212,9 +182,11 @@ function getFirebaseAdmin() {
     }
   }
 
-  /* -------------------------------------------------------
-     ENV FALLBACK
-  ------------------------------------------------------- */
+  /*
+   * -------------------------------------------------------
+   * ENV FALLBACK
+   * -------------------------------------------------------
+   */
 
   const projectId =
     process.env.FIREBASE_PROJECT_ID?.trim();
@@ -253,8 +225,7 @@ function getFirebaseAdmin() {
     privateKey.startsWith('"') &&
     privateKey.endsWith('"')
   ) {
-    privateKey =
-      privateKey.slice(1, -1);
+    privateKey = privateKey.slice(1, -1);
   }
 
   try {
@@ -281,603 +252,683 @@ function getFirebaseAdmin() {
 }
 
 /* =========================================================
-   ADMIN AUTH
+   GET NOTIFICATIONS
+   GET /api/notifications/:userId
 ========================================================= */
 
-async function getAdmin() {
-  const cookieStore =
-    await cookies();
-
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  const supabaseKey =
-    process.env
-      .NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
-      "Supabase environment variables are missing."
-    );
-  }
-
-  const supabase =
-    createServerClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(
-                ({
-                  name,
-                  value,
-                  options,
-                }) => {
-                  cookieStore.set(
-                    name,
-                    value,
-                    options
-                  );
-                }
-              );
-            } catch {
-              // Ignore cookie write errors
-            }
-          },
-        },
-      }
-    );
-
-  const {
-    data: authData,
-    error: authError,
-  } =
-    await supabase.auth.getUser();
-
-  if (authError) {
-    console.error(
-      "AUTH ERROR:",
-      authError
-    );
-  }
-
-  const user =
-    authData?.user || null;
-
-  if (!user) {
-    return {
-      supabase,
-      adminSupabase: null,
-      user: null,
-      adminUser: null,
-    };
-  }
-
-  const adminSupabase =
-    getSupabaseAdminClient();
-
-  let adminUser = null;
-
-  /* -------------------------------------------------------
-     ADMIN ROLE CHECK
-  ------------------------------------------------------- */
-
-  if (adminSupabase) {
-    const {
-      data,
-      error,
-    } =
-      await adminSupabase
-        .from("users")
-        .select("id,role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    if (error) {
-      console.error(
-        "ADMIN LOOKUP ERROR:",
-        error
-      );
-    }
-
-    adminUser = data || null;
-  }
-
-  /* -------------------------------------------------------
-     FALLBACK ROLE CHECK
-  ------------------------------------------------------- */
-
-  if (!adminUser) {
-    const {
-      data,
-      error,
-    } =
-      await supabase
-        .from("users")
-        .select("id,role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-    if (error) {
-      console.error(
-        "ROLE LOOKUP ERROR:",
-        error
-      );
-    }
-
-    adminUser = data || null;
-  }
-
-  return {
-    supabase,
-    adminSupabase,
-    user,
-    adminUser,
-  };
-}
-
-/* =========================================================
-   GET
-========================================================= */
-
-export async function GET() {
+router.get("/:userId", async (req, res) => {
   try {
-    const {
-      supabase,
-      adminSupabase,
-      user,
-      adminUser,
-    } =
-      await getAdmin();
+    const userId = String(
+      req.params.userId || ""
+    ).trim();
 
-    if (!user || !adminUser) {
-      return unauthorized();
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required.",
+      });
     }
 
-    const role =
-      String(
-        adminUser.role || ""
-      )
-        .trim()
-        .toLowerCase();
+    const db = getSupabaseAdminClient();
 
-    if (role !== "admin") {
-      return unauthorized();
-    }
-
-    const db =
-      adminSupabase || supabase;
-
-    /* -------------------------------------------------------
-       USERS
-    ------------------------------------------------------- */
-
-    const {
-      data: users,
-      error: usersError,
-    } =
-      await db
-        .from("users")
-        .select(
-          "id,full_name,phone,email,fcm_token,role"
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(5000);
-
-    if (usersError) {
-      console.error(
-        "USERS FETCH ERROR:",
-        usersError
-      );
-
-      throw new Error(
-        `Failed to load users: ${usersError.message}`
-      );
-    }
-
-    /* -------------------------------------------------------
-       HISTORY
-    ------------------------------------------------------- */
-
-    let history = [];
-
-    const {
-      data: historyData,
-      error: historyError,
-    } =
-      await db
-        .from("notifications")
-        .select("*")
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(100);
-
-    if (!historyError) {
-      history =
-        historyData || [];
-    } else {
-      console.error(
-        "HISTORY FETCH ERROR:",
-        historyError
-      );
-    }
-
-    return json({
-      success: true,
-      users: users || [],
-      history,
-    });
-  } catch (error) {
-    return apiError(error);
-  }
-}
-
-/* =========================================================
-   POST
-========================================================= */
-
-export async function POST(request) {
-  try {
-    const {
-      supabase,
-      adminSupabase,
-      user,
-      adminUser,
-    } =
-      await getAdmin();
-
-    /* -------------------------------------------------------
-       AUTH
-    ------------------------------------------------------- */
-
-    if (!user || !adminUser) {
-      return unauthorized();
-    }
-
-    const role =
-      String(
-        adminUser.role || ""
-      )
-        .trim()
-        .toLowerCase();
-
-    if (role !== "admin") {
-      return unauthorized();
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        error:
+          "Supabase service-role configuration is missing.",
+      });
     }
 
     /*
-     * Notification sending must use
-     * service-role Supabase.
+     * We fetch notifications belonging to:
+     *
+     * 1. The specific user
+     * 2. Global notifications where user_id IS NULL
      */
 
-    if (!adminSupabase) {
-      return json(
-        {
-          success: false,
-          error:
-            "SUPABASE_SERVICE_ROLE_KEY is missing. Notification sending requires the service-role client.",
-        },
-        500
+    const {
+      data,
+      error,
+    } = await db
+      .from("notifications")
+      .select("*")
+      .or(
+        `user_id.eq.${userId},user_id.is.null`
+      )
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(200);
+
+    if (error) {
+      console.error(
+        "GET NOTIFICATIONS ERROR:",
+        error
       );
+
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+      });
     }
 
-    const db =
-      adminSupabase;
+    const notifications =
+      (data || []).map((item) => ({
+        id: String(item.id),
+        title: item.title || "",
+        message: item.message || "",
+        type: item.type || "general",
 
-    /* -------------------------------------------------------
-       REQUEST BODY
-    ------------------------------------------------------- */
+        /*
+         * Current notifications table does not
+         * provide per-user read state.
+         *
+         * Keep the field compatible with Android.
+         */
+        is_read:
+          item.is_read === true ||
+          item.read === true,
 
-    const body =
-      await request.json();
+        created_at:
+          item.created_at || "",
 
-    const title =
-      String(
+        redirect_url:
+          item.redirect_url || "",
+      }));
+
+    const unreadCount =
+      notifications.filter(
+        (item) => !item.is_read
+      ).length;
+
+    return res.json({
+      success: true,
+      notifications,
+      unread_count: unreadCount,
+    });
+  } catch (error) {
+    return errorResponse(res, error);
+  }
+});
+
+/* =========================================================
+   MARK SINGLE NOTIFICATION READ
+   PATCH /api/notifications/:userId/:notificationId/read
+========================================================= */
+
+router.patch(
+  "/:userId/:notificationId/read",
+  async (req, res) => {
+    try {
+      const userId = String(
+        req.params.userId || ""
+      ).trim();
+
+      const notificationId = String(
+        req.params.notificationId || ""
+      ).trim();
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "User ID is required.",
+        });
+      }
+
+      if (!notificationId) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Notification ID is required.",
+        });
+      }
+
+      const db = getSupabaseAdminClient();
+
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          error:
+            "Supabase service-role configuration is missing.",
+        });
+      }
+
+      /*
+       * IMPORTANT
+       *
+       * The current notifications table from the
+       * supplied notification route does not show
+       * a separate per-user notification/read table.
+       *
+       * Therefore we DO NOT update the notification
+       * globally here. Doing so could mark the same
+       * notification read for every user.
+       *
+       * Return a safe response instead.
+       */
+
+      const {
+        data: notification,
+        error,
+      } = await db
+        .from("notifications")
+        .select("id,user_id")
+        .eq("id", notificationId)
+        .maybeSingle();
+
+      if (error) {
+        return res.status(500).json({
+          success: false,
+          error: error.message,
+        });
+      }
+
+      if (!notification) {
+        return res.status(404).json({
+          success: false,
+          error:
+            "Notification not found.",
+        });
+      }
+
+      /*
+       * Security:
+       * A user-specific notification must belong
+       * to the requesting user.
+       *
+       * Global notification (user_id NULL) is valid.
+       */
+
+      if (
+        notification.user_id &&
+        String(notification.user_id) !== userId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "Access denied.",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Notification received. Per-user read state requires a notification read-state table.",
+        notification_id: notificationId,
+      });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  }
+);
+
+/* =========================================================
+   MARK ALL READ
+   PATCH /api/notifications/:userId/read-all
+========================================================= */
+
+router.patch(
+  "/:userId/read-all",
+  async (req, res) => {
+    try {
+      const userId = String(
+        req.params.userId || ""
+      ).trim();
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "User ID is required.",
+        });
+      }
+
+      /*
+       * DO NOT globally modify notifications.
+       *
+       * The current DB structure supplied does not
+       * contain a per-user read-state table.
+       */
+
+      return res.json({
+        success: true,
+        message:
+          "All notifications acknowledged. Per-user read state requires a notification read-state table.",
+      });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  }
+);
+
+/* =========================================================
+   DELETE NOTIFICATION
+   DELETE /api/notifications/:userId/:notificationId
+========================================================= */
+
+router.delete(
+  "/:userId/:notificationId",
+  async (req, res) => {
+    try {
+      const userId = String(
+        req.params.userId || ""
+      ).trim();
+
+      const notificationId = String(
+        req.params.notificationId || ""
+      ).trim();
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "User ID is required.",
+        });
+      }
+
+      if (!notificationId) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Notification ID is required.",
+        });
+      }
+
+      const db = getSupabaseAdminClient();
+
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          error:
+            "Supabase service-role configuration is missing.",
+        });
+      }
+
+      /*
+       * We first verify ownership.
+       */
+
+      const {
+        data: notification,
+        error: findError,
+      } = await db
+        .from("notifications")
+        .select("id,user_id")
+        .eq("id", notificationId)
+        .maybeSingle();
+
+      if (findError) {
+        return res.status(500).json({
+          success: false,
+          error: findError.message,
+        });
+      }
+
+      if (!notification) {
+        return res.status(404).json({
+          success: false,
+          error:
+            "Notification not found.",
+        });
+      }
+
+      /*
+       * Never allow a user to delete a global
+       * notification or another user's notification
+       * from the shared notifications table.
+       *
+       * A per-user delete/read table is needed for
+       * proper Android behavior.
+       */
+
+      if (
+        !notification.user_id ||
+        String(notification.user_id) !== userId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error:
+            "This notification cannot be deleted from the shared notification table.",
+        });
+      }
+
+      const {
+        error: deleteError,
+      } = await db
+        .from("notifications")
+        .delete()
+        .eq("id", notificationId)
+        .eq("user_id", userId);
+
+      if (deleteError) {
+        return res.status(500).json({
+          success: false,
+          error: deleteError.message,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Notification deleted successfully.",
+      });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  }
+);
+
+/* =========================================================
+   SAVE / UPDATE FCM TOKEN
+   POST /api/notifications/fcm-token
+========================================================= */
+
+router.post(
+  "/fcm-token",
+  async (req, res) => {
+    try {
+      const body = req.body || {};
+
+      const userId = String(
+        body.userId ||
+        body.user_id ||
+        ""
+      ).trim();
+
+      const token = String(
+        body.fcmToken ||
+        body.fcm_token ||
+        body.token ||
+        ""
+      ).trim();
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          error: "User ID is required.",
+        });
+      }
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: "FCM token is required.",
+        });
+      }
+
+      const db = getSupabaseAdminClient();
+
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          error:
+            "Supabase service-role configuration is missing.",
+        });
+      }
+
+      /*
+       * Verify user exists.
+       */
+
+      const {
+        data: user,
+        error: userError,
+      } = await db
+        .from("users")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (userError) {
+        return res.status(500).json({
+          success: false,
+          error: userError.message,
+        });
+      }
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: "User not found.",
+        });
+      }
+
+      /*
+       * Save FCM token.
+       */
+
+      const {
+        error: updateError,
+      } = await db
+        .from("users")
+        .update({
+          fcm_token: token,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error(
+          "FCM TOKEN UPDATE ERROR:",
+          updateError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error: updateError.message,
+        });
+      }
+
+      console.log(
+        "FCM TOKEN SAVED FOR USER:",
+        userId
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "FCM token saved successfully.",
+      });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  }
+);
+
+/* =========================================================
+   ADMIN / SEND NOTIFICATION
+   POST /api/notifications/send
+========================================================= */
+
+router.post(
+  "/send",
+  async (req, res) => {
+    try {
+      const db = getSupabaseAdminClient();
+
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          error:
+            "SUPABASE SERVICE_ROLE configuration is missing.",
+        });
+      }
+
+      const body = req.body || {};
+
+      const title = String(
         body.title || ""
       ).trim();
 
-    const message =
-      String(
+      const message = String(
         body.message || ""
       ).trim();
 
-    const type =
-      String(
+      const type = String(
         body.type || "general"
       )
         .trim()
         .toLowerCase();
 
-    const target =
-      String(
+      const target = String(
         body.target || "all"
       )
         .trim()
         .toLowerCase();
 
-    const userId =
-      body.user_id
-        ? String(
-            body.user_id
-          ).trim()
+      const userId = body.user_id
+        ? String(body.user_id).trim()
         : null;
 
-    const redirectUrl =
-      body.redirect_url
-        ? String(
-            body.redirect_url
-          ).trim()
+      const redirectUrl = body.redirect_url
+        ? String(body.redirect_url).trim()
         : "";
 
-    /* -------------------------------------------------------
-       VALIDATION
-    ------------------------------------------------------- */
-
-    if (!title) {
-      return json(
-        {
+      if (!title) {
+        return res.status(400).json({
           success: false,
           error:
             "Notification title is required.",
-        },
-        400
-      );
-    }
+        });
+      }
 
-    if (!message) {
-      return json(
-        {
+      if (!message) {
+        return res.status(400).json({
           success: false,
           error:
             "Notification message is required.",
-        },
-        400
-      );
-    }
+        });
+      }
 
-    if (
-      ![
+      const allowedTypes = [
         "general",
         "tournament",
         "wallet",
         "support",
         "important",
-      ].includes(type)
-    ) {
-      return json(
-        {
+      ];
+
+      if (!allowedTypes.includes(type)) {
+        return res.status(400).json({
           success: false,
           error:
             "Invalid notification type.",
-        },
-        400
-      );
-    }
+        });
+      }
 
-    if (
-      target !== "all" &&
-      target !== "user"
-    ) {
-      return json(
-        {
+      if (
+        target !== "all" &&
+        target !== "user"
+      ) {
+        return res.status(400).json({
           success: false,
           error:
             "Invalid notification target.",
-        },
-        400
-      );
-    }
+        });
+      }
 
-    if (
-      target === "user" &&
-      !userId
-    ) {
-      return json(
-        {
+      if (
+        target === "user" &&
+        !userId
+      ) {
+        return res.status(400).json({
           success: false,
           error:
             "Please select a user.",
-        },
-        400
-      );
-    }
+        });
+      }
 
-    /* =====================================================
-       TARGET USERS
-    ===================================================== */
+      /* =====================================================
+         TARGET USERS
+      ===================================================== */
 
-    let selectedUsers = [];
+      let selectedUsers = [];
+      let targetCount = 0;
 
-    /*
-     * targetCount = actual users selected by admin.
-     *
-     * This is intentionally separate from
-     * totalTokens because a user may exist
-     * without an FCM token.
-     */
-
-    let targetCount = 0;
-
-    if (target === "user") {
-      /* ---------------------------------------------------
-         SPECIFIC USER
-      --------------------------------------------------- */
-
-      console.log(
-        "NOTIFICATION SPECIFIC USER ID:",
-        userId
-      );
-
-      const {
-        data: selectedUser,
-        error: selectedUserError,
-      } =
-        await db
+      if (target === "user") {
+        const {
+          data: selectedUser,
+          error,
+        } = await db
           .from("users")
           .select(
-            "id,phone,full_name,fcm_token"
+            "id,phone,full_name,email,fcm_token"
           )
           .eq("id", userId)
           .maybeSingle();
 
-      if (selectedUserError) {
-        console.error(
-          "SPECIFIC USER FETCH ERROR:",
-          selectedUserError
-        );
+        if (error) {
+          throw new Error(
+            `Failed to get selected user: ${error.message}`
+          );
+        }
 
-        throw new Error(
-          `Failed to get selected user: ${selectedUserError.message}`
-        );
-      }
-
-      if (!selectedUser) {
-        console.error(
-          "SPECIFIC USER NOT FOUND:",
-          userId
-        );
-
-        return json(
-          {
+        if (!selectedUser) {
+          return res.status(404).json({
             success: false,
             error:
               "Selected user was not found.",
-          },
-          404
-        );
-      }
+          });
+        }
 
-      console.log(
-        "SPECIFIC USER FOUND:",
-        selectedUser.id
-      );
+        selectedUsers = [
+          selectedUser,
+        ];
 
-      /*
-       * IMPORTANT:
-       * Target count means selected user,
-       * NOT number of FCM tokens.
-       */
-
-      targetCount = 1;
-
-      selectedUsers = [
-        selectedUser,
-      ];
-
-      const hasToken =
-        Boolean(
-          String(
-            selectedUser.fcm_token ||
-              ""
-          ).trim()
-        );
-
-      console.log(
-        "SPECIFIC USER HAS FCM:",
-        hasToken
-      );
-    } else {
-      /* ---------------------------------------------------
-         ALL USERS
-      --------------------------------------------------- */
-
-      const {
-        data: allUsers,
-        error: allUsersError,
-      } =
-        await db
+        targetCount = 1;
+      } else {
+        const {
+          data: allUsers,
+          error,
+        } = await db
           .from("users")
           .select(
-            "id,phone,full_name,fcm_token"
+            "id,phone,full_name,email,fcm_token"
           )
           .limit(5000);
 
-      if (allUsersError) {
-        console.error(
-          "ALL USERS FETCH ERROR:",
-          allUsersError
-        );
+        if (error) {
+          throw new Error(
+            `Failed to load users: ${error.message}`
+          );
+        }
 
-        throw new Error(
-          `Failed to load users: ${allUsersError.message}`
-        );
+        selectedUsers =
+          allUsers || [];
+
+        targetCount =
+          selectedUsers.length;
       }
 
-      /*
-       * All users are the target audience.
-       */
+      /* =====================================================
+         FCM TOKENS
+      ===================================================== */
 
-      selectedUsers =
-        allUsers || [];
+      const tokenSet = new Set();
 
-      targetCount =
-        selectedUsers.length;
-    }
-
-    console.log(
-      "NOTIFICATION TARGET USERS:",
-      targetCount
-    );
-
-    /* =====================================================
-       FCM TOKENS
-    ===================================================== */
-
-    const tokenSet =
-      new Set();
-
-    for (
-      const selectedUser of
+      for (
+        const selectedUser of
         selectedUsers
-    ) {
-      const token =
-        String(
-          selectedUser.fcm_token ||
-            ""
+      ) {
+        const token = String(
+          selectedUser.fcm_token || ""
         ).trim();
 
-      if (token.length > 0) {
-        tokenSet.add(token);
+        if (token) {
+          tokenSet.add(token);
+        }
       }
-    }
 
-    const tokens =
-      Array.from(tokenSet);
+      const tokens =
+        Array.from(tokenSet);
 
-    console.log(
-      "NOTIFICATION FCM TOKENS:",
-      tokens.length
-    );
+      /* =====================================================
+         SAVE NOTIFICATION HISTORY
+      ===================================================== */
 
-    /* =====================================================
-       SAVE HISTORY
-       
-       Only known-safe columns are inserted.
-    ===================================================== */
+      let historyId = null;
 
-    let historyId = null;
-
-    try {
-      const {
-        data: history,
-        error,
-      } =
-        await db
+      try {
+        const {
+          data: history,
+          error,
+        } = await db
           .from("notifications")
           .insert({
             title,
@@ -888,109 +939,88 @@ export async function POST(request) {
                 ? userId
                 : null,
             redirect_url:
-              redirectUrl ||
-              null,
+              redirectUrl || null,
           })
           .select("id")
           .single();
 
-      if (error) {
+        if (error) {
+          console.error(
+            "NOTIFICATION HISTORY INSERT ERROR:",
+            error
+          );
+        } else {
+          historyId =
+            history?.id || null;
+        }
+      } catch (error) {
         console.error(
-          "NOTIFICATION HISTORY INSERT ERROR:",
+          "HISTORY INSERT ERROR:",
           error
         );
-      } else {
-        historyId =
-          history?.id || null;
       }
-    } catch (error) {
-      console.error(
-        "HISTORY INSERT ERROR:",
-        error
-      );
-    }
 
-    /* =====================================================
-       NO FCM TOKEN
-    ===================================================== */
+      /*
+       * No FCM tokens.
+       */
 
-    if (tokens.length === 0) {
-      return json({
-        success: true,
+      if (tokens.length === 0) {
+        return res.json({
+          success: true,
+          message:
+            target === "user"
+              ? "Selected user was found, but this user has no FCM token."
+              : "No FCM tokens were found.",
+          target,
+          targetUsers:
+            targetCount,
+          totalTokens: 0,
+          sent: 0,
+          failed: 0,
+          invalidTokens: 0,
+          historyId,
+          redirectUrl:
+            redirectUrl || null,
+        });
+      }
 
-        message:
-          target === "user"
-            ? "Selected user was found, but this user has no FCM token."
-            : "No FCM tokens were found.",
+      /* =====================================================
+         FIREBASE
+      ===================================================== */
 
-        target,
+      const firebaseApp =
+        getFirebaseAdmin();
 
-        /*
-         * IMPORTANT:
-         * Specific user = 1 even when
-         * token is missing.
-         */
-
-        targetUsers:
-          targetCount,
-
-        totalTokens: 0,
-
-        sent: 0,
-
-        failed: 0,
-
-        invalidTokens: 0,
-
-        historyId,
-
-        redirectUrl:
-          redirectUrl || null,
-      });
-    }
-
-    /* =====================================================
-       FIREBASE
-    ===================================================== */
-
-    const firebaseApp =
-      getFirebaseAdmin();
-
-    const messaging =
-      getMessaging(
-        firebaseApp
-      );
-
-    /* =====================================================
-       FCM SEND
-    ===================================================== */
-
-    const CHUNK_SIZE = 500;
-
-    let sent = 0;
-    let failed = 0;
-
-    const invalidTokens = [];
-
-    for (
-      let i = 0;
-      i < tokens.length;
-      i += CHUNK_SIZE
-    ) {
-      const chunk =
-        tokens.slice(
-          i,
-          i + CHUNK_SIZE
+      const messaging =
+        getMessaging(
+          firebaseApp
         );
 
-      try {
-        console.log(
-          `FCM SENDING CHUNK: ${i + 1}-${i + chunk.length}`
-        );
+      const CHUNK_SIZE = 500;
 
-        const result =
-          await messaging.sendEachForMulticast(
-            {
+      let sent = 0;
+      let failed = 0;
+
+      const invalidTokens = [];
+
+      for (
+        let i = 0;
+        i < tokens.length;
+        i += CHUNK_SIZE
+      ) {
+        const chunk =
+          tokens.slice(
+            i,
+            i + CHUNK_SIZE
+          );
+
+        try {
+          console.log(
+            `FCM SENDING CHUNK: ${i + 1}-${i + chunk.length}`
+          );
+
+          const result =
+            await messaging.sendEachForMulticast({
               tokens: chunk,
 
               notification: {
@@ -1012,177 +1042,158 @@ export async function POST(request) {
                 notification: {
                   channelId:
                     "gamerzadda_notifications",
-
                   sound: "default",
                 },
               },
-            }
-          );
+            });
 
-        /*
-         * These are the actual Firebase
-         * delivery results.
-         */
-
-        sent +=
-          Number(
+          sent += Number(
             result.successCount || 0
           );
 
-        failed +=
-          Number(
+          failed += Number(
             result.failureCount || 0
           );
 
-        result.responses.forEach(
-          (
-            sendResponse,
-            index
-          ) => {
-            if (
-              sendResponse.success
-            ) {
-              return;
-            }
+          result.responses.forEach(
+            (
+              sendResponse,
+              index
+            ) => {
+              if (
+                sendResponse.success
+              ) {
+                return;
+              }
 
-            const code =
-              sendResponse
-                .error?.code || "";
+              const code =
+                sendResponse
+                  .error?.code || "";
 
-            const errorMessage =
-              sendResponse
-                .error?.message || "";
+              const errorMessage =
+                sendResponse
+                  .error?.message || "";
 
-            console.error(
-              "FCM SEND ERROR:",
-              code,
-              errorMessage
-            );
-
-            if (
-              code ===
-                "messaging/registration-token-not-registered" ||
-              code ===
-                "messaging/invalid-registration-token"
-            ) {
-              invalidTokens.push(
-                chunk[index]
+              console.error(
+                "FCM SEND ERROR:",
+                code,
+                errorMessage
               );
+
+              if (
+                code ===
+                  "messaging/registration-token-not-registered" ||
+                code ===
+                  "messaging/invalid-registration-token"
+              ) {
+                invalidTokens.push(
+                  chunk[index]
+                );
+              }
             }
-          }
-        );
-      } catch (error) {
-        console.error(
-          "FCM CHUNK ERROR:",
-          error
-        );
+          );
+        } catch (error) {
+          console.error(
+            "FCM CHUNK ERROR:",
+            error
+          );
 
-        failed +=
-          chunk.length;
+          failed +=
+            chunk.length;
+        }
       }
-    }
 
-    /* =====================================================
-       REMOVE INVALID TOKENS
-    ===================================================== */
+      /* =====================================================
+         REMOVE INVALID TOKENS
+      ===================================================== */
 
-    const uniqueInvalidTokens =
-      Array.from(
-        new Set(
-          invalidTokens
-        )
+      const uniqueInvalidTokens =
+        Array.from(
+          new Set(
+            invalidTokens
+          )
+        );
+
+      for (
+        const invalidToken of
+        uniqueInvalidTokens
+      ) {
+        try {
+          await db
+            .from("users")
+            .update({
+              fcm_token: null,
+            })
+            .eq(
+              "fcm_token",
+              invalidToken
+            );
+        } catch (error) {
+          console.error(
+            "INVALID TOKEN CLEANUP ERROR:",
+            error
+          );
+        }
+      }
+
+      /* =====================================================
+         FINAL RESPONSE
+      ===================================================== */
+
+      console.log(
+        "NOTIFICATION COMPLETE:",
+        {
+          target,
+          targetUsers:
+            targetCount,
+          totalTokens:
+            tokens.length,
+          sent,
+          failed,
+          invalidTokens:
+            uniqueInvalidTokens.length,
+        }
       );
 
-    for (
-      const invalidToken of
-        uniqueInvalidTokens
-    ) {
-      try {
-        await db
-          .from("users")
-          .update({
-            fcm_token: null,
-          })
-          .eq(
-            "fcm_token",
-            invalidToken
-          );
-      } catch (error) {
-        console.error(
-          "INVALID TOKEN CLEANUP ERROR:",
-          error
-        );
-      }
-    }
+      return res.json({
+        success: true,
 
-    /* =====================================================
-       FINAL COUNTS
-    ===================================================== */
+        message:
+          sent > 0
+            ? "Notification sent successfully."
+            : "Notification processed, but delivery failed.",
 
-    console.log(
-      "NOTIFICATION COMPLETE:",
-      {
         target,
+
         targetUsers:
           targetCount,
+
         totalTokens:
           tokens.length,
+
         sent,
+
         failed,
+
         invalidTokens:
           uniqueInvalidTokens.length,
-      }
-    );
 
-    /* =====================================================
-       FINAL RESPONSE
-    ===================================================== */
+        historyId,
 
-    return json({
-      success: true,
-
-      message:
-        sent > 0
-          ? "Notification sent successfully."
-          : "Notification processed, but delivery failed.",
-
-      target,
-
-      /*
-       * Number of actual users selected.
-       *
-       * Specific user = 1
-       * All users = number of users selected
-       */
-
-      targetUsers:
-        targetCount,
-
-      /*
-       * Number of unique FCM tokens
-       * actually attempted.
-       */
-
-      totalTokens:
-        tokens.length,
-
-      /*
-       * Actual Firebase result.
-       */
-
-      sent,
-
-      failed,
-
-      invalidTokens:
-        uniqueInvalidTokens.length,
-
-      historyId,
-
-      redirectUrl:
-        redirectUrl || null,
-    });
-  } catch (error) {
-    return apiError(error);
+        redirectUrl:
+          redirectUrl || null,
+      });
+    } catch (error) {
+      return errorResponse(
+        res,
+        error
+      );
+    }
   }
-}
+);
+
+/* =========================================================
+   EXPORT
+========================================================= */
+
+module.exports = router;
