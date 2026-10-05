@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -7,296 +6,145 @@ export const revalidate = 0;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
 );
 
-const ADMIN_SESSION_COOKIE = "gamerzadda_admin_session";
-const OLD_SESSION_COOKIE = "gamerzadda_session";
-
-function sha256(value) {
-  return crypto
-    .createHash("sha256")
-    .update(value)
-    .digest("hex");
-}
-
 /* =========================================================
-   CURRENT ADMIN SESSION VERIFICATION
-========================================================= */
+   CURRENT ADMIN AUTH
 
-function verifyAdminSessionToken(token) {
-  try {
-    const secret = process.env.ADMIN_SESSION_SECRET;
+   IMPORTANT:
+   The admin panel uses:
+   gamerzadda_admin_session
 
-    if (!token || !secret) {
-      return null;
-    }
-
-    const decoded = decodeURIComponent(token);
-    const parts = decoded.split(".");
-
-    if (parts.length !== 2) {
-      return null;
-    }
-
-    const [encodedPayload, signature] = parts;
-
-    const expectedSignature = crypto
-      .createHmac("sha256", secret)
-      .update(encodedPayload)
-      .digest("base64url");
-
-    const signatureBuffer = Buffer.from(signature);
-    const expectedBuffer = Buffer.from(expectedSignature);
-
-    if (
-      signatureBuffer.length !== expectedBuffer.length ||
-      !crypto.timingSafeEqual(
-        signatureBuffer,
-        expectedBuffer
-      )
-    ) {
-      return null;
-    }
-
-    const payload = JSON.parse(
-      Buffer.from(
-        encodedPayload,
-        "base64url"
-      ).toString("utf8")
-    );
-
-    if (!payload?.userId) {
-      return null;
-    }
-
-    if (payload.role !== "admin") {
-      return null;
-    }
-
-    if (
-      payload.expiresAt &&
-      Number(payload.expiresAt) <= Date.now()
-    ) {
-      return null;
-    }
-
-    return payload;
-  } catch (error) {
-    console.error(
-      "OTP ADMIN SESSION VERIFY ERROR:",
-      error
-    );
-
-    return null;
-  }
-}
-
-/* =========================================================
-   ADMIN AUTH
+   The authoritative verification is:
+   https://api.gamerzadda.in/api/admin/session
 ========================================================= */
 
 async function requireAdmin(request) {
+  const cookie =
+    request.cookies.get("gamerzadda_admin_session")?.value || "";
 
-  /*
-   * 1. Supabase Bearer token
-   */
+  if (!cookie) {
+    console.error(
+      "OTP ADMIN AUTH: gamerzadda_admin_session cookie missing"
+    );
 
-  const authorization =
-    request.headers.get("authorization") || "";
-
-  if (authorization.startsWith("Bearer ")) {
-
-    const token =
-      authorization
-        .slice(7)
-        .trim();
-
-    if (token) {
-
-      const { data, error } =
-        await supabase.auth.getUser(token);
-
-      if (
-        !error &&
-        data?.user?.id
-      ) {
-
-        let { data: admin } =
-          await supabase
-            .from("users")
-            .select("id,role,status")
-            .eq("id", data.user.id)
-            .maybeSingle();
-
-        /*
-         * Some installations have a different
-         * public users ID, so also try email.
-         */
-
-        if (
-          admin?.role !== "admin" &&
-          data.user.email
-        ) {
-
-          const result =
-            await supabase
-              .from("users")
-              .select("id,role,status")
-              .ilike(
-                "email",
-                data.user.email
-              )
-              .maybeSingle();
-
-          admin = result.data;
-        }
-
-        if (
-          admin?.role === "admin" &&
-          String(
-            admin.status || "active"
-          ).toLowerCase() === "active"
-        ) {
-          return admin;
-        }
-      }
-    }
+    throw new Error("UNAUTHORIZED");
   }
 
-  /*
-   * 2. CURRENT GamerzAdda admin session
-   */
+  const apiUrl = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://api.gamerzadda.in"
+  )
+    .trim()
+    .replace(/\/+$/, "");
 
-  const adminCookie =
-    request.cookies.get(
-      ADMIN_SESSION_COOKIE
-    )?.value;
+  try {
+    const response = await fetch(
+      `${apiUrl}/api/admin/session`,
+      {
+        method: "GET",
+        headers: {
+          Cookie:
+            `gamerzadda_admin_session=${encodeURIComponent(cookie)}`,
+        },
+        cache: "no-store",
+      }
+    );
 
-  if (adminCookie) {
+    const data = await response
+      .json()
+      .catch(() => null);
 
-    const session =
-      verifyAdminSessionToken(
-        adminCookie
+    if (
+      !response.ok ||
+      !data?.success ||
+      !data?.authenticated ||
+      !data?.admin
+    ) {
+      console.error(
+        "OTP ADMIN AUTH FAILED:",
+        {
+          status: response.status,
+          success: data?.success,
+          authenticated: data?.authenticated,
+          error: data?.error,
+        }
       );
 
-    if (session?.userId) {
-
-      const { data: admin, error } =
-        await supabase
-          .from("users")
-          .select("id,role,status")
-          .eq("id", session.userId)
-          .maybeSingle();
-
-      if (
-        !error &&
-        admin?.role === "admin" &&
-        String(
-          admin.status || "active"
-        ).toLowerCase() === "active"
-      ) {
-        return admin;
-      }
+      throw new Error("UNAUTHORIZED");
     }
-  }
 
-  /*
-   * 3. Backward-compatible old session
-   */
+    const admin = data.admin;
 
-  const oldCookie =
-    request.cookies.get(
-      OLD_SESSION_COOKIE
-    )?.value;
+    const role = String(
+      admin.role || ""
+    )
+      .trim()
+      .toLowerCase();
 
-  if (oldCookie) {
+    const status = String(
+      admin.status || "active"
+    )
+      .trim()
+      .toLowerCase();
 
-    let decoded = oldCookie;
+    if (role !== "admin") {
+      console.error(
+        "OTP ADMIN AUTH: Invalid role",
+        role
+      );
 
-    try {
-      decoded =
-        decodeURIComponent(oldCookie);
-    } catch {}
-
-    const candidates = [
-      decoded,
-      oldCookie,
-      sha256(decoded),
-      sha256(oldCookie)
-    ];
-
-    for (const candidate of [
-      ...new Set(candidates)
-    ]) {
-
-      /*
-       * Current user_sessions schema
-       * uses token_hash.
-       */
-
-      const { data: session } =
-        await supabase
-          .from("user_sessions")
-          .select(
-            "user_id,expires_at"
-          )
-          .eq(
-            "token_hash",
-            candidate
-          )
-          .maybeSingle();
-
-      if (
-        session?.user_id &&
-        (
-          !session.expires_at ||
-          new Date(
-            session.expires_at
-          ) > new Date()
-        )
-      ) {
-
-        const { data: admin } =
-          await supabase
-            .from("users")
-            .select(
-              "id,role,status"
-            )
-            .eq(
-              "id",
-              session.user_id
-            )
-            .maybeSingle();
-
-        if (
-          admin?.role === "admin" &&
-          String(
-            admin.status || "active"
-          ).toLowerCase() === "active"
-        ) {
-          return admin;
-        }
-      }
+      throw new Error("UNAUTHORIZED");
     }
-  }
 
-  throw new Error("UNAUTHORIZED");
+    if (status !== "active") {
+      console.error(
+        "OTP ADMIN AUTH: Admin inactive",
+        status
+      );
+
+      throw new Error("UNAUTHORIZED");
+    }
+
+    return admin;
+
+  } catch (error) {
+
+    if (
+      error?.message ===
+      "UNAUTHORIZED"
+    ) {
+      throw error;
+    }
+
+    console.error(
+      "OTP ADMIN SESSION REQUEST ERROR:",
+      error
+    );
+
+    throw new Error("UNAUTHORIZED");
+  }
 }
 
 /* =========================================================
-   HELPERS
+   OTP STATUS
 ========================================================= */
 
-function statusOf(row) {
-
-  if (row.verified) {
+function getOtpStatus(row) {
+  if (row?.verified === true) {
     return "verified";
   }
 
   if (
-    row.expires_at &&
-    new Date(row.expires_at) <= new Date()
+    row?.expires_at &&
+    new Date(row.expires_at).getTime() <= Date.now()
   ) {
     return "expired";
   }
@@ -309,19 +157,20 @@ function statusOf(row) {
 ========================================================= */
 
 export async function GET(request) {
-
   try {
-
     await requireAdmin(request);
 
     const {
-      searchParams
+      searchParams,
     } = new URL(request.url);
 
-    const phone =
-      (
-        searchParams.get("phone") || ""
-      ).replace(/\D/g, "");
+    /* -------------------------
+       FILTERS
+    ------------------------- */
+
+    const phone = String(
+      searchParams.get("phone") || ""
+    ).replace(/\D/g, "");
 
     const flow =
       searchParams.get("flow") || "all";
@@ -333,149 +182,182 @@ export async function GET(request) {
       searchParams.get("period") || "7";
 
     const ip =
-      (
+      String(
         searchParams.get("ip") || ""
       ).trim();
 
     const sort =
-      searchParams.get("sort") ===
-      "oldest"
+      searchParams.get("sort") === "oldest"
         ? "oldest"
         : "newest";
 
-    const limit =
-      Math.min(
-        Math.max(
-          Number(
-            searchParams.get(
-              "limit"
-            ) || 200
-          ),
-          1
-        ),
-        500
+    let limit = Number(
+      searchParams.get("limit") || 200
+    );
+
+    if (!Number.isFinite(limit)) {
+      limit = 200;
+    }
+
+    limit = Math.min(
+      Math.max(
+        Math.floor(limit),
+        1
+      ),
+      500
+    );
+
+    /* -------------------------
+       OTP QUERY
+    ------------------------- */
+
+    let query = supabase
+      .from("otp_codes")
+      .select(
+        [
+          "id",
+          "phone",
+          "flow",
+          "expires_at",
+          "attempts",
+          "verified",
+          "created_at",
+          "ip_address",
+        ].join(",")
       );
 
-    let query =
-      supabase
-        .from("otp_codes")
-        .select(
-          "id,phone,flow,expires_at,attempts,verified,created_at,ip_address"
-        );
+    /* Phone */
 
     if (phone) {
-      query =
-        query.ilike(
-          "phone",
-          `%${phone}%`
-        );
+      query = query.ilike(
+        "phone",
+        `%${phone}%`
+      );
     }
 
-    if (flow !== "all") {
-      query =
-        query.eq(
-          "flow",
-          flow
-        );
+    /* Flow */
+
+    if (
+      flow &&
+      flow !== "all"
+    ) {
+      query = query.eq(
+        "flow",
+        flow
+      );
     }
+
+    /* IP */
 
     if (ip) {
-      query =
-        query.ilike(
-          "ip_address",
-          `%${ip}%`
-        );
+      query = query.ilike(
+        "ip_address",
+        `%${ip}%`
+      );
     }
 
-    if (period !== "all") {
+    /* Period */
 
-      const days =
-        Number(period);
+    if (
+      period &&
+      period !== "all"
+    ) {
+      const days = Number(period);
 
       if (
-        Number.isFinite(days)
+        Number.isFinite(days) &&
+        days > 0
       ) {
+        const since = new Date(
+          Date.now() -
+            days * 24 * 60 * 60 * 1000
+        ).toISOString();
 
-        const since =
-          new Date(
-            Date.now() -
-            days * 86400000
-          ).toISOString();
-
-        query =
-          query.gte(
-            "created_at",
-            since
-          );
+        query = query.gte(
+          "created_at",
+          since
+        );
       }
     }
 
-    query =
-      query
-        .order(
-          "created_at",
-          {
-            ascending:
-              sort === "oldest"
-          }
-        )
-        .limit(limit);
+    /* Sorting */
+
+    query = query.order(
+      "created_at",
+      {
+        ascending:
+          sort === "oldest",
+      }
+    );
+
+    /* Limit */
+
+    query = query.limit(limit);
 
     const {
-      data: rows,
-      error
+      data,
+      error,
     } = await query;
 
     if (error) {
+      console.error(
+        "OTP DATABASE ERROR:",
+        error
+      );
+
       throw error;
     }
 
-    let requests =
-      (rows || [])
-        .map((row) => ({
-          ...row,
-          status:
-            statusOf(row)
-        }));
+    let requests = (
+      data || []
+    ).map((row) => ({
+      id: row.id,
+      phone: row.phone,
+      flow: row.flow,
+      expires_at: row.expires_at,
+      attempts: Number(
+        row.attempts || 0
+      ),
+      verified:
+        row.verified === true,
+      created_at:
+        row.created_at,
+      ip_address:
+        row.ip_address || null,
+      status:
+        getOtpStatus(row),
+    }));
 
-    if (status !== "all") {
+    /* -------------------------
+       STATUS FILTER
+    ------------------------- */
 
+    if (
+      status &&
+      status !== "all"
+    ) {
       requests =
         requests.filter(
           (row) =>
-            row.status ===
-            status
+            row.status === status
         );
     }
 
-    /*
-     * Phone ranking
-     */
+    /* =====================================================
+       PHONE RANKING
+    ===================================================== */
 
     const phoneMap = {};
 
-    /*
-     * IP ranking
-     */
-
-    const ipMap = {};
-
     for (const row of requests) {
+      const key = String(
+        row.phone || ""
+      );
 
-      phoneMap[row.phone] =
-        (
-          phoneMap[row.phone] ||
-          0
-        ) + 1;
+      if (!key) continue;
 
-      if (row.ip_address) {
-
-        ipMap[row.ip_address] =
-          (
-            ipMap[row.ip_address] ||
-            0
-          ) + 1;
-      }
+      phoneMap[key] =
+        (phoneMap[key] || 0) + 1;
     }
 
     const phoneRanking =
@@ -483,49 +365,101 @@ export async function GET(request) {
         .map(
           ([phone, count]) => ({
             phone,
-            count
+            count,
           })
         )
         .sort(
           (a, b) =>
-            b.count -
-            a.count
-        );
+            b.count - a.count
+        )
+        .slice(0, 20);
+
+    /* =====================================================
+       IP RANKING
+    ===================================================== */
+
+    const ipMap = {};
+
+    for (const row of requests) {
+      if (!row.ip_address) {
+        continue;
+      }
+
+      ipMap[row.ip_address] =
+        (ipMap[row.ip_address] || 0) +
+        1;
+    }
 
     const ipRanking =
       Object.entries(ipMap)
         .map(
           ([ip, count]) => ({
             ip,
-            count
+            count,
           })
         )
         .sort(
           (a, b) =>
-            b.count -
-            a.count
-        );
+            b.count - a.count
+        )
+        .slice(0, 15);
 
-    /*
-     * Blocked OTP accounts
-     */
+    /* =====================================================
+       OTP ABUSE / BLOCKED NUMBERS
+    ===================================================== */
+
+    let abuseRows = [];
 
     const {
-      data: abuse
-    } =
-      await supabase
-        .from(
-          "otp_abuse_limits"
-        )
-        .select(
-          "phone,is_blocked,resend_is_blocked"
-        )
-        .or(
-          "is_blocked.eq.true,resend_is_blocked.eq.true"
-        );
+      data: abuseData,
+      error: abuseError,
+    } = await supabase
+      .from("otp_abuse_limits")
+      .select(
+        [
+          "phone",
+          "flow",
+          "wrong_attempts",
+          "locked_until",
+          "is_blocked",
+          "resend_attempts",
+          "resend_locked_until",
+          "resend_is_blocked",
+        ].join(",")
+      );
+
+    if (abuseError) {
+      console.error(
+        "OTP ABUSE QUERY ERROR:",
+        abuseError
+      );
+    } else {
+      abuseRows =
+        abuseData || [];
+    }
+
+    const blockedPhones =
+      new Set(
+        abuseRows
+          .filter(
+            (row) =>
+              row.is_blocked === true ||
+              row.resend_is_blocked === true
+          )
+          .map(
+            (row) =>
+              String(
+                row.phone || ""
+              )
+          )
+          .filter(Boolean)
+      );
+
+    /* =====================================================
+       STATS
+    ===================================================== */
 
     const stats = {
-
       total:
         requests.length,
 
@@ -551,34 +485,40 @@ export async function GET(request) {
         requests.filter(
           (row) =>
             row.status ===
-              "failed" ||
+              "expired" ||
             row.status ===
-              "expired"
+              "failed"
         ).length,
 
       blocked:
-        new Set(
-          (abuse || [])
-            .map(
-              (row) =>
-                row.phone
-            )
-        ).size
+        blockedPhones.size,
     };
+
+    /* =====================================================
+       RESPONSE
+    ===================================================== */
 
     return NextResponse.json(
       {
         success: true,
+
         requests,
+
         stats,
+
         phoneRanking,
-        ipRanking
+
+        ipRanking,
       },
       {
+        status: 200,
+
         headers: {
           "Cache-Control":
-            "no-store, no-cache, must-revalidate, proxy-revalidate"
-        }
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
       }
     );
 
@@ -588,32 +528,36 @@ export async function GET(request) {
       error?.message ===
       "UNAUTHORIZED"
     ) {
-
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Unauthorized"
+          code: "UNAUTHORIZED",
+          message: "Unauthorized",
         },
         {
-          status: 401
+          status: 401,
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
         }
       );
     }
 
     console.error(
-      "ADMIN OTP GET:",
+      "ADMIN OTP GET ERROR:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
+        code: "OTP_ACTIVITY_ERROR",
         message:
-          "Unable to load OTP activity"
+          "Unable to load OTP activity",
       },
       {
-        status: 500
+        status: 500,
       }
     );
   }
@@ -624,9 +568,7 @@ export async function GET(request) {
 ========================================================= */
 
 export async function PATCH(request) {
-
   try {
-
     await requireAdmin(request);
 
     const body =
@@ -634,112 +576,169 @@ export async function PATCH(request) {
 
     const phone =
       String(
-        body.phone || ""
+        body?.phone || ""
       ).replace(/\D/g, "");
 
     const flow =
-      body.flow || "login";
+      String(
+        body?.flow || "login"
+      ).trim();
 
     const action =
-      body.action;
+      String(
+        body?.action || ""
+      ).trim();
 
     if (!phone) {
-
       return NextResponse.json(
         {
           success: false,
           message:
-            "Phone is required"
+            "Phone is required",
         },
         {
-          status: 400
+          status: 400,
         }
       );
     }
 
-    const update =
-      action ===
-      "unblock_wrong"
-
-        ? {
-            wrong_attempts: 0,
-            locked_until: null,
-            is_blocked: false,
-            blocked_at: null,
-            unblocked_at:
-              new Date().toISOString()
-          }
-
-        : action ===
-          "unblock_resend"
-
-        ? {
-            resend_attempts: 0,
-            resend_locked_until: null,
-            resend_is_blocked:
-              false
-          }
-
-        : action ===
-          "reset"
-
-        ? {
-            wrong_attempts: 0,
-            locked_until: null,
-            is_blocked: false,
-            blocked_at: null,
-            resend_attempts: 0,
-            resend_locked_until: null,
-            resend_is_blocked:
-              false,
-            unblocked_at:
-              new Date().toISOString()
-          }
-
-        : null;
-
-    if (!update) {
-
+    if (
+      !flow ||
+      !["login", "signup"].includes(
+        flow
+      )
+    ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Invalid action"
+            "Invalid OTP flow",
         },
         {
-          status: 400
+          status: 400,
+        }
+      );
+    }
+
+    /* =====================================================
+       UNBLOCK WRONG OTP
+    ===================================================== */
+
+    let update = null;
+
+    if (
+      action ===
+      "unblock_wrong"
+    ) {
+      update = {
+        wrong_attempts: 0,
+        locked_until: null,
+        is_blocked: false,
+        blocked_at: null,
+        unblocked_at:
+          new Date().toISOString(),
+      };
+    }
+
+    /* =====================================================
+       UNBLOCK RESEND
+    ===================================================== */
+
+    else if (
+      action ===
+      "unblock_resend"
+    ) {
+      update = {
+        resend_attempts: 0,
+        resend_locked_until:
+          null,
+        resend_is_blocked:
+          false,
+      };
+    }
+
+    /* =====================================================
+       FULL RESET
+    ===================================================== */
+
+    else if (
+      action === "reset"
+    ) {
+      update = {
+        wrong_attempts: 0,
+        locked_until: null,
+        is_blocked: false,
+        blocked_at: null,
+
+        resend_attempts: 0,
+        resend_locked_until:
+          null,
+        resend_is_blocked:
+          false,
+
+        unblocked_at:
+          new Date().toISOString(),
+      };
+    }
+
+    if (!update) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Invalid action",
+        },
+        {
+          status: 400,
         }
       );
     }
 
     const {
-      error
-    } =
-      await supabase
-        .from(
-          "otp_abuse_limits"
-        )
-        .upsert(
-          {
-            phone,
-            flow,
-            ...update
-          },
-          {
-            onConflict:
-              "phone,flow"
-          }
-        );
+      data,
+      error,
+    } = await supabase
+      .from(
+        "otp_abuse_limits"
+      )
+      .upsert(
+        {
+          phone,
+          flow,
+          ...update,
+        },
+        {
+          onConflict:
+            "phone,flow",
+        }
+      )
+      .select()
+      .maybeSingle();
 
     if (error) {
+      console.error(
+        "OTP CONTROL UPDATE ERROR:",
+        error
+      );
+
       throw error;
     }
 
-    return NextResponse.json({
-      success: true,
-      message:
-        "OTP controls updated"
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message:
+          "OTP controls updated",
+        data: data || null,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
 
   } catch (error) {
 
@@ -747,21 +746,21 @@ export async function PATCH(request) {
       error?.message ===
       "UNAUTHORIZED"
     ) {
-
       return NextResponse.json(
         {
           success: false,
+          code: "UNAUTHORIZED",
           message:
-            "Unauthorized"
+            "Unauthorized",
         },
         {
-          status: 401
+          status: 401,
         }
       );
     }
 
     console.error(
-      "ADMIN OTP PATCH:",
+      "ADMIN OTP PATCH ERROR:",
       error
     );
 
@@ -770,10 +769,10 @@ export async function PATCH(request) {
         success: false,
         message:
           error?.message ||
-          "Unable to update OTP controls"
+          "Unable to update OTP controls",
       },
       {
-        status: 500
+        status: 500,
       }
     );
   }
