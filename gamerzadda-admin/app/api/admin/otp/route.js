@@ -5,347 +5,160 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const supabaseAdmin = createClient(
+const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-function hashValue(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function cleanPhone(value) {
-  return String(value || "").replace(/\D/g, "").slice(-10);
-}
-
-function cleanFlow(value) {
-  const flow = String(value || "login").toLowerCase().trim();
-  return ["login", "signup"].includes(flow) ? flow : "login";
+function sha256(v) {
+  return crypto.createHash("sha256").update(v).digest("hex");
 }
 
 async function requireAdmin(request) {
-  const authorization = request.headers.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ")
-    ? authorization.slice(7).trim()
-    : "";
-
-  if (bearerToken) {
-    const { data, error } = await supabaseAdmin.auth.getUser(bearerToken);
-
-    if (!error && data?.user?.id) {
-      let { data: admin, error: adminError } = await supabaseAdmin
-        .from("users")
-        .select("id, role, email")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (admin?.role !== "admin" && data.user.email) {
-        const result = await supabaseAdmin
-          .from("users")
-          .select("id, role, email")
-          .ilike("email", data.user.email.trim().toLowerCase())
-          .maybeSingle();
-
-        admin = result.data;
-        adminError = result.error;
+  const auth = request.headers.get("authorization") || "";
+  if (auth.startsWith("Bearer ")) {
+    const token = auth.slice(7).trim();
+    if (token) {
+      const { data } = await supabase.auth.getUser(token);
+      if (data?.user?.id) {
+        const { data: u } = await supabase.from("users").select("id,role").eq("id", data.user.id).maybeSingle();
+        if (u?.role === "admin") return u;
       }
-
-      if (!adminError && admin?.role === "admin") {
-        return { ok: true, userId: admin.id };
-      }
-
-      return { ok: false, error: "Access denied. Admin only." };
     }
   }
 
-  const rawToken = request.cookies.get("gamerzadda_session")?.value;
+  const cookie = request.cookies.get("gamerzadda_session")?.value;
+  if (!cookie) throw new Error("UNAUTHORIZED");
 
-  if (!rawToken) {
-    return { ok: false, error: "Admin login required." };
-  }
-
-  let decodedToken = rawToken;
-
-  try {
-    decodedToken = decodeURIComponent(rawToken);
-  } catch (_) {}
-
-  const candidates = [
-    ...new Set([
-      decodedToken,
-      rawToken,
-      hashValue(decodedToken),
-      hashValue(rawToken),
-    ]),
-  ];
-
-  let session = null;
-  let sessionError = null;
-
-  for (const candidate of candidates) {
-    const result = await supabaseAdmin
+  const candidates = [...new Set([cookie, decodeURIComponent(cookie), sha256(cookie), sha256(decodeURIComponent(cookie))])];
+  for (const token of candidates) {
+    const { data: s } = await supabase
       .from("user_sessions")
-      .select("user_id, expires_at")
-      .eq("token_hash", candidate)
+      .select("user_id,expires_at")
+      .eq("session_token", token)
       .maybeSingle();
 
-    if (result.data?.user_id) {
-      session = result.data;
-      sessionError = null;
-      break;
+    if (s?.user_id && (!s.expires_at || new Date(s.expires_at) > new Date())) {
+      const { data: u } = await supabase.from("users").select("id,role").eq("id", s.user_id).maybeSingle();
+      if (u?.role === "admin") return u;
     }
-
-    sessionError = result.error;
   }
-
-  if (sessionError || !session?.user_id) {
-    return { ok: false, error: "Invalid session." };
-  }
-
-  if (
-    session.expires_at &&
-    new Date(session.expires_at).getTime() <= Date.now()
-  ) {
-    return { ok: false, error: "Session expired." };
-  }
-
-  const { data: admin, error: adminError } = await supabaseAdmin
-    .from("users")
-    .select("id, role")
-    .eq("id", session.user_id)
-    .maybeSingle();
-
-  if (adminError || admin?.role !== "admin") {
-    return { ok: false, error: "Access denied. Admin only." };
-  }
-
-  return { ok: true, userId: admin.id };
+  throw new Error("UNAUTHORIZED");
 }
 
-async function getOtpControl(phone, flow) {
-  const [abuseResult, otpResult] = await Promise.all([
-    supabaseAdmin
-      .from("otp_abuse_limits")
-      .select(
-        "id, phone, flow, wrong_attempts, locked_until, is_blocked, blocked_at, unblocked_at, resend_attempts, resend_locked_until, resend_is_blocked, created_at, updated_at"
-      )
-      .eq("phone", phone)
-      .eq("flow", flow)
-      .maybeSingle(),
+function clientIp(request) {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || null;
+}
 
-    supabaseAdmin
-      .from("otp_codes")
-      .select("id, phone, flow, attempts, verified, expires_at, created_at, device_id")
-      .eq("phone", phone)
-      .eq("flow", flow)
-      .order("created_at", { ascending: false })
-      .limit(10),
-  ]);
-
-  if (abuseResult.error) throw abuseResult.error;
-  if (otpResult.error) throw otpResult.error;
-
-  return {
-    record: abuseResult.data || null,
-    recentOtps: otpResult.data || [],
-  };
+function statusOf(row) {
+  if (row.verified) return "verified";
+  if (row.expires_at && new Date(row.expires_at) <= new Date()) return "expired";
+  return "active";
 }
 
 export async function GET(request) {
   try {
-    const auth = await requireAdmin(request);
+    await requireAdmin(request);
+    const { searchParams } = new URL(request.url);
 
-    if (!auth.ok) {
-      return NextResponse.json(
-        { success: false, error: auth.error },
-        { status: 401 }
-      );
-    }
+    const phone = (searchParams.get("phone") || "").replace(/\D/g, "");
+    const flow = searchParams.get("flow") || "all";
+    const status = searchParams.get("status") || "all";
+    const period = searchParams.get("period") || "7";
+    const ip = (searchParams.get("ip") || "").trim();
+    const sort = searchParams.get("sort") === "oldest" ? "oldest" : "newest";
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") || 200), 1), 500);
 
-    const phone = cleanPhone(
-      request.nextUrl.searchParams.get("phone")
-    );
-    const flow = cleanFlow(
-      request.nextUrl.searchParams.get("flow")
-    );
+    let q = supabase
+      .from("otp_codes")
+      .select("id,phone,flow,expires_at,attempts,verified,created_at,ip_address")
+      .limit(limit);
 
-    if (phone.length !== 10) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Enter a valid 10-digit phone number.",
-        },
-        { status: 400 }
-      );
-    }
+    if (phone) q = q.ilike("phone", `%${phone}%`);
+    if (flow !== "all") q = q.eq("flow", flow);
+    if (ip) q = q.ilike("ip_address", `%${ip}%`);
 
-    const result = await getOtpControl(phone, flow);
-
-    return NextResponse.json(
-      {
-        success: true,
-        phone,
-        flow,
-        ...result,
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
+    if (period !== "all") {
+      const days = Number(period);
+      if (Number.isFinite(days)) {
+        const since = new Date(Date.now() - days * 86400000).toISOString();
+        q = q.gte("created_at", since);
       }
-    );
-  } catch (error) {
-    console.error("ADMIN OTP GET ERROR:", error);
+    }
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || "Unable to load OTP control data.",
-      },
-      { status: 500 }
-    );
+    q = q.order("created_at", { ascending: sort === "oldest" });
+    const { data: rows, error } = await q;
+    if (error) throw error;
+
+    let requests = (rows || []).map(x => ({ ...x, status: statusOf(x) }));
+
+    if (status !== "all") requests = requests.filter(x => x.status === status);
+
+    const phoneMap = {};
+    const ipMap = {};
+    for (const x of requests) {
+      phoneMap[x.phone] = (phoneMap[x.phone] || 0) + 1;
+      if (x.ip_address) ipMap[x.ip_address] = (ipMap[x.ip_address] || 0) + 1;
+    }
+
+    const phoneRanking = Object.entries(phoneMap)
+      .map(([phone, count]) => ({ phone, count }))
+      .sort((a,b) => b.count - a.count);
+
+    const ipRanking = Object.entries(ipMap)
+      .map(([ip, count]) => ({ ip, count }))
+      .sort((a,b) => b.count - a.count);
+
+    const { data: abuse } = await supabase
+      .from("otp_abuse_limits")
+      .select("phone,is_blocked,resend_is_blocked")
+      .or("is_blocked.eq.true,resend_is_blocked.eq.true");
+
+    const stats = {
+      total: requests.length,
+      uniquePhones: new Set(requests.map(x => x.phone)).size,
+      uniqueIps: new Set(requests.map(x => x.ip_address).filter(Boolean)).size,
+      failed: requests.filter(x => x.status === "failed" || x.status === "expired").length,
+      blocked: new Set((abuse || []).map(x => x.phone)).size,
+    };
+
+    return NextResponse.json({ success: true, requests, stats, phoneRanking, ipRanking });
+  } catch (e) {
+    if (e?.message === "UNAUTHORIZED") return NextResponse.json({ success:false, message:"Unauthorized" }, { status:401 });
+    console.error("ADMIN OTP GET:", e);
+    return NextResponse.json({ success:false, message:"Unable to load OTP activity" }, { status:500 });
   }
 }
 
 export async function PATCH(request) {
   try {
-    const auth = await requireAdmin(request);
-
-    if (!auth.ok) {
-      return NextResponse.json(
-        { success: false, error: auth.error },
-        { status: 401 }
-      );
-    }
-
+    await requireAdmin(request);
     const body = await request.json();
+    const phone = String(body.phone || "").replace(/\D/g, "");
+    const flow = body.flow || "login";
+    const action = body.action;
 
-    const phone = cleanPhone(body?.phone);
-    const flow = cleanFlow(body?.flow);
-    const action = String(body?.action || "").trim();
+    if (!phone) return NextResponse.json({ success:false, message:"Phone is required" }, { status:400 });
 
-    if (phone.length !== 10) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Enter a valid 10-digit phone number.",
-        },
-        { status: 400 }
-      );
-    }
+    const update = action === "unblock_wrong"
+      ? { wrong_attempts: 0, locked_until: null, is_blocked: false, blocked_at: null, unblocked_at: new Date().toISOString() }
+      : action === "unblock_resend"
+      ? { resend_attempts: 0, resend_locked_until: null, resend_is_blocked: false }
+      : action === "reset"
+      ? { wrong_attempts: 0, locked_until: null, is_blocked: false, blocked_at: null, resend_attempts: 0, resend_locked_until: null, resend_is_blocked: false, unblocked_at: new Date().toISOString() }
+      : null;
 
-    if (
-      !["unblock_wrong", "unblock_resend", "reset"].includes(action)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid OTP admin action.",
-        },
-        { status: 400 }
-      );
-    }
+    if (!update) return NextResponse.json({ success:false, message:"Invalid action" }, { status:400 });
 
-    if (action === "reset") {
-      const { error: abuseDeleteError } = await supabaseAdmin
-        .from("otp_abuse_limits")
-        .delete()
-        .eq("phone", phone)
-        .eq("flow", flow);
+    const { error } = await supabase.from("otp_abuse_limits").upsert({ phone, flow, ...update }, { onConflict:"phone,flow" });
+    if (error) throw error;
 
-      if (abuseDeleteError) throw abuseDeleteError;
-
-      const { error: otpInvalidateError } = await supabaseAdmin
-        .from("otp_codes")
-        .update({ verified: true })
-        .eq("phone", phone)
-        .eq("flow", flow)
-        .eq("verified", false);
-
-      if (otpInvalidateError) throw otpInvalidateError;
-
-      return NextResponse.json({
-        success: true,
-        message: `OTP limits fully reset for ${phone} (${flow}).`,
-      });
-    }
-
-    const update =
-      action === "unblock_wrong"
-        ? {
-            wrong_attempts: 0,
-            locked_until: null,
-            is_blocked: false,
-            unblocked_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }
-        : {
-            resend_attempts: 0,
-            resend_locked_until: null,
-            resend_is_blocked: false,
-            updated_at: new Date().toISOString(),
-          };
-
-    const { data: existing, error: existingError } = await supabaseAdmin
-      .from("otp_abuse_limits")
-      .select("id")
-      .eq("phone", phone)
-      .eq("flow", flow)
-      .maybeSingle();
-
-    if (existingError) throw existingError;
-
-    if (existing?.id) {
-      const { error: updateError } = await supabaseAdmin
-        .from("otp_abuse_limits")
-        .update(update)
-        .eq("id", existing.id);
-
-      if (updateError) throw updateError;
-    } else {
-      const insertData = {
-        phone,
-        flow,
-        wrong_attempts: 0,
-        locked_until: null,
-        is_blocked: false,
-        blocked_at: null,
-        resend_attempts: 0,
-        resend_locked_until: null,
-        resend_is_blocked: false,
-        unblocked_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: insertError } = await supabaseAdmin
-        .from("otp_abuse_limits")
-        .insert(insertData);
-
-      if (insertError) throw insertError;
-    }
-
-    return NextResponse.json({
-      success: true,
-      message:
-        action === "unblock_wrong"
-          ? `Wrong-OTP lock unblocked for ${phone} (${flow}).`
-          : `OTP resend lock unblocked for ${phone} (${flow}).`,
-    });
-  } catch (error) {
-    console.error("ADMIN OTP PATCH ERROR:", error);
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error?.message || "Unable to update OTP control.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success:true, message:"OTP controls updated" });
+  } catch (e) {
+    if (e?.message === "UNAUTHORIZED") return NextResponse.json({ success:false, message:"Unauthorized" }, { status:401 });
+    console.error("ADMIN OTP PATCH:", e);
+    return NextResponse.json({ success:false, message:e.message || "Unable to update OTP controls" }, { status:500 });
   }
 }
