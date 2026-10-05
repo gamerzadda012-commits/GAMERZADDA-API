@@ -8,7 +8,8 @@ const supabase = require("../config/supabase");
 // CONFIG
 // ============================================================
 
-const TOKEN = process.env.TELEGRAM_WITHDRAW_BOT_TOKEN;
+const TOKEN =
+    process.env.TELEGRAM_WITHDRAW_BOT_TOKEN;
 
 const ADMIN_CHAT_ID = String(
     process.env.TELEGRAM_WITHDRAW_ADMIN_CHAT_ID || ""
@@ -27,13 +28,13 @@ if (!ADMIN_CHAT_ID) {
 }
 
 // ============================================================
-// BOT
+// TELEGRAM BOT
 // ============================================================
 
 const bot = new Bot(TOKEN);
 
 // ============================================================
-// STATE FILE
+// STATE
 // ============================================================
 
 const STATE_FILE = path.join(
@@ -95,7 +96,7 @@ function escapeHtml(value) {
 }
 
 // ============================================================
-// SEND WITHDRAWAL NOTIFICATION
+// SEND WITHDRAWAL TELEGRAM MESSAGE
 // ============================================================
 
 async function sendWithdrawalRequest(withdrawal) {
@@ -157,7 +158,6 @@ async function sendWithdrawalRequest(withdrawal) {
         chat_id: ADMIN_CHAT_ID,
         text: message,
         parse_mode: "HTML",
-
         reply_markup: {
             inline_keyboard: [
                 [
@@ -183,7 +183,7 @@ async function sendWithdrawalRequest(withdrawal) {
 }
 
 // ============================================================
-// CHECK NEW PENDING WITHDRAWALS
+// FIND NEW PENDING WITHDRAWALS
 // ============================================================
 
 async function checkNewWithdrawals() {
@@ -267,7 +267,7 @@ async function checkNewWithdrawals() {
 }
 
 // ============================================================
-// CALLBACK BUTTONS
+// APPROVE / DECLINE BUTTON
 // ============================================================
 
 bot.on(
@@ -281,10 +281,7 @@ bot.on(
                 callback?.message?.chat?.id || ""
             );
 
-            // ------------------------------------------------
-            // ADMIN SECURITY
-            // ------------------------------------------------
-
+            // Only configured admin
             if (
                 chatId !==
                 ADMIN_CHAT_ID
@@ -346,9 +343,9 @@ bot.on(
                         : "⏳ Declining withdrawal..."
             });
 
-            // ------------------------------------------------
-            // LOAD WITHDRAWAL
-            // ------------------------------------------------
+            // ==================================================
+            // GET WITHDRAWAL
+            // ==================================================
 
             const {
                 data: withdrawal,
@@ -385,9 +382,9 @@ bot.on(
                 return;
             }
 
-            // ------------------------------------------------
-            // ALREADY PROCESSED
-            // ------------------------------------------------
+            // ==================================================
+            // CHECK PENDING
+            // ==================================================
 
             if (
                 String(
@@ -424,9 +421,9 @@ bot.on(
                 return;
             }
 
-            // ------------------------------------------------
-            // EXISTING ADMIN RPC
-            // ------------------------------------------------
+            // ==================================================
+            // EXISTING ADMIN WITHDRAWAL RPC
+            // ==================================================
 
             const {
                 data: rpcData,
@@ -479,9 +476,9 @@ bot.on(
                 return;
             }
 
-            // ------------------------------------------------
+            // ==================================================
             // SUCCESS
-            // ------------------------------------------------
+            // ==================================================
 
             notifiedIds.add(
                 String(
@@ -539,9 +536,9 @@ bot.on(
                 "🤖 <i>Processed via GamerzAdda Telegram Bot</i>"
             ].join("\n");
 
-            // ------------------------------------------------
+            // ==================================================
             // UPDATE ORIGINAL TELEGRAM MESSAGE
-            // ------------------------------------------------
+            // ==================================================
 
             if (
                 callback?.message?.message_id
@@ -551,7 +548,8 @@ bot.on(
                         ADMIN_CHAT_ID,
 
                     message_id:
-                        callback.message.message_id,
+                        callback.message
+                            .message_id,
 
                     text:
                         finalMessage,
@@ -605,7 +603,7 @@ bot.catch(
 );
 
 // ============================================================
-// START BOT
+// START
 // ============================================================
 
 async function startBot() {
@@ -627,28 +625,28 @@ async function startBot() {
             "=========================================="
         );
 
-        // Start Telegram long polling
-        await bot.startPolling();
-
-        console.log(
-            "GAMERZADDA WITHDRAW TELEGRAM BOT STARTED"
-        );
-
-        // Initial pending withdrawal check
+        // IMPORTANT:
+        // Check database BEFORE starting polling.
         await checkNewWithdrawals();
 
-        // Continue checking every 5 seconds
+        // Continue checking every 5 seconds.
         setInterval(
             checkNewWithdrawals,
             5000
+        );
+
+        // Start Telegram polling.
+        // DO NOT await this.
+        bot.startPolling();
+
+        console.log(
+            "GAMERZADDA WITHDRAW TELEGRAM BOT STARTED"
         );
     } catch (error) {
         console.error(
             "TELEGRAM BOT START ERROR:",
             error
         );
-
-        process.exit(1);
     }
 }
 
