@@ -4,6 +4,8 @@ const router = express.Router();
 const supabase = require("../config/supabase");
 const OTP_EXPIRY_SECONDS = 300;
 const MAX_OTP_ATTEMPTS = 5;
+const OTP_LOCK_DURATIONS_MS = [60_000, 180_000, 300_000, 1_800_000, 3_600_000];
+const OTP_PERMANENT_BLOCK_AFTER = 6;
 // ======================================================
 // HELPERS
 // ======================================================
@@ -88,6 +90,68 @@ async function generateReferralCode(fullName) {
         "Unable to generate a unique referral code."
     );
 }
+// ======================================================
+// OTP ABUSE PROTECTION
+// ======================================================
+async function getOtpAbuseState(phone, flow) {
+    const { data, error } = await supabase
+        .from("otp_abuse_limits")
+        .select("id, phone, flow, wrong_attempts, locked_until, is_blocked")
+        .eq("phone", phone)
+        .eq("flow", flow)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+}
+
+async function resetOtpAbuseState(phone, flow) {
+    const { error } = await supabase
+        .from("otp_abuse_limits")
+        .upsert({
+            phone, flow, wrong_attempts: 0, locked_until: null,
+            is_blocked: false, updated_at: new Date().toISOString()
+        }, { onConflict: "phone,flow" });
+    if (error) throw error;
+}
+
+function otpLockMessage(attempts, lockedUntil) {
+    const ms = Math.max(0, new Date(lockedUntil).getTime() - Date.now());
+    const minutes = Math.ceil(ms / 60000);
+    return `Too many incorrect OTP attempts. Please try again after ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+}
+
+async function checkOtpAbuseBeforeSend(phone, flow, res) {
+    const state = await getOtpAbuseState(phone, flow);
+    if (!state) return false;
+    if (state.is_blocked) {
+        res.status(429).json({ success:false, code:"OTP_BLOCKED", message:"OTP access is blocked due to repeated incorrect OTP attempts. Please contact GamerzAdda Support to unblock your OTP access." });
+        return true;
+    }
+    if (state.locked_until) {
+        const until = new Date(state.locked_until);
+        if (until.getTime() > Date.now()) {
+            res.status(429).json({ success:false, code:"OTP_COOLDOWN", message:otpLockMessage(state.wrong_attempts, state.locked_until), lockedUntil:state.locked_until, wrongAttempts:state.wrong_attempts });
+            return true;
+        }
+        await supabase.from("otp_abuse_limits").update({ locked_until:null, updated_at:new Date().toISOString() }).eq("id", state.id);
+    }
+    return false;
+}
+
+async function recordWrongOtp(phone, flow) {
+    const state = await getOtpAbuseState(phone, flow);
+    const attempts = Number(state?.wrong_attempts || 0) + 1;
+    if (attempts >= OTP_PERMANENT_BLOCK_AFTER) {
+        await supabase.from("otp_abuse_limits").upsert({ phone, flow, wrong_attempts:attempts, locked_until:null, is_blocked:true, blocked_at:new Date().toISOString(), updated_at:new Date().toISOString() }, { onConflict:"phone,flow" });
+        return { blocked:true, attempts };
+    }
+    const lockMs = OTP_LOCK_DURATIONS_MS[attempts - 1];
+    const lockedUntil = new Date(Date.now() + lockMs).toISOString();
+    await supabase.from("otp_abuse_limits").upsert({ phone, flow, wrong_attempts:attempts, locked_until:lockedUntil, is_blocked:false, updated_at:new Date().toISOString() }, { onConflict:"phone,flow" });
+    return { blocked:false, attempts, lockedUntil };
+}
+
 // ======================================================
 // FULL APP RESTRICTION DETAILS
 // ======================================================
@@ -534,6 +598,13 @@ router.post("/otp", async (req, res) => {
                 }
             }
             // ----------------------------------------------
+            // OTP ABUSE CHECK
+            // ----------------------------------------------
+            if (await checkOtpAbuseBeforeSend(cleanPhone, flow, res)) {
+                return;
+            }
+
+            // ----------------------------------------------
             // GENERATE OTP
             // ----------------------------------------------
             const generatedOtp =
@@ -642,16 +713,13 @@ router.post("/otp", async (req, res) => {
             }
             let smsMessage = smsTemplate;
 
-            // HSP/Fayda Bazar DLT template uses two {#var#} placeholders:
-            // first for the brand name and second for the OTP.
             if (smsMessage.includes("{#var#}")) {
                 smsMessage = smsMessage.replace("{#var#}", "Gamerzadda");
                 smsMessage = smsMessage.replace("{#var#}", generatedOtp);
             } else if (smsMessage.includes("{otp}")) {
                 smsMessage = smsMessage.replace("{otp}", generatedOtp);
             } else {
-                smsMessage =
-                    `Dear Gamerzadda, your One Time Password for Registration is ${generatedOtp}. Thanks and Regards Fayda Bazar.`;
+                smsMessage = `Dear Gamerzadda, your One Time Password for Registration is ${generatedOtp}. Thanks and Regards Fayda Bazar.`;
             }
 
             console.log("SMS MESSAGE:", smsMessage);
@@ -889,19 +957,25 @@ router.post("/otp", async (req, res) => {
             ) {
                 await supabase
                     .from("otp_codes")
-                    .update({
-                        attempts:
-                            attempts + 1
-                    })
-                    .eq(
-                        "id",
-                        otpRecord.id
-                    );
+                    .update({ attempts: attempts + 1 })
+                    .eq("id", otpRecord.id);
+
+                const abuse = await recordWrongOtp(cleanPhone, flow);
+                if (abuse.blocked) {
+                    return res.status(429).json({
+                        success:false,
+                        code:"OTP_BLOCKED",
+                        message:"OTP access is blocked due to repeated incorrect OTP attempts. Please contact GamerzAdda Support to unblock your OTP access.",
+                        wrongAttempts: abuse.attempts
+                    });
+                }
+
                 return res.status(400).json({
-                    success: false,
-                    code: "INVALID_OTP",
-                    message:
-                        "Invalid OTP. Please try again."
+                    success:false,
+                    code:"INVALID_OTP",
+                    message:`Invalid OTP. ${otpLockMessage(abuse.attempts, abuse.lockedUntil)}`,
+                    wrongAttempts: abuse.attempts,
+                    lockedUntil: abuse.lockedUntil
                 });
             }
             // ----------------------------------------------
@@ -930,6 +1004,8 @@ router.post("/otp", async (req, res) => {
                         "Unable to complete verification."
                 });
             }
+            await resetOtpAbuseState(cleanPhone, flow);
+
             // =================================================
             // LOGIN
             // =================================================
