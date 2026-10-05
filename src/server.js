@@ -24,10 +24,33 @@ const supportRouter = require("./routes/support");
 const notificationsRouter = require("./routes/notifications");
 
 // ===============================
-// TELEGRAM WITHDRAW BOT
+// TELEGRAM BOTS
+// ===============================
+
+// ===============================
+// WITHDRAW TELEGRAM BOT
 // ===============================
 
 require("./telegram/withdrawBot");
+
+// ===============================
+// SUPPORT TELEGRAM BOT
+// ===============================
+
+const {
+    startBot: startSupportBot
+} = require("./telegram/supportBot");
+
+startSupportBot().catch((error) => {
+    console.error(
+        "SUPPORT BOT START ERROR:",
+        error
+    );
+});
+
+// ===============================
+// EXPRESS APP
+// ===============================
 
 const app = express();
 
@@ -318,5 +341,9 @@ if (require.main === module) {
         }
     );
 }
+
+// ===============================
+// EXPORT
+// ===============================
 
 module.exports = app;
