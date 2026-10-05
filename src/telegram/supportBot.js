@@ -212,6 +212,7 @@ function buildTicketText(item) {
 
     const name =
         user?.full_name ||
+        user?.game_name ||
         "Unknown User";
 
     const email = user?.email || "-";
@@ -228,7 +229,7 @@ function buildTicketText(item) {
         `👤 <b>User:</b> ${escapeHtml(name)}\n` +
         `📧 <b>Email:</b> ${escapeHtml(email)}\n` +
         `📱 <b>Phone:</b> ${escapeHtml(phone)}\n` +
-        `👤 <b>Real Name:</b> ${escapeHtml(user?.full_name || "-")}\n` +
+        `🎮 <b>Game Name:</b> ${escapeHtml(user?.game_name || "-")}\n` +
         `🆔 <b>Free Fire UID:</b> ${escapeHtml(uid)}\n` +
         `🕒 <b>Time:</b> ${escapeHtml(formatDate(message.created_at))}\n\n` +
         `💬 <b>User Message:</b>\n${escapeHtml(short(message.message))}` +
@@ -356,10 +357,9 @@ async function attendTicket(conversationId, callbackQuery) {
                 "👀 <b>Status:</b> ATTENDED BY ADMIN"
             );
 
-        await bot.api.editMessageText({
+        await bot.api.editMessageText(updatedText, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
-            text: updatedText,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: {
@@ -456,10 +456,9 @@ async function closeTicket(conversationId, callbackQuery) {
                 "✅ <b>Status:</b> CLOSED"
             );
 
-        await bot.api.editMessageText({
+        await bot.api.editMessageText(updatedText, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
-            text: updatedText,
             parse_mode: "HTML",
             disable_web_page_preview: true,
             reply_markup: {

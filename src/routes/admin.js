@@ -2,9 +2,449 @@ const express = require("express");
 const crypto = require("crypto");
 
 const supabase = require("../config/supabase");
-const { attendSupportTicket } = require("../utils/supportAttendance");
 
 const router = express.Router();
+
+/*
+|--------------------------------------------------------------------------
+| FCM / FIREBASE HELPERS
+|--------------------------------------------------------------------------
+*/
+
+let firebaseAdmin = null;
+let firebaseMessaging = null;
+
+function getFirebaseAdmin() {
+    if (firebaseAdmin) {
+        return firebaseAdmin;
+    }
+
+    try {
+        const {
+            initializeApp,
+            getApps,
+            cert,
+        } = require("firebase-admin/app");
+
+        const serviceAccountPath =
+            process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+        if (!serviceAccountPath) {
+            console.error(
+                "FCM FIREBASE CONFIGURATION MISSING: FIREBASE_SERVICE_ACCOUNT_PATH"
+            );
+            return null;
+        }
+
+        const path = require("path");
+        const fs = require("fs");
+
+        const absolutePath = path.isAbsolute(serviceAccountPath)
+            ? serviceAccountPath
+            : path.resolve(process.cwd(), serviceAccountPath);
+
+        if (!fs.existsSync(absolutePath)) {
+            console.error(
+                "FCM SERVICE ACCOUNT FILE NOT FOUND:",
+                absolutePath
+            );
+            return null;
+        }
+
+        const serviceAccount = require(absolutePath);
+        const existingApps = getApps();
+
+        firebaseAdmin =
+            existingApps.length > 0
+                ? existingApps[0]
+                : initializeApp({
+                      credential: cert(serviceAccount),
+                  });
+
+        console.log("FCM FIREBASE INITIALIZED SUCCESSFULLY");
+
+        return firebaseAdmin;
+    } catch (error) {
+        console.error("FCM FIREBASE INIT ERROR:", error);
+        return null;
+    }
+}
+
+function getFirebaseMessaging() {
+    if (firebaseMessaging) {
+        return firebaseMessaging;
+    }
+
+    const app = getFirebaseAdmin();
+
+    if (!app) {
+        return null;
+    }
+
+    try {
+        const { getMessaging } = require("firebase-admin/messaging");
+        firebaseMessaging = getMessaging(app);
+        return firebaseMessaging;
+    } catch (error) {
+        console.error("FCM MESSAGING INIT ERROR:", error);
+        return null;
+    }
+}
+
+
+async function sendRoomKeysNotification({
+    tournamentId,
+    tournamentTitle,
+    roomId,
+    roomPassword
+}) {
+    try {
+        const admin = getFirebaseAdmin();
+        const messaging = getFirebaseMessaging();
+
+        if (!admin || !messaging) {
+            return {
+                success: false,
+                sent: 0,
+                failed: 0,
+                reason: "Firebase is not configured."
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET JOINED PLAYERS ONLY
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: entries,
+            error: entriesError
+        } = await supabase
+            .from("tournament_entries")
+            .select("user_id")
+            .eq(
+                "tournament_id",
+                tournamentId
+            )
+            .eq(
+                "cancelled",
+                false
+            );
+
+        if (entriesError) {
+            console.error(
+                "ROOM KEYS FCM ENTRIES ERROR:",
+                entriesError
+            );
+
+            return {
+                success: false,
+                sent: 0,
+                failed: 0,
+                reason: entriesError.message
+            };
+        }
+
+        const userIds = [
+            ...new Set(
+                (entries || [])
+                    .map((entry) =>
+                        String(
+                            entry?.user_id || ""
+                        ).trim()
+                    )
+                    .filter(Boolean)
+            )
+        ];
+
+        if (userIds.length === 0) {
+            console.log(
+                "ROOM KEYS FCM: NO JOINED PLAYERS",
+                tournamentId
+            );
+
+            return {
+                success: true,
+                participants: 0,
+                tokens: 0,
+                sent: 0,
+                failed: 0
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | GET FCM TOKENS
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: users,
+            error: usersError
+        } = await supabase
+            .from("users")
+            .select(
+                "id, fcm_token"
+            )
+            .in(
+                "id",
+                userIds
+            );
+
+        if (usersError) {
+            console.error(
+                "ROOM KEYS FCM USERS ERROR:",
+                usersError
+            );
+
+            return {
+                success: false,
+                participants: userIds.length,
+                tokens: 0,
+                sent: 0,
+                failed: 0,
+                reason: usersError.message
+            };
+        }
+
+        const tokenToUser = new Map();
+
+        for (const user of users || []) {
+            const token =
+                String(
+                    user?.fcm_token || ""
+                ).trim();
+
+            if (token) {
+                tokenToUser.set(
+                    token,
+                    user.id
+                );
+            }
+        }
+
+        const tokens = [
+            ...tokenToUser.keys()
+        ];
+
+        if (tokens.length === 0) {
+            console.log(
+                "ROOM KEYS FCM: JOINED PLAYERS HAVE NO TOKENS",
+                tournamentId
+            );
+
+            return {
+                success: true,
+                participants: userIds.length,
+                tokens: 0,
+                sent: 0,
+                failed: 0
+            };
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | NOTIFICATION
+        |--------------------------------------------------------------------------
+        */
+
+        // Admin stores titles like: "#CS_12 - Clash Squad"
+        // Notification should be: "Clash Squad #CS_12 🎮 is LIVE NOW"
+        const rawTournamentTitle = String(
+            tournamentTitle || "Tournament"
+        ).trim();
+
+        let displayTournamentTitle = rawTournamentTitle;
+        let tournamentCode = "";
+
+        const titleMatch = rawTournamentTitle.match(
+            /^\s*(#[A-Za-z0-9_-]+)\s*[-–—:]\s*(.+?)\s*$/
+        );
+
+        if (titleMatch) {
+            tournamentCode = titleMatch[1];
+            displayTournamentTitle = titleMatch[2].trim();
+        }
+
+        const title = tournamentCode
+            ? `${displayTournamentTitle} ${tournamentCode} 🎮 is LIVE NOW`
+            : `${displayTournamentTitle} 🎮 is LIVE NOW`;
+
+        const body =
+            `🔐 ID: ${roomId} || PASS: ${roomPassword} — JOIN FAST! ⚡`;
+
+        let sent = 0;
+        let failed = 0;
+        const invalidTokens = [];
+
+        /*
+        |--------------------------------------------------------------------------
+        | FCM MAX MULTICAST SIZE = 500
+        |--------------------------------------------------------------------------
+        */
+
+        for (
+            let start = 0;
+            start < tokens.length;
+            start += 500
+        ) {
+            const chunk =
+                tokens.slice(
+                    start,
+                    start + 500
+                );
+
+            console.log(
+                `ROOM KEYS FCM SENDING CHUNK: ${start + 1}-${start + chunk.length}`
+            );
+
+            const response =
+                await messaging.sendEachForMulticast({
+                        tokens: chunk,
+                        notification: {
+                            title,
+                            body
+                        },
+                        data: {
+                            type:
+                                "tournament_room_keys",
+                            tournament_id:
+                                String(
+                                    tournamentId
+                                ),
+                            tournament_title:
+                                String(
+                                    tournamentTitle ||
+                                    ""
+                                ),
+                            room_id:
+                                String(
+                                    roomId
+                                ),
+                            room_password:
+                                String(
+                                    roomPassword
+                                )
+                        },
+                        android: {
+                            priority:
+                                "high",
+                            notification: {
+                                channelId:
+                                    "gamerzadda_notifications",
+                                sound:
+                                    "default"
+                            }
+                        }
+                    });
+
+            sent +=
+                Number(
+                    response.successCount || 0
+                );
+
+            failed +=
+                Number(
+                    response.failureCount || 0
+                );
+
+            response.responses.forEach(
+                (result, index) => {
+                    if (
+                        result.success
+                    ) {
+                        return;
+                    }
+
+                    const code =
+                        result.error?.code ||
+                        "";
+
+                    if (
+                        code ===
+                            "messaging/registration-token-not-registered" ||
+                        code ===
+                            "messaging/invalid-registration-token"
+                    ) {
+                        invalidTokens.push(
+                            chunk[index]
+                        );
+                    }
+
+                    console.error(
+                        "ROOM KEYS FCM SEND ERROR:",
+                        code ||
+                            result.error?.message ||
+                            "Unknown FCM error"
+                    );
+                }
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | CLEAN INVALID TOKENS
+        |--------------------------------------------------------------------------
+        */
+
+        for (
+            const invalidToken of invalidTokens
+        ) {
+            await supabase
+                .from("users")
+                .update({
+                    fcm_token: null
+                })
+                .eq(
+                    "fcm_token",
+                    invalidToken
+                );
+        }
+
+        console.log(
+            "ROOM KEYS FCM COMPLETE:",
+            {
+                participants:
+                    userIds.length,
+                tokens:
+                    tokens.length,
+                sent,
+                failed,
+                invalidTokens:
+                    invalidTokens.length
+            }
+        );
+
+        return {
+            success: true,
+            participants:
+                userIds.length,
+            tokens:
+                tokens.length,
+            sent,
+            failed,
+            invalidTokens:
+                invalidTokens.length
+        };
+
+    } catch (error) {
+        console.error(
+            "ROOM KEYS FCM EXCEPTION:",
+            error
+        );
+
+        return {
+            success: false,
+            sent: 0,
+            failed: 0,
+            reason:
+                error?.message ||
+                "FCM notification failed."
+        };
+    }
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -240,6 +680,7 @@ function setAdminCookie(
         `${SESSION_COOKIE_NAME}=${encodeURIComponent(
             token
         )}`,
+        "Domain=.gamerzadda.in",
         "Path=/",
         `Max-Age=${SESSION_MAX_AGE}`,
         "HttpOnly",
@@ -269,6 +710,7 @@ function clearAdminCookie(res) {
         "Set-Cookie",
         [
             `${SESSION_COOKIE_NAME}=`,
+            "Domain=.gamerzadda.in",
             "Path=/",
             "Max-Age=0",
             "HttpOnly",
@@ -1530,6 +1972,34 @@ router.post(
                 cleanTournamentId
             );
 
+            /*
+            |--------------------------------------------------------------------------
+            | SEND FCM TO JOINED PLAYERS ONLY
+            |--------------------------------------------------------------------------
+            |
+            | IMPORTANT:
+            | Room keys are already saved and tournament is already LIVE.
+            | FCM failure must NOT make the admin request fail.
+            |--------------------------------------------------------------------------
+            */
+
+            const notificationResult =
+                await sendRoomKeysNotification({
+                    tournamentId:
+                        cleanTournamentId,
+                    tournamentTitle:
+                        tournament?.title || "Tournament",
+                    roomId:
+                        cleanRoomId,
+                    roomPassword:
+                        cleanRoomPassword
+                });
+
+            console.log(
+                "ROOM KEYS NOTIFICATION RESULT:",
+                notificationResult
+            );
+
             return res
                 .status(200)
                 .json({
@@ -1542,7 +2012,9 @@ router.post(
                         cleanRoomId,
                     roomPassword:
                         cleanRoomPassword,
-                    match
+                    match,
+                    notification:
+                        notificationResult
                 });
 
         } catch (error) {
@@ -1565,6 +2037,225 @@ router.post(
     }
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/admin/members
+| LOAD MEMBER PROFILE + WALLET
+|--------------------------------------------------------------------------
+*/
+
+router.get("/members", async (req, res) => {
+    try {
+        const admin = await verifyAdmin(req);
+
+        if (!admin.authenticated) {
+            return res.status(401).json({
+                success: false,
+                code: "ADMIN_AUTH_REQUIRED",
+                error: "Admin login required."
+            });
+        }
+
+        const userId =
+            String(
+                req.query.userId || ""
+            ).trim();
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: "User ID is required."
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | USER PROFILE
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: member,
+            error: memberError
+        } = await supabase
+            .from("users")
+            .select(`
+                id,
+                email,
+                full_name,
+                free_fire_uid,
+                game_name,
+                level,
+                wallet_balance,
+                role,
+                created_at,
+                updated_at,
+                phone,
+                phone_verified,
+                status,
+                referral_code,
+                referred_by,
+                bio,
+                avatar_url,
+                ip_address,
+                device_id,
+                device_user_agent,
+                last_login_at,
+                device_changed_at,
+                status_reason,
+                status_updated_at,
+                restricted_until,
+                profile_pic
+            `)
+            .eq("id", userId)
+            .maybeSingle();
+
+        if (memberError) {
+            console.error(
+                "ADMIN MEMBER PROFILE ERROR:",
+                memberError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    memberError.message ||
+                    "Unable to load member profile."
+            });
+        }
+
+        if (!member) {
+            return res.status(404).json({
+                success: false,
+                error: "Member not found."
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | WALLET BALANCES
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: wallet,
+            error: walletError
+        } = await supabase
+            .from("wallet_balances")
+            .select(`
+                user_id,
+                deposit_balance,
+                bonus_balance,
+                winning_balance,
+                created_at
+            `)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        if (walletError) {
+            console.error(
+                "ADMIN MEMBER WALLET ERROR:",
+                walletError
+            );
+
+            return res.status(500).json({
+                success: false,
+                error:
+                    walletError.message ||
+                    "Unable to load member wallet."
+            });
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | WALLET FALLBACK
+        |
+        | Some older accounts may only have users.wallet_balance.
+        | Use it as a safe fallback for total balance, while keeping
+        | the three detailed balances at zero when no wallet row exists.
+        |--------------------------------------------------------------------------
+        */
+
+        const deposit =
+            Number(
+                wallet?.deposit_balance || 0
+            );
+
+        const bonus =
+            Number(
+                wallet?.bonus_balance || 0
+            );
+
+        const winning =
+            Number(
+                wallet?.winning_balance || 0
+            );
+
+        const legacyWallet =
+            Number(
+                member.wallet_balance || 0
+            );
+
+        const totalWallet =
+            wallet
+                ? deposit + bonus + winning
+                : legacyWallet;
+
+        return res.status(200).json({
+            success: true,
+
+            member: {
+                ...member
+            },
+
+            wallet: {
+                user_id: userId,
+                deposit_balance: deposit,
+                bonus_balance: bonus,
+                winning_balance: winning,
+                total_balance: totalWallet
+            },
+
+            referral: {
+                referral_code:
+                    member.referral_code || null,
+                referred_by:
+                    member.referred_by || null
+            },
+
+            loginHistory: member.last_login_at
+                ? [
+                    {
+                        last_login_at:
+                            member.last_login_at,
+                        ip_address:
+                            member.ip_address || null,
+                        device_id:
+                            member.device_id || null,
+                        device_user_agent:
+                            member.device_user_agent ||
+                            null
+                    }
+                ]
+                : []
+        });
+
+    } catch (error) {
+        console.error(
+            "ADMIN MEMBER PROFILE EXCEPTION:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error."
+        });
+    }
+});
+
 /*
 |--------------------------------------------------------------------------
 | EXPORT
@@ -1578,6 +2269,17 @@ router.post(
 |--------------------------------------------------------------------------
 */
 
+function getSupportTicketId(conversationId) {
+    const clean = String(conversationId || "")
+        .replace(/[^a-fA-F0-9]/g, "")
+        .toUpperCase();
+
+    const seed = clean || "0";
+    const value = parseInt(seed.slice(0, 5), 16) % 100000;
+
+    return `#GZ-${String(value).padStart(5, "0")}`;
+}
+
 router.get("/support", async (req, res) => {
     try {
         const admin = await verifyAdmin(req);
@@ -1590,43 +2292,108 @@ router.get("/support", async (req, res) => {
             });
         }
 
-        const { data, error } = await supabase
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD ALL CONVERSATIONS
+        |--------------------------------------------------------------------------
+        */
+
+        const {
+            data: rawConversations,
+            error: conversationsError
+        } = await supabase
             .from("support_conversations")
             .select("*")
-            .order("updated_at", { ascending: false });
+            .order("updated_at", {
+                ascending: false
+            });
 
-        if (error) {
-            console.error("ADMIN SUPPORT LIST ERROR:", error);
+        if (conversationsError) {
+            console.error(
+                "ADMIN SUPPORT LIST ERROR:",
+                conversationsError
+            );
+
             return res.status(500).json({
                 success: false,
-                error: error.message || "Unable to load support conversations."
+                error:
+                    conversationsError.message ||
+                    "Unable to load support conversations."
             });
         }
 
-        const conversations = data || [];
+        const conversations =
+            rawConversations || [];
 
-        // Attach the real user profile to every support conversation.
-        // This keeps the Support page independent from the Members API.
-        const userIds = [
-            ...new Set(
-                conversations
-                    .map((conversation) => conversation?.user_id)
-                    .filter(Boolean)
-                    .map(String)
-            )
-        ];
+        /*
+        |--------------------------------------------------------------------------
+        | IMPORTANT:
+        | One inbox row per USER.
+        |
+        | Old duplicate support conversations can exist for the
+        | same user. The admin inbox must not show 3-4 rows for
+        | the same person.
+        |
+        | Because the query is already sorted newest-first,
+        | the first conversation we keep is the latest one.
+        |--------------------------------------------------------------------------
+        */
 
-        let userMap = new Map();
+        const latestByUser =
+            new Map();
+
+        for (const conversation of conversations) {
+            const userId =
+                String(
+                    conversation?.user_id || ""
+                ).trim();
+
+            if (!userId) {
+                continue;
+            }
+
+            if (!latestByUser.has(userId)) {
+                latestByUser.set(
+                    userId,
+                    conversation
+                );
+            }
+        }
+
+        const uniqueConversations =
+            Array.from(
+                latestByUser.values()
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD USER PROFILES
+        |--------------------------------------------------------------------------
+        */
+
+        const userIds =
+            uniqueConversations
+                .map((item) =>
+                    String(
+                        item?.user_id || ""
+                    ).trim()
+                )
+                .filter(Boolean);
+
+        let users = [];
 
         if (userIds.length > 0) {
-            const { data: users, error: usersError } = await supabase
+            const {
+                data,
+                error: usersError
+            } = await supabase
                 .from("users")
                 .select(`
                     id,
                     email,
                     full_name,
-                    game_name,
                     free_fire_uid,
+                    game_name,
                     level,
                     role,
                     status,
@@ -1640,49 +2407,200 @@ router.get("/support", async (req, res) => {
                 .in("id", userIds);
 
             if (usersError) {
-                console.error("ADMIN SUPPORT USERS ERROR:", usersError);
-            } else {
-                userMap = new Map(
-                    (users || []).map((user) => [String(user.id), user])
+                console.error(
+                    "ADMIN SUPPORT USERS ERROR:",
+                    usersError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        usersError.message ||
+                        "Unable to load support users."
+                });
+            }
+
+            users = data || [];
+        }
+
+        const userMap =
+            new Map(
+                users.map((user) => [
+                    String(user.id),
+                    user
+                ])
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD LAST MESSAGE FOR EACH CONVERSATION
+        |--------------------------------------------------------------------------
+        */
+
+        const conversationIds =
+            uniqueConversations
+                .map((item) => item.id)
+                .filter(Boolean);
+
+        let lastMessages = [];
+
+        if (conversationIds.length > 0) {
+            const {
+                data,
+                error: messagesError
+            } = await supabase
+                .from("support_messages")
+                .select(`
+                    id,
+                    conversation_id,
+                    sender_id,
+                    sender_type,
+                    message,
+                    attachment_url,
+                    attachment_name,
+                    attachment_type,
+                    attachment_size,
+                    created_at
+                `)
+                .in(
+                    "conversation_id",
+                    conversationIds
+                )
+                .order(
+                    "created_at",
+                    { ascending: false }
+                );
+
+            if (messagesError) {
+                console.error(
+                    "ADMIN SUPPORT LAST MESSAGE ERROR:",
+                    messagesError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    error:
+                        messagesError.message ||
+                        "Unable to load support messages."
+                });
+            }
+
+            lastMessages = data || [];
+        }
+
+        const lastMessageMap =
+            new Map();
+
+        const attendedMap = new Set();
+
+        for (const message of lastMessages) {
+            if (
+                message?.sender_type === "admin" &&
+                String(message?.message || "").startsWith("🎧 Support Agent Connected")
+            ) {
+                attendedMap.add(String(message.conversation_id));
+            }
+
+            if (
+                !lastMessageMap.has(
+                    message.conversation_id
+                )
+            ) {
+                lastMessageMap.set(
+                    message.conversation_id,
+                    message
                 );
             }
         }
 
-        const enrichedConversations = conversations.map((conversation) => {
-            const user = userMap.get(String(conversation?.user_id || ""));
+        /*
+        |--------------------------------------------------------------------------
+        | FINAL ADMIN INBOX DATA
+        |--------------------------------------------------------------------------
+        */
 
-            return {
-                ...conversation,
-                user: user
-                    ? {
-                        id: user.id,
-                        email: user.email || "",
-                        full_name: user.full_name || "",
-                        game_name: user.game_name || "",
-                        free_fire_uid: user.free_fire_uid || "",
-                        level: user.level ?? null,
-                        role: user.role || "user",
-                        status: user.status || "active",
-                        phone: user.phone || "",
-                        phone_verified: Boolean(user.phone_verified),
-                        created_at: user.created_at || null,
-                        last_login_at: user.last_login_at || null,
-                        profile_pic: user.profile_pic || user.avatar_url || "",
-                        avatar_url: user.avatar_url || ""
-                    }
-                    : null
-            };
-        });
+        const result =
+            uniqueConversations.map(
+                (conversation) => {
+                    const user =
+                        userMap.get(
+                            String(
+                                conversation.user_id
+                            )
+                        ) || null;
+
+                    return {
+                        ...conversation,
+                        ticket_id:
+                            getSupportTicketId(
+                                conversation.id
+                            ),
+
+                        user: user
+                            ? {
+                                id: user.id,
+                                email:
+                                    user.email || "",
+                                full_name:
+                                    user.full_name || "",
+                                game_name:
+                                    user.game_name || "",
+                                free_fire_uid:
+                                    user.free_fire_uid || "",
+                                level:
+                                    user.level ?? null,
+                                role:
+                                    user.role || "user",
+                                status:
+                                    user.status || "active",
+                                phone:
+                                    user.phone || "",
+                                phone_verified:
+                                    Boolean(
+                                        user.phone_verified
+                                    ),
+                                created_at:
+                                    user.created_at || null,
+                                last_login_at:
+                                    user.last_login_at || null,
+                                profile_pic:
+                                    user.profile_pic ||
+                                    user.avatar_url ||
+                                    ""
+                            }
+                            : null,
+
+                        last_message:
+                            lastMessageMap.get(
+                                conversation.id
+                            ) || null,
+
+                        ticket_state:
+                            conversation.status === "closed"
+                                ? "solved"
+                                : attendedMap.has(String(conversation.id))
+                                    ? "attend"
+                                    : "all"
+                    };
+                }
+            );
 
         return res.status(200).json({
             success: true,
-            conversations: enrichedConversations
+            conversations: result
         });
+
     } catch (error) {
-        console.error("ADMIN SUPPORT LIST EXCEPTION:", error);
+        console.error(
+            "ADMIN SUPPORT LIST EXCEPTION:",
+            error
+        );
+
         return res.status(500).json({
             success: false,
-            error: error?.message || "Internal server error."
+            error:
+                error?.message ||
+                "Internal server error."
         });
     }
 });
@@ -1744,9 +2662,24 @@ router.get("/support/:conversationId", async (req, res) => {
             });
         }
 
+        const attended = (messages || []).some(
+            (message) =>
+                message?.sender_type === "admin" &&
+                String(message?.message || "").startsWith("🎧 Support Agent Connected")
+        );
+
         return res.status(200).json({
             success: true,
-            conversation,
+            conversation: {
+                ...conversation,
+                ticket_id: getSupportTicketId(conversation.id),
+                ticket_state:
+                    conversation.status === "closed"
+                        ? "solved"
+                        : attended
+                            ? "attend"
+                            : "all"
+            },
             messages: messages || []
         });
     } catch (error) {
@@ -1800,6 +2733,14 @@ router.post("/support/:conversationId/message", async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: "Conversation not found."
+            });
+        }
+
+        if (conversation.status !== "open") {
+            return res.status(400).json({
+                success: false,
+                error:
+                    "This support ticket is closed. Reopen it before replying."
             });
         }
 
@@ -1857,90 +2798,138 @@ router.patch("/support/:conversationId", async (req, res) => {
 
         const conversationId = String(req.params.conversationId || "").trim();
         const action = String(req.body?.action || "").trim().toLowerCase();
-        const status = String(req.body?.status || "").trim().toLowerCase();
 
         if (!conversationId) {
+            return res.status(400).json({ success: false, error: "Conversation ID is required." });
+        }
+
+        if (!["attend", "solve"].includes(action)) {
             return res.status(400).json({
                 success: false,
-                error: "Conversation ID is required."
+                error: "Action must be attend or solve."
+            });
+        }
+
+        const { data: currentConversation, error: currentError } =
+            await supabase
+                .from("support_conversations")
+                .select("id, user_id, status")
+                .eq("id", conversationId)
+                .maybeSingle();
+
+        if (currentError) {
+            return res.status(500).json({ success: false, error: currentError.message });
+        }
+
+        if (!currentConversation) {
+            return res.status(404).json({ success: false, error: "Conversation not found." });
+        }
+
+        if (currentConversation.status === "closed") {
+            return res.status(400).json({
+                success: false,
+                error: "This ticket is already solved. It cannot be reopened or replied to."
             });
         }
 
         if (action === "attend") {
-            try {
-                const result = await attendSupportTicket(conversationId);
+            const { data: existingAttendance, error: attendanceCheckError } =
+                await supabase
+                    .from("support_messages")
+                    .select("id")
+                    .eq("conversation_id", conversationId)
+                    .eq("sender_type", "admin")
+                    .ilike("message", "🎧 Support Agent Connected%")
+                    .limit(1)
+                    .maybeSingle();
 
-                const { data: attendedConversation, error: attendedError } =
-                    await supabase
-                        .from("support_conversations")
-                        .select("*")
-                        .eq("id", conversationId)
-                        .maybeSingle();
-
-                if (attendedError) {
-                    return res.status(500).json({
-                        success: false,
-                        error: attendedError.message || "Unable to load attended ticket."
-                    });
-                }
-
-                return res.status(200).json({
-                    success: true,
-                    attended: true,
-                    alreadyAttended: Boolean(result?.alreadyAttended),
-                    conversation: attendedConversation
-                });
-            } catch (error) {
-                console.error("ADMIN SUPPORT ATTEND ERROR:", error);
-                return res.status(500).json({
-                    success: false,
-                    error: error?.message || "Unable to attend support ticket."
-                });
+            if (attendanceCheckError) {
+                return res.status(500).json({ success: false, error: attendanceCheckError.message });
             }
+
+            if (!existingAttendance) {
+                const attendanceMessage =
+                    "🎧 Support Agent Connected\n\n" +
+                    "Hello! A support agent has joined your conversation.\n" +
+                    "You can continue explaining your issue here and we'll assist you shortly.\n\n" +
+                    "GAMERZADDA Support Team";
+
+                const { error: insertError } = await supabase
+                    .from("support_messages")
+                    .insert({
+                        conversation_id: conversationId,
+                        sender_id: currentConversation.user_id,
+                        sender_type: "admin",
+                        message: attendanceMessage,
+                        attachment_url: null,
+                        attachment_name: null,
+                        attachment_type: null,
+                        attachment_size: null
+                    });
+
+                if (insertError) {
+                    return res.status(500).json({ success: false, error: insertError.message });
+                }
+            }
+
+            const { data, error } = await supabase
+                .from("support_conversations")
+                .update({ updated_at: new Date().toISOString(), status: "open" })
+                .eq("id", conversationId)
+                .select("*")
+                .single();
+
+            if (error) {
+                return res.status(500).json({ success: false, error: error.message });
+            }
+
+            return res.status(200).json({
+                success: true,
+                conversation: { ...data, ticket_id: getSupportTicketId(data.id), ticket_state: "attend" },
+                attended: true
+            });
         }
 
-        if (!["open", "closed"].includes(status)) {
-            return res.status(400).json({
-                success: false,
-                error: "Status must be open or closed."
+        const ticketId = getSupportTicketId(conversationId);
+        const resolutionMessage =
+            `Your GAMERZADDA support ticket ${ticketId} has been marked as resolved. ✅\n\n` +
+            `If your issue is still not resolved or you need help with a different issue, please open Support again and send a new message. A new ticket will be created for you.`;
+
+        const { error: resolutionError } = await supabase
+            .from("support_messages")
+            .insert({
+                conversation_id: conversationId,
+                sender_id: currentConversation.user_id,
+                sender_type: "admin",
+                message: resolutionMessage,
+                attachment_url: null,
+                attachment_name: null,
+                attachment_type: null,
+                attachment_size: null
             });
+
+        if (resolutionError) {
+            return res.status(500).json({ success: false, error: resolutionError.message });
         }
 
         const { data, error } = await supabase
             .from("support_conversations")
-            .update({
-                status,
-                updated_at: new Date().toISOString()
-            })
+            .update({ status: "closed", updated_at: new Date().toISOString() })
             .eq("id", conversationId)
             .select("*")
-            .maybeSingle();
+            .single();
 
         if (error) {
-            console.error("ADMIN SUPPORT STATUS ERROR:", error);
-            return res.status(500).json({
-                success: false,
-                error: error.message || "Unable to update support status."
-            });
-        }
-
-        if (!data) {
-            return res.status(404).json({
-                success: false,
-                error: "Conversation not found."
-            });
+            return res.status(500).json({ success: false, error: error.message });
         }
 
         return res.status(200).json({
             success: true,
-            conversation: data
+            conversation: { ...data, ticket_id: ticketId, ticket_state: "solved" }
         });
     } catch (error) {
-        console.error("ADMIN SUPPORT STATUS EXCEPTION:", error);
-        return res.status(500).json({
-            success: false,
-            error: error?.message || "Internal server error."
-        });
+        console.error("ADMIN SUPPORT TICKET ACTION ERROR:", error);
+        return res.status(500).json({ success: false, error: error?.message || "Internal server error." });
     }
 });
 

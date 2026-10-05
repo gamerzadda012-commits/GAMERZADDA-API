@@ -12,6 +12,7 @@ export default function Page() {
   const [messages, setMessages] = useState([]);
   const [member, setMember] = useState(null);
   const [wallet, setWallet] = useState(null);
+  const [conversationProfiles, setConversationProfiles] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -21,6 +22,7 @@ export default function Page() {
   const [error, setError] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [ticketFilter, setTicketFilter] = useState("all");
 
   const selectedId = selected?.id;
 
@@ -50,19 +52,16 @@ export default function Page() {
       setError("");
 
       const data = await api("/api/admin/support");
-      const list = (data.conversations || []).map((conversation) => {
-        const user = conversation?.user || {};
-        return {
-          ...conversation,
-          user_name: user.full_name || conversation.user_name || "",
-          full_name: user.full_name || conversation.full_name || "",
-          game_name: user.game_name || conversation.game_name || "",
-          profile_pic: user.profile_pic || user.avatar_url || conversation.profile_pic || "",
-          phone: user.phone || conversation.phone || "",
-          free_fire_uid: user.free_fire_uid || conversation.free_fire_uid || "",
-        };
-      });
+      const list = data.conversations || [];
       setConversations(list);
+
+      // Support API already returns the real user profile.
+      const profileEntries = list.map((conversation) => [
+        String(conversation.id),
+        conversation.user || null,
+      ]);
+
+      setConversationProfiles(Object.fromEntries(profileEntries));
 
       if (selectedId) {
         const updated = list.find(
@@ -100,30 +99,25 @@ export default function Page() {
   }
 
   async function loadMember(userId) {
-    if (!userId) return;
+    if (!userId) {
+      setMember(null);
+      setWallet(null);
+      return;
+    }
 
     setMemberLoading(true);
-    setMember(null);
-    setWallet(null);
-
     try {
-      // Load the exact member profile for this support conversation.
-      // Do not call /api/admin/members without userId here because the
-      // profile drawer needs the single real user record.
-      const data = await api(
-        `/api/admin/members?userId=${encodeURIComponent(userId)}`
-      );
-
-      setMember(data.member || null);
-      setWallet(
-        data.wallet || {
-          deposit_balance: 0,
-          bonus_balance: 0,
-          winning_balance: 0,
-        }
-      );
+      const profile = selected?.user || null;
+      setMember(profile);
+      setWallet({
+        deposit_balance: 0,
+        bonus_balance: 0,
+        winning_balance: 0,
+      });
     } catch (err) {
-      console.error("SUPPORT MEMBER LOAD:", err);
+      console.error("SUPPORT PROFILE LOAD:", err);
+      setMember(null);
+      setWallet(null);
     } finally {
       setMemberLoading(false);
     }
@@ -195,22 +189,18 @@ export default function Page() {
     }
   }
 
-  async function changeStatus(status) {
-    if (!selectedId) return;
+  async function ticketAction(action) {
+    if (!selectedId || action === "" || selected?.ticket_state === "solved") return;
 
     try {
       setError("");
 
-      const data = await api(
-        `/api/admin/support/${selectedId}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-        }
-      );
+      const data = await api(`/api/admin/support/${selectedId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action }),
+      });
 
       setSelected(data.conversation);
-
       setConversations((prev) =>
         prev.map((item) =>
           String(item.id) === String(selectedId)
@@ -218,26 +208,37 @@ export default function Page() {
             : item
         )
       );
+
+      if (action === "attend") {
+        await loadMessages(selectedId, true);
+      } else if (action === "solve") {
+        await loadMessages(selectedId, true);
+        setReply("");
+      }
     } catch (err) {
-      setError(err.message || "Unable to update conversation.");
+      setError(err.message || "Unable to update ticket.");
     }
   }
 
-  const openCount = useMemo(
-    () =>
-      conversations.filter(
-        (item) => item.status === "open"
-      ).length,
-    [conversations]
-  );
 
-  const closedCount = useMemo(
-    () =>
-      conversations.filter(
-        (item) => item.status === "closed"
-      ).length,
-    [conversations]
-  );
+  const allCount = conversations.length;
+  const attendCount = conversations.filter(
+    (item) => item.ticket_state === "attend"
+  ).length;
+  const solvedCount = conversations.filter(
+    (item) => item.ticket_state === "solved"
+  ).length;
+
+  const filteredConversations = useMemo(() => {
+    if (ticketFilter === "attend") {
+      return conversations.filter((item) => item.ticket_state === "attend");
+    }
+    if (ticketFilter === "solved") {
+      return conversations.filter((item) => item.ticket_state === "solved");
+    }
+    return conversations;
+  }, [conversations, ticketFilter]);
+
 
   function formatDate(value) {
     if (!value) return "—";
@@ -280,30 +281,20 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="stats-row">
-          <div className="stat-card">
-            <span>🎧</span>
-            <div>
-              <small>Total Chats</small>
-              <strong>{conversations.length}</strong>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <span>🟢</span>
-            <div>
-              <small>Open</small>
-              <strong>{openCount}</strong>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <span>⚪</span>
-            <div>
-              <small>Closed</small>
-              <strong>{closedCount}</strong>
-            </div>
-          </div>
+        <div className="ticket-filters">
+          {[
+            ["all", "All", allCount],
+            ["attend", "Attend", attendCount],
+            ["solved", "Solved", solvedCount],
+          ].map(([key, label, count]) => (
+            <button
+              key={key}
+              className={ticketFilter === key ? "active" : ""}
+              onClick={() => setTicketFilter(key)}
+            >
+              {label}<span>{count}</span>
+            </button>
+          ))}
         </div>
 
         {error && <div className="error-box">{error}</div>}
@@ -317,14 +308,14 @@ export default function Page() {
           <div className="conversation-panel">
             <div className="panel-title">
               <span>Conversations</span>
-              <b>{conversations.length}</b>
+              <b>{filteredConversations.length}</b>
             </div>
 
             {loading ? (
               <div className="empty-state">
                 Loading conversations...
               </div>
-            ) : conversations.length === 0 ? (
+            ) : filteredConversations.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">🎧</div>
                 <strong>No support chats</strong>
@@ -332,21 +323,31 @@ export default function Page() {
               </div>
             ) : (
               <div className="conversation-list">
-                {conversations.map((conversation) => {
+                {filteredConversations.map((conversation) => {
                   const active =
                     String(conversation.id) ===
                     String(selectedId);
 
+                  const profile = conversationProfiles[String(conversation.id)] || {};
                   const name =
+                    profile.full_name ||
                     conversation.full_name ||
                     conversation.user_name ||
+                    profile.game_name ||
                     conversation.game_name ||
                     `User ${shortId(conversation.user_id)}`;
 
-                  const profilePic =
+                  const profilePhoto =
+                    profile.profile_pic ||
+                    profile.profile_image ||
+                    profile.avatar_url ||
+                    profile.photo_url ||
+                    profile.photo ||
                     conversation.profile_pic ||
+                    conversation.profile_image ||
                     conversation.avatar_url ||
-                    "";
+                    conversation.photo_url ||
+                    null;
 
                   return (
                     <button
@@ -360,11 +361,10 @@ export default function Page() {
                       }
                     >
                       <div className="avatar">
-                        {profilePic ? (
+                        {profilePhoto ? (
                           <img
-                            src={profilePic}
+                            src={profilePhoto}
                             alt={name}
-                            className="conversation-avatar-image"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                             }}
@@ -388,9 +388,11 @@ export default function Page() {
                       <span
                         className={
                           "status-dot " +
-                          (conversation.status === "open"
-                            ? "open"
-                            : "closed")
+                          (conversation.ticket_state === "solved"
+                            ? "closed"
+                            : conversation.ticket_state === "attend"
+                              ? "attend"
+                              : "open")
                         }
                       />
                     </button>
@@ -453,27 +455,29 @@ export default function Page() {
                     <span
                       className={
                         "status-pill " +
-                        (selected.status === "open"
-                          ? "status-open"
-                          : "status-closed")
+                        (selected.ticket_state === "solved"
+                          ? "status-closed"
+                          : selected.ticket_state === "attend"
+                            ? "status-attend"
+                            : "status-open")
                       }
                     >
-                      {selected.status}
+                      {selected.ticket_state === "solved"
+                        ? "SOLVED"
+                        : selected.ticket_state === "attend"
+                          ? "ATTENDED"
+                          : "WAITING"}
                     </span>
 
-                    {selected.status === "open" ? (
-                      <button
-                        onClick={() =>
-                          changeStatus("closed")
-                        }
-                      >
-                        Close
+                    {selected.ticket_state === "all" && (
+                      <button onClick={() => ticketAction("attend")}>
+                        👀 Attend
                       </button>
-                    ) : (
-                      <button
-                        onClick={() => changeStatus("open")}
-                      >
-                        Reopen
+                    )}
+
+                    {selected.ticket_state !== "solved" && (
+                      <button onClick={() => ticketAction("solve")}>
+                        ✅ Solve
                       </button>
                     )}
                   </div>
@@ -596,7 +600,7 @@ export default function Page() {
                     placeholder="Type your reply..."
                     disabled={
                       sending ||
-                      selected.status !== "open"
+                      selected.ticket_state === "solved"
                     }
                     onKeyDown={(e) => {
                       if (
@@ -614,7 +618,7 @@ export default function Page() {
                     disabled={
                       sending ||
                       !reply.trim() ||
-                      selected.status !== "open"
+                      selected.ticket_state === "solved"
                     }
                   >
                     {sending ? "Sending..." : "Send"}
@@ -893,6 +897,42 @@ export default function Page() {
             font-size: 13px;
           }
 
+          .ticket-filters {
+            display: flex;
+            gap: 8px;
+            margin: 0 0 14px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+
+          .ticket-filters button {
+            border: 1px solid #e9e9ed;
+            background: #fff;
+            color: #555;
+            border-radius: 999px;
+            padding: 8px 13px;
+            font-size: 12px;
+            font-weight: 800;
+            white-space: nowrap;
+            cursor: pointer;
+          }
+
+          .ticket-filters button.active {
+            background: #ff174f;
+            border-color: #ff174f;
+            color: #fff;
+          }
+
+          .ticket-filters span {
+            margin-left: 6px;
+            opacity: .8;
+          }
+
+          .status-attend {
+            background: #fff4d6 !important;
+            color: #9a6800 !important;
+          }
+
           .support-layout {
             display: grid;
             grid-template-columns: 350px minmax(0, 1fr);
@@ -970,17 +1010,17 @@ export default function Page() {
           .avatar {
             width: 43px;
             height: 43px;
-            border-radius: 14px;
+            border-radius: 50%;
             background: #ffe8ee;
             color: #ff174f;
             overflow: hidden;
           }
 
-          .conversation-avatar-image {
+          .avatar img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
             display: block;
+            object-fit: cover;
           }
 
           .conversation-info {
@@ -1541,6 +1581,14 @@ export default function Page() {
           }
 
           @media (max-width: 700px) {
+            .support-page { padding: 8px; }
+            .support-top { margin-bottom: 10px; gap: 8px; }
+            .support-top h1 { font-size: 19px; }
+            .support-top p { font-size: 10px; }
+            .refresh-btn { padding: 7px 9px; border-radius: 9px; font-size: 10px; }
+            .ticket-filters { gap: 6px; margin-bottom: 8px; }
+            .ticket-filters button { padding: 7px 11px; font-size: 10px; }
+
             .support-page {
               padding: 12px;
               overflow-x: hidden;
