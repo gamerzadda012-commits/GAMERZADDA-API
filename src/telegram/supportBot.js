@@ -209,6 +209,7 @@ function buildTicketText(item) {
 
     const name =
         user?.full_name ||
+        user?.game_name ||
         "Unknown User";
 
     const email = user?.email || "-";
@@ -287,7 +288,7 @@ async function sendTicketNotification(item, force = false) {
     );
 }
 
-async function checkSupportTickets() {
+async function checkSupportTickets({ initialize = false } = {}) {
     try {
         const items = await getOpenUserMessages();
 
@@ -296,9 +297,21 @@ async function checkSupportTickets() {
             const current = ticketState(conversationId);
             const messageId = String(item.message.id);
 
-            // Attendance is persisted in support_messages by the shared
-            // attendance helper. A bot restart or a newer user message
-            // must NOT restart reminders after an admin has attended.
+            // On startup, only remember the latest existing user message.
+            // Never resend old/open tickets just because the bot restarted.
+            if (initialize) {
+                current.lastMessageId = messageId;
+                current.lastNotifiedAt = Date.now();
+                saveState();
+                continue;
+            }
+
+            // Already notified for this exact user message.
+            if (current.lastMessageId === messageId) {
+                continue;
+            }
+
+            // Attendance is persisted in support_messages by the shared helper.
             const { data: attendanceMessage, error: attendanceError } =
                 await supabase
                     .from("support_messages")
@@ -315,10 +328,12 @@ async function checkSupportTickets() {
 
             if (attendanceMessage || current.attended) {
                 current.attended = true;
+                current.lastMessageId = messageId;
                 continue;
             }
 
-            await sendTicketNotification(item);
+            // A genuinely new user message: notify admin once.
+            await sendTicketNotification(item, true);
         }
 
         saveState();
@@ -330,7 +345,7 @@ async function checkSupportTickets() {
     }
 }
 
-async function attendTicket(conversationId, callbackQuery, callbackAlreadyAnswered = false) {
+async function attendTicket(conversationId, callbackQuery) {
     const id = String(conversationId);
 
     const result = await attendSupportTicket(id);
@@ -340,17 +355,13 @@ async function attendTicket(conversationId, callbackQuery, callbackAlreadyAnswer
     current.lastNotifiedAt = Date.now();
     saveState();
 
-    if (!callbackAlreadyAnswered) {
-        try {
-            await bot.api.answerCallbackQuery({
-                callback_query_id: callbackQuery.id,
-                text: result.alreadyAttended
-                    ? "Already attended. Notifications are stopped."
-                    : "Attended. User has been notified.",
-                show_alert: false
-            });
-        } catch {}
-    }
+    await bot.api.answerCallbackQuery({
+        callback_query_id: callbackQuery.id,
+        text: result.alreadyAttended
+            ? "Already attended. Notifications are stopped."
+            : "Attended. User has been notified.",
+        show_alert: false
+    });
 
     if (callbackQuery.message) {
         const oldText = callbackQuery.message.text || "";
@@ -361,7 +372,7 @@ async function attendTicket(conversationId, callbackQuery, callbackAlreadyAnswer
                 "👀 <b>Status:</b> ATTENDED BY ADMIN"
             );
 
-        await bot.editMessageText(updatedText, {
+        await bot.api.editMessageText(updatedText, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
             parse_mode: "HTML",
@@ -386,7 +397,7 @@ async function attendTicket(conversationId, callbackQuery, callbackAlreadyAnswer
     console.log("TELEGRAM SUPPORT ATTENDED:", id);
 }
 
-async function closeTicket(conversationId, callbackQuery, callbackAlreadyAnswered = false) {
+async function closeTicket(conversationId, callbackQuery) {
     const id = String(conversationId);
 
     const { data: conversation, error } = await supabase
@@ -404,8 +415,7 @@ async function closeTicket(conversationId, callbackQuery, callbackAlreadyAnswere
     }
 
     if (conversation.status === "closed") {
-        await bot.api.answerCallbackQuery({
-            callback_query_id: callbackQuery.id,
+        await bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id,
             text: "Ticket is already closed.",
             show_alert: false
         });
@@ -455,8 +465,7 @@ async function closeTicket(conversationId, callbackQuery, callbackAlreadyAnswere
     current.lastNotifiedAt = Date.now();
     saveState();
 
-    await bot.api.answerCallbackQuery({
-        callback_query_id: callbackQuery.id,
+    await bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id,
         text: "Support ticket closed.",
         show_alert: false
     });
@@ -470,7 +479,7 @@ async function closeTicket(conversationId, callbackQuery, callbackAlreadyAnswere
                 "✅ <b>Status:</b> CLOSED"
             );
 
-        await bot.editMessageText(updatedText, {
+        await bot.api.editMessageText(updatedText, {
             chat_id: callbackQuery.message.chat.id,
             message_id: callbackQuery.message.message_id,
             parse_mode: "HTML",
@@ -500,44 +509,27 @@ bot.on("callback_query", async (callbackQuery) => {
         if (chatId !== ADMIN_CHAT_ID) {
             await bot.api.answerCallbackQuery({
                 callback_query_id: callbackQuery.id,
-                text: "Not authorized.",
-                show_alert: true
-            });
+                    text: "Not authorized.",
+                    show_alert: true
+                }
+            );
             return;
         }
 
         const data = String(callbackQuery.data || "");
 
         if (data.startsWith("attend:")) {
-            try {
-                await bot.api.answerCallbackQuery({
-                    callback_query_id: callbackQuery.id,
-                    text: "Processing attendance...",
-                    show_alert: false
-                });
-            } catch {}
-
             await attendTicket(
                 data.slice("attend:".length),
-                callbackQuery,
-                true
+                callbackQuery
             );
             return;
         }
 
         if (data.startsWith("close:")) {
-            try {
-                await bot.api.answerCallbackQuery({
-                    callback_query_id: callbackQuery.id,
-                    text: "Closing ticket...",
-                    show_alert: false
-                });
-            } catch {}
-
             await closeTicket(
                 data.slice("close:".length),
-                callbackQuery,
-                true
+                callbackQuery
             );
             return;
         }
@@ -548,9 +540,10 @@ bot.on("callback_query", async (callbackQuery) => {
         ) {
             await bot.api.answerCallbackQuery({
                 callback_query_id: callbackQuery.id,
-                text: "No action required.",
-                show_alert: false
-            });
+                    text: "No action required.",
+                    show_alert: false
+                }
+            );
         }
     } catch (error) {
         console.error(
@@ -561,15 +554,17 @@ bot.on("callback_query", async (callbackQuery) => {
         try {
             await bot.api.answerCallbackQuery({
                 callback_query_id: callbackQuery.id,
-                text: error?.message || "Action failed.",
-                show_alert: true
-            });
+                    text: error?.message || "Action failed.",
+                    show_alert: true
+                }
+            );
         } catch {}
     }
 });
 
 bot.command("start", async (ctx) => {
-    const chatId = String(ctx.chat.id);
+    const message = ctx.message;
+    const chatId = String(message.chat.id);
 
     if (chatId !== ADMIN_CHAT_ID) {
         await bot.api.sendMessage({
@@ -581,8 +576,7 @@ bot.command("start", async (ctx) => {
 
     await bot.api.sendMessage({
         chat_id: chatId,
-        text:
-            "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
+        text: "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
             "I will notify you when users send support messages.\n\n" +
             "👀 ATTEND → stops reminders for that ticket\n" +
             "✅ CLOSE → closes the ticket",
@@ -602,10 +596,12 @@ async function startBot() {
 
     console.log("Starting GamerzAdda Telegram Support Bot...");
 
-    await checkSupportTickets();
+    await bot.api.getMe();
+
+    await checkSupportTickets({ initialize: true });
 
     setInterval(
-        checkSupportTickets,
+        () => checkSupportTickets(),
         POLL_MS
     );
 
