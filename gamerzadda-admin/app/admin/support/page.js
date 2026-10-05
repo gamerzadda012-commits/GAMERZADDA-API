@@ -12,7 +12,6 @@ export default function Page() {
   const [messages, setMessages] = useState([]);
   const [member, setMember] = useState(null);
   const [wallet, setWallet] = useState(null);
-  const [conversationProfiles, setConversationProfiles] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -51,31 +50,19 @@ export default function Page() {
       setError("");
 
       const data = await api("/api/admin/support");
-      const list = data.conversations || [];
+      const list = (data.conversations || []).map((conversation) => {
+        const user = conversation?.user || {};
+        return {
+          ...conversation,
+          user_name: user.full_name || conversation.user_name || "",
+          full_name: user.full_name || conversation.full_name || "",
+          game_name: user.game_name || conversation.game_name || "",
+          profile_pic: user.profile_pic || user.avatar_url || conversation.profile_pic || "",
+          phone: user.phone || conversation.phone || "",
+          free_fire_uid: user.free_fire_uid || conversation.free_fire_uid || "",
+        };
+      });
       setConversations(list);
-
-      // Load real profile data for the conversation list so each chat shows
-      // the user's real name and profile photo instead of the fallback User/UID.
-      const profileEntries = await Promise.all(
-        list.map(async (conversation) => {
-          const userId = conversation.user_id;
-          if (!userId) return [String(conversation.id), null];
-
-          try {
-            const profile = await api(
-              `/api/admin/members?userId=${encodeURIComponent(userId)}`
-            );
-            return [String(conversation.id), profile.member || null];
-          } catch {
-            return [String(conversation.id), null];
-          }
-        })
-      );
-
-      setConversationProfiles((prev) => ({
-        ...prev,
-        ...Object.fromEntries(profileEntries),
-      }));
 
       if (selectedId) {
         const updated = list.find(
@@ -350,26 +337,16 @@ export default function Page() {
                     String(conversation.id) ===
                     String(selectedId);
 
-                  const profile = conversationProfiles[String(conversation.id)] || {};
                   const name =
-                    profile.full_name ||
                     conversation.full_name ||
                     conversation.user_name ||
-                    profile.game_name ||
                     conversation.game_name ||
                     `User ${shortId(conversation.user_id)}`;
 
-                  const profilePhoto =
-                    profile.profile_pic ||
-                    profile.profile_image ||
-                    profile.avatar_url ||
-                    profile.photo_url ||
-                    profile.photo ||
+                  const profilePic =
                     conversation.profile_pic ||
-                    conversation.profile_image ||
                     conversation.avatar_url ||
-                    conversation.photo_url ||
-                    null;
+                    "";
 
                   return (
                     <button
@@ -383,10 +360,11 @@ export default function Page() {
                       }
                     >
                       <div className="avatar">
-                        {profilePhoto ? (
+                        {profilePic ? (
                           <img
-                            src={profilePhoto}
+                            src={profilePic}
                             alt={name}
+                            className="conversation-avatar-image"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                             }}
@@ -992,17 +970,17 @@ export default function Page() {
           .avatar {
             width: 43px;
             height: 43px;
-            border-radius: 50%;
+            border-radius: 14px;
             background: #ffe8ee;
             color: #ff174f;
             overflow: hidden;
           }
 
-          .avatar img {
+          .conversation-avatar-image {
             width: 100%;
             height: 100%;
-            display: block;
             object-fit: cover;
+            display: block;
           }
 
           .conversation-info {
