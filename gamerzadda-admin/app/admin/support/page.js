@@ -6,17 +6,6 @@ import AdminShell from "../AdminShell";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "https://api.gamerzadda.in";
 
-function supportTicketId(conversationId) {
-  const clean = String(conversationId || "")
-    .replace(/[^a-fA-F0-9]/g, "")
-    .toUpperCase();
-
-  const seed = clean || "0";
-  const value = parseInt(seed.slice(0, 5), 16) % 100000;
-
-  return `#GZ-${String(value).padStart(5, "0")}`;
-}
-
 export default function Page() {
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -192,6 +181,37 @@ export default function Page() {
       setError(err.message || "Unable to send reply.");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function attendTicket() {
+    if (!selectedId || selected?.status !== "open") return;
+
+    try {
+      setError("");
+
+      const data = await api(
+        `/api/admin/support/${selectedId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ action: "attend" }),
+        }
+      );
+
+      if (data.conversation) {
+        setSelected(data.conversation);
+        setConversations((prev) =>
+          prev.map((item) =>
+            String(item.id) === String(selectedId)
+              ? data.conversation
+              : item
+          )
+        );
+      }
+
+      await loadMessages(selectedId, true);
+    } catch (err) {
+      setError(err.message || "Unable to attend ticket.");
     }
   }
 
@@ -429,11 +449,6 @@ export default function Page() {
                           {member?.phone ||
                             `ID: ${shortId(selected.user_id)}`}
                         </span>
-
-                        <span className="support-ticket-id">
-                          {selected.ticket_id ||
-                            supportTicketId(selected.id)}
-                        </span>
                       </span>
                     </button>
                   </div>
@@ -450,16 +465,26 @@ export default function Page() {
                       {selected.status}
                     </span>
 
-                    {selected.status === "open" ? (
+                    {selected.status === "open" && (
+                      <>
+                        <button
+                          className="attend-btn"
+                          onClick={attendTicket}
+                        >
+                          👀 Attend
+                        </button>
+                        <button
+                          className="close-btn"
+                          onClick={() => changeStatus("closed")}
+                        >
+                          ✅ Close
+                        </button>
+                      </>
+                    )}
+
+                    {selected.status === "closed" && (
                       <button
-                        onClick={() =>
-                          changeStatus("closed")
-                        }
-                      >
-                        Close
-                      </button>
-                    ) : (
-                      <button
+                        className="reopen-btn"
                         onClick={() => changeStatus("open")}
                       >
                         Reopen
@@ -805,7 +830,7 @@ export default function Page() {
 
         <style jsx>{`
           .support-page {
-            padding: 20px;
+            padding: 12px 14px;
             min-height: 100vh;
             box-sizing: border-box;
           }
@@ -814,12 +839,12 @@ export default function Page() {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
           }
 
           .support-top h1 {
             margin: 0;
-            font-size: 25px;
+            font-size: 21px;
             font-weight: 900;
           }
 
@@ -834,8 +859,8 @@ export default function Page() {
             border: 0;
             background: #ff174f;
             color: #fff;
-            padding: 10px 16px;
-            border-radius: 12px;
+            padding: 8px 12px;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: 800;
           }
@@ -843,22 +868,22 @@ export default function Page() {
           .stats-row {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 14px;
-            margin-bottom: 18px;
+            gap: 10px;
+            margin-bottom: 10px;
           }
 
           .stat-card {
             background: #fff;
             border: 1px solid #eee;
             border-radius: 16px;
-            padding: 16px;
+            padding: 10px 12px;
             display: flex;
             gap: 12px;
             align-items: center;
           }
 
           .stat-card > span {
-            font-size: 25px;
+            font-size: 21px;
           }
 
           .stat-card small {
@@ -868,7 +893,7 @@ export default function Page() {
 
           .stat-card strong {
             display: block;
-            font-size: 22px;
+            font-size: 18px;
             margin-top: 3px;
           }
 
@@ -877,7 +902,7 @@ export default function Page() {
             color: #d60032;
             border: 1px solid #ffd0da;
             padding: 12px 14px;
-            border-radius: 12px;
+            border-radius: 10px;
             margin-bottom: 15px;
             font-size: 13px;
           }
@@ -885,11 +910,11 @@ export default function Page() {
           .support-layout {
             display: grid;
             grid-template-columns: 350px minmax(0, 1fr);
-            height: calc(100vh - 260px);
-            min-height: 560px;
+            height: calc(100vh - 205px);
+            min-height: 500px;
             background: #fff;
             border: 1px solid #e9e9ed;
-            border-radius: 20px;
+            border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 8px 35px rgba(0, 0, 0, 0.05);
           }
@@ -913,7 +938,7 @@ export default function Page() {
           .panel-title b {
             background: #ff174f;
             color: white;
-            border-radius: 20px;
+            border-radius: 16px;
             padding: 4px 9px;
             font-size: 11px;
           }
@@ -972,7 +997,7 @@ export default function Page() {
           .conversation-info strong {
             display: block;
             font-size: 13px;
-            overflow: hidden;      
+            overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
@@ -999,6 +1024,31 @@ export default function Page() {
             background: #aaa;
           }
 
+
+
+          .chat-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+          }
+
+          .chat-actions .attend-btn {
+            background: #16a34a;
+          }
+
+          .chat-actions .close-btn {
+            background: #dc2626;
+          }
+
+          .chat-actions .reopen-btn {
+            background: #ff174f;
+          }
+
+          .chat-actions .status-pill {
+            font-size: 10px;
+            padding: 5px 8px;
+          }
           .chat-panel {
             display: flex;
             flex-direction: column;
@@ -1008,8 +1058,8 @@ export default function Page() {
           }
 
           .chat-header {
-            min-height: 70px;
-            padding: 10px 16px;
+            min-height: 58px;
+            padding: 8px 12px;
             border-bottom: 1px solid #eee;
             display: flex;
             align-items: center;
@@ -1082,7 +1132,7 @@ export default function Page() {
 
           .status-pill {
             padding: 6px 10px;
-            border-radius: 20px;
+            border-radius: 16px;
             font-size: 10px;
             font-weight: 800;
             text-transform: capitalize;
@@ -1141,7 +1191,7 @@ export default function Page() {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
-            padding: 20px;
+            padding: 12px 14px;
             background: #f7f7f8;
           }
 
@@ -1280,7 +1330,7 @@ export default function Page() {
             width: 34px;
             height: 34px;
             border-radius: 10px;
-            font-size: 25px;
+            font-size: 21px;
             line-height: 1;
             cursor: pointer;
             margin-right: 5px;
@@ -1543,7 +1593,7 @@ export default function Page() {
 
             .stat-card {
               padding: 10px;
-              border-radius: 12px;
+              border-radius: 10px;
             }
 
             .stat-card > span {
