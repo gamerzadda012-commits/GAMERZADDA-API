@@ -20,14 +20,11 @@ const bot = new Bot(TOKEN);
 
 const STATE_FILE = path.join(__dirname, "supportBotState.json");
 const POLL_MS = 5000;
-// Notifications are sent once per user message. No timed spam/reminders.
+const REMINDER_MS = 60000;
 
 let state = {
     tickets: {}
 };
-
-// Prevent overlapping polling runs from sending the same ticket twice.
-let checkRunning = false;
 
 function loadState() {
     try {
@@ -211,7 +208,6 @@ function buildTicketText(item) {
     const { conversation, user, message } = item;
 
     const name =
-        user?.game_name ||
         user?.full_name ||
         "Unknown User";
 
@@ -229,7 +225,7 @@ function buildTicketText(item) {
         `👤 <b>User:</b> ${escapeHtml(name)}\n` +
         `📧 <b>Email:</b> ${escapeHtml(email)}\n` +
         `📱 <b>Phone:</b> ${escapeHtml(phone)}\n` +
-        `🎮 <b>Game Name:</b> ${escapeHtml(user?.game_name || "-")}\n` +
+        `👤 <b>Real Name:</b> ${escapeHtml(user?.full_name || "-")}\n` +
         `🆔 <b>Free Fire UID:</b> ${escapeHtml(uid)}\n` +
         `🕒 <b>Time:</b> ${escapeHtml(formatDate(message.created_at))}\n\n` +
         `💬 <b>User Message:</b>\n${escapeHtml(short(message.message))}` +
@@ -258,10 +254,13 @@ function ticketKeyboard(conversationId) {
 async function sendTicketNotification(item, force = false) {
     const conversationId = String(item.conversation.id);
     const current = ticketState(conversationId);
-    const messageId = String(item.message.id);
+    const now = Date.now();
 
-    // Never send the same user message more than once.
-    if (!force && current.lastMessageId === messageId) {
+    if (
+        !force &&
+        current.lastNotifiedAt &&
+        now - current.lastNotifiedAt < REMINDER_MS
+    ) {
         return;
     }
 
@@ -275,8 +274,8 @@ async function sendTicketNotification(item, force = false) {
         reply_markup: ticketKeyboard(conversationId)
     });
 
-    current.lastMessageId = messageId;
-    current.lastNotifiedAt = Date.now();
+    current.lastMessageId = String(item.message.id);
+    current.lastNotifiedAt = now;
     current.telegramMessageId = sent.message_id;
 
     saveState();
@@ -284,27 +283,22 @@ async function sendTicketNotification(item, force = false) {
     console.log(
         "TELEGRAM SUPPORT NOTIFICATION SENT:",
         conversationId,
-        messageId
+        item.message.id
     );
 }
 
 async function checkSupportTickets() {
-    if (checkRunning) {
-        return;
-    }
-
-    checkRunning = true;
-
     try {
         const items = await getOpenUserMessages();
 
         for (const item of items) {
             const conversationId = String(item.conversation.id);
             const current = ticketState(conversationId);
+            const messageId = String(item.message.id);
 
-            // Attendance is persistent in support_messages. Once attended,
-            // this ticket must never start Telegram notifications again,
-            // even if the user sends another message in the same ticket.
+            // Attendance is persisted in support_messages by the shared
+            // attendance helper. A bot restart or a newer user message
+            // must NOT restart reminders after an admin has attended.
             const { data: attendanceMessage, error: attendanceError } =
                 await supabase
                     .from("support_messages")
@@ -333,12 +327,10 @@ async function checkSupportTickets() {
             "SUPPORT BOT CHECK ERROR:",
             error?.message || error
         );
-    } finally {
-        checkRunning = false;
     }
 }
 
-async function attendTicket(conversationId, callbackQuery) {
+async function attendTicket(conversationId, callbackQuery, callbackAlreadyAnswered = false) {
     const id = String(conversationId);
 
     const result = await attendSupportTicket(id);
@@ -347,6 +339,18 @@ async function attendTicket(conversationId, callbackQuery) {
     current.attended = true;
     current.lastNotifiedAt = Date.now();
     saveState();
+
+    if (!callbackAlreadyAnswered) {
+        try {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: result.alreadyAttended
+                    ? "Already attended. Notifications are stopped."
+                    : "Attended. User has been notified.",
+                show_alert: false
+            });
+        } catch {}
+    }
 
     if (callbackQuery.message) {
         const oldText = callbackQuery.message.text || "";
@@ -382,7 +386,7 @@ async function attendTicket(conversationId, callbackQuery) {
     console.log("TELEGRAM SUPPORT ATTENDED:", id);
 }
 
-async function closeTicket(conversationId, callbackQuery) {
+async function closeTicket(conversationId, callbackQuery, callbackAlreadyAnswered = false) {
     const id = String(conversationId);
 
     const { data: conversation, error } = await supabase
@@ -400,7 +404,11 @@ async function closeTicket(conversationId, callbackQuery) {
     }
 
     if (conversation.status === "closed") {
-        return;
+        await bot.api.answerCallbackQuery({
+            callback_query_id: callbackQuery.id,
+            text: "Ticket is already closed.",
+            show_alert: false
+        });
         return;
     }
 
@@ -447,6 +455,12 @@ async function closeTicket(conversationId, callbackQuery) {
     current.lastNotifiedAt = Date.now();
     saveState();
 
+    await bot.api.answerCallbackQuery({
+        callback_query_id: callbackQuery.id,
+        text: "Support ticket closed.",
+        show_alert: false
+    });
+
     if (callbackQuery.message) {
         const oldText = callbackQuery.message.text || "";
 
@@ -478,56 +492,84 @@ async function closeTicket(conversationId, callbackQuery) {
 }
 
 bot.on("callback_query", async (callbackQuery) => {
-    const callbackId = callbackQuery?.id;
-    const chatId = String(callbackQuery?.message?.chat?.id || "");
-    const data = String(callbackQuery?.data || "");
-
-    // Acknowledge Telegram immediately. Database/network work must never
-    // happen before this, otherwise Telegram can expire the callback query.
-    if (callbackId) {
-        try {
-            await bot.api.answerCallbackQuery({
-                callback_query_id: callbackId,
-                text: chatId === ADMIN_CHAT_ID ? "Processing..." : "Not authorized.",
-                show_alert: chatId !== ADMIN_CHAT_ID
-            });
-        } catch (error) {
-            // Old/stale Telegram buttons can legitimately return 400 here.
-            console.error(
-                "SUPPORT BOT CALLBACK ACK ERROR:",
-                error?.message || error
-            );
-        }
-    }
-
-    if (chatId !== ADMIN_CHAT_ID) {
-        return;
-    }
-
     try {
+        const chatId = String(
+            callbackQuery?.message?.chat?.id || ""
+        );
+
+        if (chatId !== ADMIN_CHAT_ID) {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: "Not authorized.",
+                show_alert: true
+            });
+            return;
+        }
+
+        const data = String(callbackQuery.data || "");
+
         if (data.startsWith("attend:")) {
-            await attendTicket(data.slice("attend:".length), callbackQuery);
+            try {
+                await bot.api.answerCallbackQuery({
+                    callback_query_id: callbackQuery.id,
+                    text: "Processing attendance...",
+                    show_alert: false
+                });
+            } catch {}
+
+            await attendTicket(
+                data.slice("attend:".length),
+                callbackQuery,
+                true
+            );
             return;
         }
 
         if (data.startsWith("close:")) {
-            await closeTicket(data.slice("close:".length), callbackQuery);
+            try {
+                await bot.api.answerCallbackQuery({
+                    callback_query_id: callbackQuery.id,
+                    text: "Closing ticket...",
+                    show_alert: false
+                });
+            } catch {}
+
+            await closeTicket(
+                data.slice("close:".length),
+                callbackQuery,
+                true
+            );
             return;
         }
 
-        if (data.startsWith("attended:") || data.startsWith("closed:")) {
-            return;
+        if (
+            data.startsWith("attended:") ||
+            data.startsWith("closed:")
+        ) {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: "No action required.",
+                show_alert: false
+            });
         }
     } catch (error) {
         console.error(
             "SUPPORT BOT CALLBACK ERROR:",
             error?.message || error
         );
+
+        try {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: error?.message || "Action failed.",
+                show_alert: true
+            });
+        } catch {}
     }
 });
 
-bot.command("start", async (ctx) => {
-    const chatId = String(ctx.chat.id);
+bot.onText(/^\/start$/, async (message) => {
+    const chatId = String(message.chat.id);
 
     if (chatId !== ADMIN_CHAT_ID) {
         await bot.api.sendMessage({
@@ -542,7 +584,7 @@ bot.command("start", async (ctx) => {
         text:
             "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
             "I will notify you when users send support messages.\n\n" +
-            "👀 ATTEND → stops notifications for that ticket\n" +
+            "👀 ATTEND → stops reminders for that ticket\n" +
             "✅ CLOSE → closes the ticket",
         parse_mode: "HTML"
     });
