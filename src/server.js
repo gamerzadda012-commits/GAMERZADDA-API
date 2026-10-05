@@ -10,6 +10,7 @@ const path = require("path");
 
 const authRouter = require("./routes/auth");
 const adminRouter = require("./routes/admin");
+const appVersionRouter = require("./routes/appVersion");
 const tournamentsRouter = require("./routes/tournaments");
 const walletRouter = require("./routes/wallet");
 const depositRouter = require("./routes/deposit");
@@ -110,6 +111,24 @@ app.get(
             });
         }
     }
+);
+
+// ===============================
+// APP VERSION
+//
+// GET /api/app-version
+//
+// Used by Android app to check:
+// - latest version
+// - minimum supported version
+// - version code
+// - APK URL
+// - force update
+// ===============================
+
+app.use(
+    "/api/app-version",
+    appVersionRouter
 );
 
 // ===============================
