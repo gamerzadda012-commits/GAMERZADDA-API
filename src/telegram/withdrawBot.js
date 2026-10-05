@@ -27,13 +27,13 @@ if (!ADMIN_CHAT_ID) {
 }
 
 // ============================================================
-// TELEGRAM BOT
+// BOT
 // ============================================================
 
 const bot = new Bot(TOKEN);
 
 // ============================================================
-// STATE
+// STATE FILE
 // ============================================================
 
 const STATE_FILE = path.join(
@@ -58,7 +58,7 @@ try {
     }
 } catch (error) {
     console.error(
-        "Telegram state load error:",
+        "WITHDRAW BOT STATE LOAD ERROR:",
         error.message
     );
 }
@@ -68,20 +68,22 @@ function saveState() {
         fs.writeFileSync(
             STATE_FILE,
             JSON.stringify(
-                [...notifiedIds].slice(-5000)
+                [...notifiedIds].slice(-5000),
+                null,
+                2
             ),
             "utf8"
         );
     } catch (error) {
         console.error(
-            "Telegram state save error:",
+            "WITHDRAW BOT STATE SAVE ERROR:",
             error.message
         );
     }
 }
 
 // ============================================================
-// TEXT HELPERS
+// HTML ESCAPE
 // ============================================================
 
 function escapeHtml(value) {
@@ -93,12 +95,10 @@ function escapeHtml(value) {
 }
 
 // ============================================================
-// SEND NEW WITHDRAWAL
+// SEND WITHDRAWAL NOTIFICATION
 // ============================================================
 
-async function sendWithdrawalRequest(
-    withdrawal
-) {
+async function sendWithdrawalRequest(withdrawal) {
     if (!withdrawal?.id) {
         return;
     }
@@ -140,8 +140,7 @@ async function sendWithdrawalRequest(
         `✅ <b>Net Amount:</b> ₹${netAmount.toFixed(2)}`,
         "",
         `👤 <b>Account Holder:</b> ${escapeHtml(
-            withdrawal.account_holder_name ||
-            "N/A"
+            withdrawal.account_holder_name || "N/A"
         )}`,
         `🏦 <b>UPI ID:</b> ${escapeHtml(
             withdrawal.upi_id || "N/A"
@@ -154,38 +153,37 @@ async function sendWithdrawalRequest(
         "⏳ <b>Status:</b> PENDING"
     ].join("\n");
 
-    await bot.api.sendMessage(
-        ADMIN_CHAT_ID,
-        message,
-        {
-            parse_mode: "HTML",
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: "✅ APPROVE",
-                            callback_data:
-                                `withdraw:approve:${withdrawal.id}`
-                        },
-                        {
-                            text: "❌ DECLINE",
-                            callback_data:
-                                `withdraw:reject:${withdrawal.id}`
-                        }
-                    ]
+    await bot.api.sendMessage({
+        chat_id: ADMIN_CHAT_ID,
+        text: message,
+        parse_mode: "HTML",
+
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    {
+                        text: "✅ APPROVE",
+                        callback_data:
+                            `withdraw:approve:${withdrawal.id}`
+                    },
+                    {
+                        text: "❌ DECLINE",
+                        callback_data:
+                            `withdraw:reject:${withdrawal.id}`
+                    }
                 ]
-            }
+            ]
         }
-    );
+    });
 
     console.log(
-        "Telegram withdrawal notification sent:",
+        "TELEGRAM WITHDRAWAL NOTIFICATION SENT:",
         withdrawal.id
     );
 }
 
 // ============================================================
-// CHECK NEW WITHDRAWALS
+// CHECK NEW PENDING WITHDRAWALS
 // ============================================================
 
 async function checkNewWithdrawals() {
@@ -225,15 +223,15 @@ async function checkNewWithdrawals() {
 
         if (error) {
             console.error(
-                "Telegram withdrawal fetch error:",
+                "TELEGRAM WITHDRAWAL FETCH ERROR:",
                 error.message
             );
+
             return;
         }
 
         for (
-            const withdrawal
-            of data || []
+            const withdrawal of data || []
         ) {
             const id = String(
                 withdrawal.id
@@ -255,52 +253,54 @@ async function checkNewWithdrawals() {
                 saveState();
             } catch (error) {
                 console.error(
-                    "Telegram notification error:",
+                    "TELEGRAM WITHDRAWAL SEND ERROR:",
                     error.message
                 );
             }
         }
     } catch (error) {
         console.error(
-            "Telegram withdrawal checker error:",
+            "TELEGRAM WITHDRAWAL CHECK ERROR:",
             error.message
         );
     }
 }
 
 // ============================================================
-// CALLBACK HANDLER
+// CALLBACK BUTTONS
 // ============================================================
 
 bot.on(
     "callback_query",
-    async (query) => {
+    async (ctx) => {
         try {
+            const callback =
+                ctx.callbackQuery;
+
             const chatId = String(
-                query?.message?.chat?.id ||
-                ""
+                callback?.message?.chat?.id || ""
             );
 
-            // Only configured admin
+            // ------------------------------------------------
+            // ADMIN SECURITY
+            // ------------------------------------------------
+
             if (
                 chatId !==
                 ADMIN_CHAT_ID
             ) {
-                await bot.api.answerCallbackQuery(
-                    query.id,
-                    {
-                        text:
-                            "❌ Unauthorized",
-                        show_alert:
-                            true
-                    }
-                );
+                await ctx.answerCallbackQuery({
+                    text:
+                        "❌ Unauthorized",
+                    show_alert:
+                        true
+                });
 
                 return;
             }
 
             const data = String(
-                query.data || ""
+                callback?.data || ""
             );
 
             if (
@@ -329,39 +329,30 @@ bot.on(
                 ].includes(action) ||
                 !withdrawalId
             ) {
-                await bot.api.answerCallbackQuery(
-                    query.id,
-                    {
-                        text:
-                            "Invalid withdrawal request.",
-                        show_alert:
-                            true
-                    }
-                );
+                await ctx.answerCallbackQuery({
+                    text:
+                        "Invalid withdrawal request.",
+                    show_alert:
+                        true
+                });
 
                 return;
             }
 
-            await bot.api.answerCallbackQuery(
-                query.id,
-                {
-                    text:
-                        action ===
-                        "approve"
-                            ? "⏳ Approving..."
-                            : "⏳ Declining..."
-                }
-            );
+            await ctx.answerCallbackQuery({
+                text:
+                    action === "approve"
+                        ? "⏳ Approving withdrawal..."
+                        : "⏳ Declining withdrawal..."
+            });
 
-            // ==================================================
-            // GET WITHDRAWAL
-            // ==================================================
+            // ------------------------------------------------
+            // LOAD WITHDRAWAL
+            // ------------------------------------------------
 
             const {
-                data:
-                    withdrawal,
-                error:
-                    lookupError
+                data: withdrawal,
+                error: lookupError
             } = await supabase
                 .from(
                     "withdraw_requests"
@@ -387,17 +378,16 @@ bot.on(
             }
 
             if (!withdrawal) {
-                await bot.api.sendMessage(
-                    ADMIN_CHAT_ID,
+                await ctx.reply(
                     "❌ Withdrawal request not found."
                 );
 
                 return;
             }
 
-            // ==================================================
+            // ------------------------------------------------
             // ALREADY PROCESSED
-            // ==================================================
+            // ------------------------------------------------
 
             if (
                 String(
@@ -405,8 +395,7 @@ bot.on(
                 ).toLowerCase() !==
                 "pending"
             ) {
-                await bot.api.sendMessage(
-                    ADMIN_CHAT_ID,
+                await ctx.reply(
                     [
                         "⚠️ <b>Withdrawal Already Processed</b>",
                         "",
@@ -435,9 +424,9 @@ bot.on(
                 return;
             }
 
-            // ==================================================
-            // SAME EXISTING ADMIN RPC
-            // ==================================================
+            // ------------------------------------------------
+            // EXISTING ADMIN RPC
+            // ------------------------------------------------
 
             const {
                 data: rpcData,
@@ -452,8 +441,7 @@ bot.on(
                         action,
 
                     p_note:
-                        action ===
-                        "approve"
+                        action === "approve"
                             ? "Approved via Telegram"
                             : "Declined via Telegram"
                 }
@@ -464,26 +452,22 @@ bot.on(
             }
 
             const result =
-                Array.isArray(
-                    rpcData
-                )
+                Array.isArray(rpcData)
                     ? rpcData[0]
                     : rpcData;
 
             if (
                 result &&
-                result.success ===
-                    false
+                result.success === false
             ) {
-                await bot.api.sendMessage(
-                    ADMIN_CHAT_ID,
+                await ctx.reply(
                     [
                         "❌ <b>Withdrawal Processing Failed</b>",
                         "",
                         escapeHtml(
                             result.message ||
-                                result.error ||
-                                "Unknown error"
+                            result.error ||
+                            "Unknown error"
                         )
                     ].join("\n"),
                     {
@@ -495,9 +479,9 @@ bot.on(
                 return;
             }
 
-            // ==================================================
+            // ------------------------------------------------
             // SUCCESS
-            // ==================================================
+            // ------------------------------------------------
 
             notifiedIds.add(
                 String(
@@ -509,34 +493,25 @@ bot.on(
 
             const amount =
                 Number(
-                    withdrawal.amount ||
-                        0
+                    withdrawal.amount || 0
                 );
 
             const serviceCharge =
                 Number(
-                    withdrawal.service_charge ||
-                        0
+                    withdrawal.service_charge || 0
                 );
 
             const netAmount =
                 Number(
                     withdrawal.net_amount ??
-                        amount -
-                            serviceCharge
+                    amount - serviceCharge
                 );
 
-            const isApproved =
-                action ===
-                "approve";
-
-            const statusText =
-                isApproved
-                    ? "✅ APPROVED"
-                    : "❌ DECLINED";
+            const approved =
+                action === "approve";
 
             const finalMessage = [
-                isApproved
+                approved
                     ? "💸 <b>WITHDRAWAL APPROVED</b>"
                     : "💸 <b>WITHDRAWAL DECLINED</b>",
                 "",
@@ -546,52 +521,52 @@ bot.on(
                 "",
                 `👤 <b>Account Holder:</b> ${escapeHtml(
                     withdrawal.account_holder_name ||
-                        "N/A"
+                    "N/A"
                 )}`,
                 `🏦 <b>UPI ID:</b> ${escapeHtml(
                     withdrawal.upi_id ||
-                        "N/A"
+                    "N/A"
                 )}`,
                 "",
                 `🆔 <b>Withdrawal ID:</b> <code>${escapeHtml(
                     withdrawalId
                 )}</code>`,
                 "",
-                `<b>Status:</b> ${statusText}`,
+                approved
+                    ? "✅ <b>Status:</b> APPROVED"
+                    : "❌ <b>Status:</b> DECLINED",
                 "",
                 "🤖 <i>Processed via GamerzAdda Telegram Bot</i>"
             ].join("\n");
 
-            // ==================================================
+            // ------------------------------------------------
             // UPDATE ORIGINAL TELEGRAM MESSAGE
-            // ==================================================
+            // ------------------------------------------------
 
             if (
-                query.message?.message_id
+                callback?.message?.message_id
             ) {
-                await bot.api.editMessageText(
-                    finalMessage,
-                    {
-                        chat_id:
-                            ADMIN_CHAT_ID,
+                await bot.api.editMessageText({
+                    chat_id:
+                        ADMIN_CHAT_ID,
 
-                        message_id:
-                            query.message
-                                .message_id,
+                    message_id:
+                        callback.message.message_id,
 
-                        parse_mode:
-                            "HTML",
+                    text:
+                        finalMessage,
 
-                        reply_markup: {
-                            inline_keyboard:
-                                []
-                        }
+                    parse_mode:
+                        "HTML",
+
+                    reply_markup: {
+                        inline_keyboard: []
                     }
-                );
+                });
             }
 
             console.log(
-                "Telegram withdrawal processed:",
+                "TELEGRAM WITHDRAWAL PROCESSED:",
                 {
                     withdrawalId,
                     action
@@ -599,40 +574,48 @@ bot.on(
             );
         } catch (error) {
             console.error(
-                "Telegram withdrawal callback error:",
+                "TELEGRAM CALLBACK ERROR:",
                 error
             );
 
             try {
-                await bot.api.answerCallbackQuery(
-                    query.id,
-                    {
-                        text:
-                            error?.message ||
-                            "Something went wrong.",
-                        show_alert:
-                            true
-                    }
-                );
+                await ctx.answerCallbackQuery({
+                    text:
+                        error?.message ||
+                        "Something went wrong.",
+                    show_alert:
+                        true
+                });
             } catch {}
         }
     }
 );
 
 // ============================================================
-// BOT START
+// BOT ERROR HANDLER
+// ============================================================
+
+bot.catch(
+    (error) => {
+        console.error(
+            "TELEGRAM BOT ERROR:",
+            error
+        );
+    }
+);
+
+// ============================================================
+// START BOT
 // ============================================================
 
 async function startBot() {
     try {
-        await bot.init();
-
         console.log(
             "=========================================="
         );
 
         console.log(
-            "GAMERZADDA WITHDRAW TELEGRAM BOT STARTED"
+            "GAMERZADDA WITHDRAW TELEGRAM BOT STARTING"
         );
 
         console.log(
@@ -644,18 +627,17 @@ async function startBot() {
             "=========================================="
         );
 
-        // Start polling
-        bot.start({
-            allowed_updates: [
-                "message",
-                "callback_query"
-            ]
-        });
+        // Start Telegram long polling
+        await bot.startPolling();
 
-        // Initial check
+        console.log(
+            "GAMERZADDA WITHDRAW TELEGRAM BOT STARTED"
+        );
+
+        // Initial pending withdrawal check
         await checkNewWithdrawals();
 
-        // Check every 5 seconds
+        // Continue checking every 5 seconds
         setInterval(
             checkNewWithdrawals,
             5000
