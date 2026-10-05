@@ -568,8 +568,8 @@ bot.on("callback_query", async (callbackQuery) => {
     }
 });
 
-bot.onText(/^\/start$/, async (message) => {
-    const chatId = String(message.chat.id);
+bot.command("start", async (ctx) => {
+    const chatId = String(ctx.chat.id);
 
     if (chatId !== ADMIN_CHAT_ID) {
         await bot.api.sendMessage({
