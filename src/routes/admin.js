@@ -2,6 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 
 const supabase = require("../config/supabase");
+const { attendSupportTicket } = require("../utils/supportAttendance");
 
 const router = express.Router();
 
@@ -2773,12 +2774,40 @@ router.patch("/support/:conversationId", async (req, res) => {
 
         const conversationId = String(req.params.conversationId || "").trim();
         const status = String(req.body?.status || "").trim().toLowerCase();
+        const action = String(req.body?.action || "").trim().toLowerCase();
 
         if (!conversationId) {
             return res.status(400).json({
                 success: false,
                 error: "Conversation ID is required."
             });
+        }
+
+        if (action === "attend") {
+            try {
+                const result = await attendSupportTicket(conversationId);
+
+                return res.status(200).json({
+                    success: true,
+                    attended: true,
+                    already_attended: Boolean(result.alreadyAttended),
+                    conversation: {
+                        ...result.conversation,
+                        ticket_id: result.ticketId
+                    },
+                    message: result.message || null,
+                    notification: result.notification || null
+                });
+            } catch (attendError) {
+                console.error("ADMIN SUPPORT ATTEND ERROR:", attendError);
+
+                return res.status(400).json({
+                    success: false,
+                    error:
+                        attendError?.message ||
+                        "Unable to attend support ticket."
+                });
+            }
         }
 
         if (!["open", "closed"].includes(status)) {

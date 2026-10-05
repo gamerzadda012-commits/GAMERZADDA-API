@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const supabase = require("../config/supabase");
+const { attendSupportTicket } = require("../utils/supportAttendance");
 
 const TOKEN = process.env.TELEGRAM_SUPPORT_BOT_TOKEN;
 const ADMIN_CHAT_ID = String(process.env.TELEGRAM_SUPPORT_ADMIN_CHAT_ID || "").trim();
@@ -298,15 +299,25 @@ async function checkSupportTickets() {
             const current = ticketState(conversationId);
             const messageId = String(item.message.id);
 
-            // A newer user message means the ticket needs attention again.
-            if (
-                current.lastMessageId &&
-                current.lastMessageId !== messageId
-            ) {
-                current.attended = false;
+            // Attendance is persisted in support_messages by the shared
+            // attendance helper. A bot restart or a newer user message
+            // must NOT restart reminders after an admin has attended.
+            const { data: attendanceMessage, error: attendanceError } =
+                await supabase
+                    .from("support_messages")
+                    .select("id")
+                    .eq("conversation_id", conversationId)
+                    .eq("sender_type", "admin")
+                    .ilike("message", "🎧 Support Agent Connected%")
+                    .limit(1)
+                    .maybeSingle();
+
+            if (attendanceError) {
+                throw attendanceError;
             }
 
-            if (current.attended) {
+            if (attendanceMessage || current.attended) {
+                current.attended = true;
                 continue;
             }
 
@@ -325,23 +336,7 @@ async function checkSupportTickets() {
 async function attendTicket(conversationId, callbackQuery) {
     const id = String(conversationId);
 
-    const { data: conversation, error } = await supabase
-        .from("support_conversations")
-        .select("id,status")
-        .eq("id", id)
-        .maybeSingle();
-
-    if (error) {
-        throw error;
-    }
-
-    if (!conversation) {
-        throw new Error("Support ticket not found.");
-    }
-
-    if (conversation.status !== "open") {
-        throw new Error("This support ticket is already closed.");
-    }
+    const result = await attendSupportTicket(id);
 
     const current = ticketState(id);
     current.attended = true;
@@ -351,7 +346,9 @@ async function attendTicket(conversationId, callbackQuery) {
     await bot.answerCallbackQuery(
         callbackQuery.id,
         {
-            text: "Support ticket attended. Notifications stopped.",
+            text: result.alreadyAttended
+                ? "Already attended. Notifications are stopped."
+                : "Attended. User has been notified.",
             show_alert: false
         }
     );
