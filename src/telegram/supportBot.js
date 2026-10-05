@@ -247,8 +247,8 @@ function ticketKeyboard(conversationId) {
                     callback_data: `attend:${conversationId}`
                 },
                 {
-                    text: "✅ CLOSE",
-                    callback_data: `close:${conversationId}`
+                    text: "✅ SOLVE",
+                    callback_data: `solve:${conversationId}`
                 }
             ]
         ]
@@ -370,8 +370,8 @@ async function attendTicket(conversationId, callbackQuery) {
                             callback_data: `attended:${id}`
                         },
                         {
-                            text: "✅ CLOSE",
-                            callback_data: `close:${id}`
+                            text: "✅ SOLVE",
+                            callback_data: `solve:${id}`
                         }
                     ]
                 ]
@@ -382,7 +382,7 @@ async function attendTicket(conversationId, callbackQuery) {
     console.log("TELEGRAM SUPPORT ATTENDED:", id);
 }
 
-async function closeTicket(conversationId, callbackQuery) {
+async function solveTicket(conversationId, callbackQuery) {
     const id = String(conversationId);
 
     const { data: conversation, error } = await supabase
@@ -400,7 +400,13 @@ async function closeTicket(conversationId, callbackQuery) {
     }
 
     if (conversation.status === "closed") {
-        return;
+        try {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackQuery.id,
+                text: "This ticket is already solved.",
+                show_alert: false
+            });
+        } catch {}
         return;
     }
 
@@ -453,7 +459,7 @@ async function closeTicket(conversationId, callbackQuery) {
         const updatedText =
             oldText.replace(
                 /⚠️ <b>Status:<\/b> Waiting for admin attendance|👀 <b>Status:<\/b> ATTENDED BY ADMIN/,
-                "✅ <b>Status:</b> CLOSED"
+                "✅ <b>Status:</b> SOLVED"
             );
 
         await bot.api.editMessageText(updatedText, {
@@ -465,8 +471,8 @@ async function closeTicket(conversationId, callbackQuery) {
                 inline_keyboard: [
                     [
                         {
-                            text: "✅ CLOSED",
-                            callback_data: `closed:${id}`
+                            text: "✅ SOLVED",
+                            callback_data: `solved:${id}`
                         }
                     ]
                 ]
@@ -474,7 +480,7 @@ async function closeTicket(conversationId, callbackQuery) {
         });
     }
 
-    console.log("TELEGRAM SUPPORT CLOSED:", id);
+    console.log("TELEGRAM SUPPORT SOLVED:", id);
 }
 
 bot.on("callback_query", async (callbackQuery) => {
@@ -510,12 +516,12 @@ bot.on("callback_query", async (callbackQuery) => {
             return;
         }
 
-        if (data.startsWith("close:")) {
-            await closeTicket(data.slice("close:".length), callbackQuery);
+        if (data.startsWith("solve:")) {
+            await solveTicket(data.slice("solve:".length), callbackQuery);
             return;
         }
 
-        if (data.startsWith("attended:") || data.startsWith("closed:")) {
+        if (data.startsWith("attended:") || data.startsWith("solved:")) {
             return;
         }
     } catch (error) {
@@ -532,7 +538,7 @@ bot.command("start", async (ctx) => {
     if (chatId !== ADMIN_CHAT_ID) {
         await bot.api.sendMessage({
             chat_id: chatId,
-            text: "This is the GAMERZADDA Support Admin Bot."
+            text: "🎧 GAMERZADDA Support Bot\n\n👀 ATTEND → stops reminders and notifies the user\n✅ SOLVE → permanently resolves the ticket"
         });
         return;
     }
@@ -543,7 +549,7 @@ bot.command("start", async (ctx) => {
             "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
             "I will notify you when users send support messages.\n\n" +
             "👀 ATTEND → stops notifications for that ticket\n" +
-            "✅ CLOSE → closes the ticket",
+            "✅ SOLVE → permanently solves the ticket",
         parse_mode: "HTML"
     });
 });

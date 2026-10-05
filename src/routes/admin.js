@@ -2740,7 +2740,7 @@ router.post("/support/:conversationId/message", async (req, res) => {
             return res.status(400).json({
                 success: false,
                 error:
-                    "This support ticket is closed. Reopen it before replying."
+                    "This support ticket is already solved and cannot receive new replies."
             });
         }
 
@@ -2766,8 +2766,7 @@ router.post("/support/:conversationId/message", async (req, res) => {
         await supabase
             .from("support_conversations")
             .update({
-                updated_at: new Date().toISOString(),
-                status: "open"
+                updated_at: new Date().toISOString()
             })
             .eq("id", conversationId);
 

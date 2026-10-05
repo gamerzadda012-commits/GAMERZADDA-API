@@ -301,7 +301,7 @@ function getTicketId(conversationId) {
 
 // ======================================================
 
-// VERIFY OPEN CONVERSATION
+// VERIFY ACTIVE SUPPORT CONVERSATION
 
 // ======================================================
 
@@ -367,7 +367,7 @@ async function verifyOpenConversation(
 
 
 
-    if (conversation.status !== "open") {
+    if (!["open", "attended"].includes(conversation.status)) {
 
 
 
@@ -377,7 +377,7 @@ async function verifyOpenConversation(
 
             status: 400,
 
-            error: "This support conversation is closed."
+            error: "This support ticket is solved and cannot be reopened."
 
         };
 
@@ -2047,9 +2047,9 @@ router.use(
 
 // ======================================================
 
-// CLOSE / UPDATE CONVERSATION
+// SOLVE / UPDATE CONVERSATION
 
-// PATCH /api/support/:userId/:conversationId
+// PATCH /api/support/:userId/:conversationId (SOLVE ONLY)
 
 // ======================================================
 
