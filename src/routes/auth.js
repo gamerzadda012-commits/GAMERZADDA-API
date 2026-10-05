@@ -49,28 +49,6 @@ function normalizePhone(phone) {
 }
 
 
-// Get the real client IP from common reverse-proxy headers.
-// Priority: Cloudflare -> X-Forwarded-For -> X-Real-IP -> Express/socket.
-function getClientIP(req) {
-    const cloudflareIP = req.headers["cf-connecting-ip"];
-    if (cloudflareIP) {
-        return String(cloudflareIP).trim();
-    }
-
-    const forwardedFor = req.headers["x-forwarded-for"];
-    if (forwardedFor) {
-        return String(forwardedFor).split(",")[0].trim();
-    }
-
-    const realIP = req.headers["x-real-ip"];
-    if (realIP) {
-        return String(realIP).trim();
-    }
-
-    return req.ip || req.socket?.remoteAddress || null;
-}
-
-
 function generateOtp() {
     return crypto
         .randomInt(100000, 1000000)
@@ -83,6 +61,110 @@ function hashOtp(otp) {
         .createHash("sha256")
         .update(otp)
         .digest("hex");
+}
+
+// ======================================================
+// CLIENT IP
+// ======================================================
+
+function getClientIP(req) {
+    const forwardedFor = req.headers["x-forwarded-for"];
+
+    if (forwardedFor) {
+        const firstIp = String(forwardedFor)
+            .split(",")[0]
+            .trim();
+
+        if (firstIp) {
+            return firstIp;
+        }
+    }
+
+    return (
+        req.headers["cf-connecting-ip"] ||
+        req.headers["x-real-ip"] ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        null
+    );
+}
+
+
+// ======================================================
+// OTP IP BLOCK CHECK
+// ======================================================
+
+async function checkOtpIpBlock(ip, res) {
+    if (!ip) {
+        return false;
+    }
+
+    const { data, error } = await supabase
+        .from("otp_ip_blocks")
+        .select(
+            "ip_address, reason, is_permanent, expires_at"
+        )
+        .eq("ip_address", ip)
+        .eq("is_active", true)
+        .maybeSingle();
+
+    if (error) {
+        console.error("OTP IP BLOCK CHECK ERROR:", error);
+
+        // Fail closed: if the IP block system cannot be checked,
+        // do not allow an OTP to be initiated.
+        res.status(503).json({
+            success: false,
+            code: "OTP_IP_BLOCK_CHECK_FAILED",
+            message:
+                "OTP service is temporarily unavailable. Please try again later."
+        });
+
+        return true;
+    }
+
+    if (!data) {
+        return false;
+    }
+
+    const isExpired =
+        !data.is_permanent &&
+        data.expires_at &&
+        new Date(data.expires_at).getTime() <= Date.now();
+
+    if (isExpired) {
+        const { error: deactivateError } = await supabase
+            .from("otp_ip_blocks")
+            .update({
+                is_active: false,
+                updated_at: new Date().toISOString()
+            })
+            .eq("ip_address", ip)
+            .eq("is_active", true);
+
+        if (deactivateError) {
+            console.error(
+                "OTP IP BLOCK EXPIRY UPDATE ERROR:",
+                deactivateError
+            );
+        }
+
+        return false;
+    }
+
+    res.status(429).json({
+        success: false,
+        code: "OTP_IP_BLOCKED",
+        message:
+            "OTP requests are blocked from this IP address.",
+        reason: data.reason || null,
+        expiresAt:
+            data.is_permanent
+                ? null
+                : data.expires_at || null
+    });
+
+    return true;
 }
 
 
@@ -548,10 +630,33 @@ router.post(
 
 
             // ==================================================
+            // CLIENT IP
+            // ==================================================
+
+            const clientIP = getClientIP(req);
+
+            console.log(
+                "OTP REQUEST IP:",
+                clientIP || "UNKNOWN"
+            );
+
+            // ==================================================
             // SEND OTP
             // ==================================================
 
             if (action === "send") {
+
+                // IP block is checked before OTP generation,
+                // database insert, and SMS sending.
+                const ipBlocked =
+                    await checkOtpIpBlock(
+                        clientIP,
+                        res
+                    );
+
+                if (ipBlocked) {
+                    return;
+                }
 
 
                 /*
@@ -887,13 +992,6 @@ router.post(
                 // ----------------------------------------------
                 // SAVE OTP
                 // ----------------------------------------------
-
-                const clientIP = getClientIP(req);
-
-                console.log(
-                    "OTP REQUEST IP:",
-                    clientIP || "UNKNOWN"
-                );
 
                 const {
                     error:
