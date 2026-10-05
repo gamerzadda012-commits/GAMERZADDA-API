@@ -23,6 +23,12 @@ const scratchCardRouter = require("./routes/scratchCard");
 const supportRouter = require("./routes/support");
 const notificationsRouter = require("./routes/notifications");
 
+// ===============================
+// TELEGRAM WITHDRAW BOT
+// ===============================
+
+require("./telegram/withdrawBot");
+
 const app = express();
 
 // ===============================
@@ -115,15 +121,6 @@ app.get(
 
 // ===============================
 // APP VERSION
-//
-// GET /api/app-version
-//
-// Used by Android app to check:
-// - latest version
-// - minimum supported version
-// - version code
-// - APK URL
-// - force update
 // ===============================
 
 app.use(
@@ -214,16 +211,6 @@ app.use(
 
 // ===============================
 // SPIN
-//
-// spin.js contains:
-//
-// GET  /spin/:userId
-// POST /spin/:userId
-//
-// Final:
-//
-// GET  /api/spin/:userId
-// POST /api/spin/:userId
 // ===============================
 
 app.use(
@@ -233,16 +220,6 @@ app.use(
 
 // ===============================
 // SCRATCH CARD
-//
-// scratchCard.js contains:
-//
-// GET  /scratch-card/:userId
-// POST /scratch-card/:userId/claim
-//
-// Final:
-//
-// GET  /api/scratch-card/:userId
-// POST /api/scratch-card/:userId/claim
 // ===============================
 
 app.use(
