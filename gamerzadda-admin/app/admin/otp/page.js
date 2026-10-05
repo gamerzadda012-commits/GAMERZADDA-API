@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AdminShell from "../AdminShell";
-
 const RED = "#ff174f";
 
 function fmt(v) {
@@ -43,6 +41,7 @@ export default function Page() {
   const [status,setStatus]=useState("all");
   const [period,setPeriod]=useState("7");
   const [ip,setIp]=useState("");
+  const [blockIp,setBlockIp]=useState("");
   const [sort,setSort]=useState("newest");
   const [limit,setLimit]=useState(200);
   const [data,setData]=useState({requests:[],stats:{},phoneRanking:[],ipRanking:[],blockedIps:[]});
@@ -55,10 +54,15 @@ export default function Page() {
   const load=useCallback(async()=>{
     setLoading(true); setError("");
     try{
-      const q=new URLSearchParams({phone,flow,status,period,ip,sort,limit:String(limit)});
+      const q=new URLSearchParams({phone,flow,status:status==="blocked"?"all":status,period,ip,sort,limit:String(limit)});
       const r=await fetch(`/api/admin/otp?${q.toString()}`,{cache:"no-store"});
       const j=await r.json();
       if(!r.ok||!j.success) throw new Error(j.message||"Unable to load OTP activity");
+      if(status==="blocked") {
+        const blockedPhones=new Set((j.blockedPhones||[]).map(String));
+        const blockedIpsNow=new Set((j.blockedIps||[]).map(x=>String(x.ip_address)));
+        j.requests=(j.requests||[]).filter(x=>blockedPhones.has(String(x.phone||""))||blockedIpsNow.has(String(x.ip_address||"")));
+      }
       setData(j);
     }catch(e){setError(e.message||"Unable to load OTP activity");}
     finally{setLoading(false);}
@@ -82,6 +86,7 @@ export default function Page() {
       const j=await r.json();
       if(!r.ok||!j.success) throw new Error(j.message||"Unable to update IP block");
       setReason("");
+      setBlockIp("");
       setShowBlockBox(false);
       await load();
     }catch(e){setError(e.message||"Unable to update IP block");}
@@ -96,10 +101,9 @@ export default function Page() {
     ["Blocked numbers",data.stats.blocked||0,"OTP abuse blocks"],
   ],[data]);
 
-  const blockedSet=new Set((data.blockedIps||[]).map(x=>x.ip_address));
+  const blockedSet=new Set((data.blockedIps||[]).map(x=>String(x.ip_address)));
 
-  return <AdminShell>
-    <main style={{padding:24,maxWidth:1600,margin:"0 auto",color:"#0f172a"}}>
+  return <main style={{padding:24,maxWidth:1600,margin:"0 auto",color:"#0f172a"}}>
       <div style={{display:"flex",justifyContent:"space-between",gap:15,flexWrap:"wrap",alignItems:"center"}}>
         <div>
           <div style={{color:RED,fontSize:12,fontWeight:900,letterSpacing:1}}>SECURITY</div>
@@ -117,7 +121,7 @@ export default function Page() {
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
           <input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} placeholder="Search phone number" style={inputStyle}/>
           <select value={flow} onChange={e=>setFlow(e.target.value)} style={inputStyle}><option value="all">All flows</option><option value="login">Login</option><option value="signup">Signup</option></select>
-          <select value={status} onChange={e=>setStatus(e.target.value)} style={inputStyle}><option value="all">All status</option><option value="active">Sent / active</option><option value="verified">Verified</option><option value="expired">Expired</option><option value="failed">Failed</option></select>
+          <select value={status} onChange={e=>setStatus(e.target.value)} style={inputStyle}><option value="all">All status</option><option value="active">Sent / active</option><option value="verified">Verified</option><option value="expired">Expired</option><option value="failed">Failed</option><option value="blocked">Blocked Number / IP</option></select>
           <select value={period} onChange={e=>setPeriod(e.target.value)} style={inputStyle}><option value="1">Today</option><option value="2">Last 2 days</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select>
           <input value={ip} onChange={e=>setIp(e.target.value)} placeholder="Filter IP" style={inputStyle}/>
           <select value={sort} onChange={e=>setSort(e.target.value)} style={inputStyle}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
@@ -133,9 +137,9 @@ export default function Page() {
           <button onClick={()=>setShowBlockBox(v=>!v)} style={btnStyle(RED)}>{showBlockBox?"Cancel":"＋ Block IP"}</button>
         </div>
         {showBlockBox&&<div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14,paddingTop:14,borderTop:"1px solid #eef2f7"}}>
-          <input value={ip} onChange={e=>setIp(e.target.value.trim())} placeholder="IP address to block" style={{...inputStyle,minWidth:210}}/>
+          <input value={blockIp} onChange={e=>setBlockIp(e.target.value.trim())} placeholder="IP address to block" style={{...inputStyle,minWidth:210}}/>
           <input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Reason (optional)" style={{...inputStyle,minWidth:240}}/>
-          <button disabled={!ip.trim()||!!busyIp} onClick={()=>controlIp(ip.trim(),"block_ip")} style={btnStyle(RED)}>{busyIp===ip.trim()?"Blocking…":"Block IP"}</button>
+          <button disabled={!blockIp.trim()||!!busyIp} onClick={()=>controlIp(blockIp.trim(),"block_ip")} style={btnStyle(RED)}>{busyIp===blockIp.trim()?"Blocking…":"Block IP"}</button>
         </div>}
         <div style={{marginTop:14,overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",minWidth:720}}>
@@ -179,8 +183,7 @@ export default function Page() {
           <Card><h2 style={{margin:"0 0 12px",fontSize:18}}>Most Active IPs</h2>{!data.ipRanking.length?<div style={empty}>No data.</div>:data.ipRanking.slice(0,15).map((x,i)=><div key={x.ip} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #eef2f7"}}><span><b style={{width:28,display:"inline-block"}}>#{i+1}</b><code>{x.ip}</code></span><b>{x.count}</b></div>)}</Card>
         </div>
       </div>
-    </main>
-  </AdminShell>;
+    </main>;
 }
 
 const inputStyle={height:42,border:"1px solid #dbe2ea",borderRadius:11,padding:"0 12px",background:"#fff",color:"#0f172a",outline:"none"};

@@ -527,6 +527,8 @@ export async function GET(request) {
         phoneRanking,
 
         ipRanking,
+        blockedIps,
+        blockedPhones: Array.from(blockedPhones),
       },
       {
         status: 200,
