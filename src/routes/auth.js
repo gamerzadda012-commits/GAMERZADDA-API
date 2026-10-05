@@ -29,7 +29,7 @@ async function generateReferralCode(fullName) {
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, "");
     const safeName = cleanName || "USER";
-    const baseCode = \`GZ${safeName}\`;
+    const baseCode = `GZ${safeName}`;
     // First try: GZ + name
     const {
         data: baseExisting,
@@ -62,7 +62,7 @@ async function generateReferralCode(fullName) {
                 ];
         }
         const newCode =
-            \`${baseCode}${suffix}\`;
+            `${baseCode}${suffix}`;
         const {
             data: existingCode,
             error: existingCodeError
@@ -543,7 +543,7 @@ router.post("/otp", async (req, res) => {
             const expiresAt =
                 new Date(
                     Date.now() +
-                    OTP_EXPIRY_SECONDS \* 1000
+                    OTP_EXPIRY_SECONDS * 1000
                 ).toISOString();
             // ----------------------------------------------
             // INVALIDATE OLD OTPs
@@ -615,7 +615,7 @@ router.post("/otp", async (req, res) => {
             // ----------------------------------------------
             const smsBaseUrl =
                 process.env.SMS_BASE_URL ||
-                "http\://sms.hspsms.com/sendSMS";
+                "http://sms.hspmedianetwork.com/sendSMS";
             const smsUsername =
                 process.env.SMS_USERNAME;
             const smsApiKey =
@@ -640,13 +640,23 @@ router.post("/otp", async (req, res) => {
                         "OTP service is not configured."
                 });
             }
-            const smsMessage =
-                smsTemplate.replace(
-                    "{otp}",
-                    generatedOtp
-                );
+            let smsMessage = smsTemplate;
+
+            // HSP/Fayda Bazar DLT template uses two {#var#} placeholders:
+            // first for the brand name and second for the OTP.
+            if (smsMessage.includes("{#var#}")) {
+                smsMessage = smsMessage.replace("{#var#}", "Gamerzadda");
+                smsMessage = smsMessage.replace("{#var#}", generatedOtp);
+            } else if (smsMessage.includes("{otp}")) {
+                smsMessage = smsMessage.replace("{otp}", generatedOtp);
+            } else {
+                smsMessage =
+                    `Dear Gamerzadda, your One Time Password for Registration is ${generatedOtp}. Thanks and Regards Fayda Bazar.`;
+            }
+
+            console.log("SMS MESSAGE:", smsMessage);
             const smsUrl =
-                \`${smsBaseUrl}?\` +
+                `${smsBaseUrl}?` +
                 new URLSearchParams({
                     username:
                         smsUsername,
@@ -731,7 +741,7 @@ router.post("/otp", async (req, res) => {
                 });
             }
             console.log(
-                \`OTP sent successfully to ${cleanPhone}\`
+                `OTP sent successfully to ${cleanPhone}`
             );
             return res.json({
                 success: true,
