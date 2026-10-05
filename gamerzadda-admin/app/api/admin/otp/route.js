@@ -459,6 +459,24 @@ export async function GET(request) {
        STATS
     ===================================================== */
 
+    const {
+      data: ipBlockData,
+      error: ipBlockError,
+    } = await supabase
+      .from("otp_ip_blocks")
+      .select(
+        "id, ip_address, reason, is_permanent, expires_at, is_active, created_at, updated_at"
+      )
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    if (ipBlockError) {
+      console.error("OTP IP BLOCK QUERY ERROR:", ipBlockError);
+      throw ipBlockError;
+    }
+
+    const blockedIps = ipBlockData || [];
+
     const stats = {
       total:
         requests.length,
@@ -574,6 +592,132 @@ export async function PATCH(request) {
     const body =
       await request.json();
 
+    const action =
+      String(body?.action || "").trim();
+
+    // =====================================================
+    // IP BLOCK / UNBLOCK CONTROLS
+    // =====================================================
+
+    if (
+      action === "block_ip" ||
+      action === "unblock_ip"
+    ) {
+      const ipAddress =
+        String(
+          body?.ip_address || ""
+        ).trim();
+
+      if (!ipAddress) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "IP address is required",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (action === "block_ip") {
+        const reason =
+          String(body?.reason || "").trim() ||
+          "Blocked by admin";
+
+        const expiresAt =
+          body?.expires_at
+            ? new Date(body.expires_at).toISOString()
+            : null;
+
+        const isPermanent =
+          body?.is_permanent !== false;
+
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("otp_ip_blocks")
+          .upsert(
+            {
+              ip_address: ipAddress,
+              reason,
+              is_permanent: isPermanent,
+              expires_at: isPermanent ? null : expiresAt,
+              is_active: true,
+              updated_at:
+                new Date().toISOString(),
+            },
+            {
+              onConflict: "ip_address",
+            }
+          )
+          .select()
+          .single();
+
+        if (error) {
+          console.error(
+            "OTP IP BLOCK ERROR:",
+            error
+          );
+          throw error;
+        }
+
+        return NextResponse.json(
+          {
+            success: true,
+            message: "IP blocked successfully",
+            data,
+          },
+          {
+            status: 200,
+            headers: {
+              "Cache-Control": "no-store",
+            },
+          }
+        );
+      }
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("otp_ip_blocks")
+        .update({
+          is_active: false,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq("ip_address", ipAddress)
+        .eq("is_active", true)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "OTP IP UNBLOCK ERROR:",
+          error
+        );
+        throw error;
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "IP unblocked successfully",
+          data: data || null,
+        },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
+
+    // =====================================================
+    // PHONE OTP CONTROLS
+    // =====================================================
+
     const phone =
       String(
         body?.phone || ""
@@ -584,52 +728,32 @@ export async function PATCH(request) {
         body?.flow || "login"
       ).trim();
 
-    const action =
-      String(
-        body?.action || ""
-      ).trim();
-
     if (!phone) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Phone is required",
+          message: "Phone is required",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     if (
       !flow ||
-      !["login", "signup"].includes(
-        flow
-      )
+      !["login", "signup"].includes(flow)
     ) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid OTP flow",
+          message: "Invalid OTP flow",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
-    /* =====================================================
-       UNBLOCK WRONG OTP
-    ===================================================== */
-
     let update = null;
 
-    if (
-      action ===
-      "unblock_wrong"
-    ) {
+    if (action === "unblock_wrong") {
       update = {
         wrong_attempts: 0,
         locked_until: null,
@@ -638,44 +762,21 @@ export async function PATCH(request) {
         unblocked_at:
           new Date().toISOString(),
       };
-    }
-
-    /* =====================================================
-       UNBLOCK RESEND
-    ===================================================== */
-
-    else if (
-      action ===
-      "unblock_resend"
-    ) {
+    } else if (action === "unblock_resend") {
       update = {
         resend_attempts: 0,
-        resend_locked_until:
-          null,
-        resend_is_blocked:
-          false,
+        resend_locked_until: null,
+        resend_is_blocked: false,
       };
-    }
-
-    /* =====================================================
-       FULL RESET
-    ===================================================== */
-
-    else if (
-      action === "reset"
-    ) {
+    } else if (action === "reset") {
       update = {
         wrong_attempts: 0,
         locked_until: null,
         is_blocked: false,
         blocked_at: null,
-
         resend_attempts: 0,
-        resend_locked_until:
-          null,
-        resend_is_blocked:
-          false,
-
+        resend_locked_until: null,
+        resend_is_blocked: false,
         unblocked_at:
           new Date().toISOString(),
       };
@@ -685,12 +786,9 @@ export async function PATCH(request) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Invalid action",
+          message: "Invalid action",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -698,9 +796,7 @@ export async function PATCH(request) {
       data,
       error,
     } = await supabase
-      .from(
-        "otp_abuse_limits"
-      )
+      .from("otp_abuse_limits")
       .upsert(
         {
           phone,
@@ -708,8 +804,7 @@ export async function PATCH(request) {
           ...update,
         },
         {
-          onConflict:
-            "phone,flow",
+          onConflict: "phone,flow",
         }
       )
       .select()
@@ -720,22 +815,19 @@ export async function PATCH(request) {
         "OTP CONTROL UPDATE ERROR:",
         error
       );
-
       throw error;
     }
 
     return NextResponse.json(
       {
         success: true,
-        message:
-          "OTP controls updated",
+        message: "OTP controls updated",
         data: data || null,
       },
       {
         status: 200,
         headers: {
-          "Cache-Control":
-            "no-store",
+          "Cache-Control": "no-store",
         },
       }
     );
