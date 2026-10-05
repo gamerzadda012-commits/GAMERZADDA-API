@@ -26,6 +26,8 @@ let state = {
     tickets: {}
 };
 
+let initialSyncComplete = false;
+
 function loadState() {
     try {
         if (!fs.existsSync(STATE_FILE)) {
@@ -209,7 +211,6 @@ function buildTicketText(item) {
 
     const name =
         user?.full_name ||
-        user?.game_name ||
         "Unknown User";
 
     const email = user?.email || "-";
@@ -223,10 +224,10 @@ function buildTicketText(item) {
     return (
         `🚨 <b>NEW SUPPORT REQUEST</b>\n\n` +
         `🎫 <b>Ticket:</b> ${escapeHtml(getTicketId(conversation.id))}\n` +
-        `👤 <b>User:</b> ${escapeHtml(name)}\n` +
+        `👤 <b>Real Name:</b> ${escapeHtml(name)}\n` +
         `📧 <b>Email:</b> ${escapeHtml(email)}\n` +
         `📱 <b>Phone:</b> ${escapeHtml(phone)}\n` +
-        `👤 <b>Real Name:</b> ${escapeHtml(user?.full_name || "-")}\n` +
+
         `🆔 <b>Free Fire UID:</b> ${escapeHtml(uid)}\n` +
         `🕒 <b>Time:</b> ${escapeHtml(formatDate(message.created_at))}\n\n` +
         `💬 <b>User Message:</b>\n${escapeHtml(short(message.message))}` +
@@ -288,30 +289,57 @@ async function sendTicketNotification(item, force = false) {
     );
 }
 
-async function checkSupportTickets({ initialize = false } = {}) {
+async function checkSupportTickets() {
     try {
         const items = await getOpenUserMessages();
+
+        // On every bot restart, sync the current open tickets into state
+        // WITHOUT sending their old messages to Telegram.
+        // Notifications start only when a genuinely newer user message arrives.
+        if (!initialSyncComplete) {
+            for (const item of items) {
+                const conversationId = String(item.conversation.id);
+                const current = ticketState(conversationId);
+                const messageId = String(item.message.id);
+
+                if (!current.lastMessageId) {
+                    current.lastMessageId = messageId;
+                }
+
+                current.lastNotifiedAt = Date.now();
+
+                if (!current.attended) {
+                    const { data: attendanceMessage, error: attendanceError } =
+                        await supabase
+                            .from("support_messages")
+                            .select("id")
+                            .eq("conversation_id", conversationId)
+                            .eq("sender_type", "admin")
+                            .ilike("message", "🎧 Support Agent Connected%")
+                            .limit(1)
+                            .maybeSingle();
+
+                    if (attendanceError) {
+                        throw attendanceError;
+                    }
+
+                    if (attendanceMessage) {
+                        current.attended = true;
+                    }
+                }
+            }
+
+            saveState();
+            initialSyncComplete = true;
+            console.log("TELEGRAM SUPPORT INITIAL SYNC COMPLETE");
+            return;
+        }
 
         for (const item of items) {
             const conversationId = String(item.conversation.id);
             const current = ticketState(conversationId);
             const messageId = String(item.message.id);
 
-            // On startup, only remember the latest existing user message.
-            // Never resend old/open tickets just because the bot restarted.
-            if (initialize) {
-                current.lastMessageId = messageId;
-                current.lastNotifiedAt = Date.now();
-                saveState();
-                continue;
-            }
-
-            // Already notified for this exact user message.
-            if (current.lastMessageId === messageId) {
-                continue;
-            }
-
-            // Attendance is persisted in support_messages by the shared helper.
             const { data: attendanceMessage, error: attendanceError } =
                 await supabase
                     .from("support_messages")
@@ -332,7 +360,15 @@ async function checkSupportTickets({ initialize = false } = {}) {
                 continue;
             }
 
-            // A genuinely new user message: notify admin once.
+            // Same message already processed.
+            if (current.lastMessageId === messageId) {
+                continue;
+            }
+
+            // A genuinely newer user message: notify immediately.
+            current.lastMessageId = messageId;
+            current.lastNotifiedAt = 0;
+
             await sendTicketNotification(item, true);
         }
 
@@ -345,7 +381,7 @@ async function checkSupportTickets({ initialize = false } = {}) {
     }
 }
 
-async function attendTicket(conversationId, callbackQuery) {
+async function attendTicket(conversationId, callbackQuery, alreadyAcknowledged = false) {
     const id = String(conversationId);
 
     const result = await attendSupportTicket(id);
@@ -355,13 +391,15 @@ async function attendTicket(conversationId, callbackQuery) {
     current.lastNotifiedAt = Date.now();
     saveState();
 
-    await bot.api.answerCallbackQuery({
-        callback_query_id: callbackQuery.id,
-        text: result.alreadyAttended
-            ? "Already attended. Notifications are stopped."
-            : "Attended. User has been notified.",
-        show_alert: false
-    });
+    await bot.answerCallbackQuery(
+        callbackQuery.id,
+        {
+            text: result.alreadyAttended
+                ? "Already attended. Notifications are stopped."
+                : "Attended. User has been notified.",
+            show_alert: false
+        }
+    );
 
     if (callbackQuery.message) {
         const oldText = callbackQuery.message.text || "";
@@ -397,7 +435,7 @@ async function attendTicket(conversationId, callbackQuery) {
     console.log("TELEGRAM SUPPORT ATTENDED:", id);
 }
 
-async function closeTicket(conversationId, callbackQuery) {
+async function closeTicket(conversationId, callbackQuery, alreadyAcknowledged = false) {
     const id = String(conversationId);
 
     const { data: conversation, error } = await supabase
@@ -415,10 +453,6 @@ async function closeTicket(conversationId, callbackQuery) {
     }
 
     if (conversation.status === "closed") {
-        await bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id,
-            text: "Ticket is already closed.",
-            show_alert: false
-        });
         return;
     }
 
@@ -465,11 +499,6 @@ async function closeTicket(conversationId, callbackQuery) {
     current.lastNotifiedAt = Date.now();
     saveState();
 
-    await bot.api.answerCallbackQuery({ callback_query_id: callbackQuery.id,
-        text: "Support ticket closed.",
-        show_alert: false
-    });
-
     if (callbackQuery.message) {
         const oldText = callbackQuery.message.text || "";
 
@@ -501,27 +530,42 @@ async function closeTicket(conversationId, callbackQuery) {
 }
 
 bot.on("callback_query", async (callbackQuery) => {
+    const callbackId = callbackQuery?.id;
+
+    // ACK IMMEDIATELY. Telegram callbacks expire very quickly.
+    // Never wait for Supabase/API work before answering the callback.
+    try {
+        if (callbackId) {
+            await bot.api.answerCallbackQuery({
+                callback_query_id: callbackId,
+                text: "Processing...",
+                show_alert: false
+            });
+        }
+    } catch (ackError) {
+        console.error(
+            "SUPPORT BOT CALLBACK ACK ERROR:",
+            ackError?.message || ackError
+        );
+        return;
+    }
+
     try {
         const chatId = String(
             callbackQuery?.message?.chat?.id || ""
         );
 
         if (chatId !== ADMIN_CHAT_ID) {
-            await bot.api.answerCallbackQuery({
-                callback_query_id: callbackQuery.id,
-                    text: "Not authorized.",
-                    show_alert: true
-                }
-            );
             return;
         }
 
-        const data = String(callbackQuery.data || "");
+        const data = String(callbackQuery?.data || "");
 
         if (data.startsWith("attend:")) {
             await attendTicket(
                 data.slice("attend:".length),
-                callbackQuery
+                callbackQuery,
+                true
             );
             return;
         }
@@ -529,41 +573,24 @@ bot.on("callback_query", async (callbackQuery) => {
         if (data.startsWith("close:")) {
             await closeTicket(
                 data.slice("close:".length),
-                callbackQuery
+                callbackQuery,
+                true
             );
             return;
-        }
-
-        if (
-            data.startsWith("attended:") ||
-            data.startsWith("closed:")
-        ) {
-            await bot.api.answerCallbackQuery({
-                callback_query_id: callbackQuery.id,
-                    text: "No action required.",
-                    show_alert: false
-                }
-            );
         }
     } catch (error) {
         console.error(
             "SUPPORT BOT CALLBACK ERROR:",
             error?.message || error
         );
-
-        try {
-            await bot.api.answerCallbackQuery({
-                callback_query_id: callbackQuery.id,
-                    text: error?.message || "Action failed.",
-                    show_alert: true
-                }
-            );
-        } catch {}
+        // Do NOT call answerCallbackQuery again here.
+        // The callback was already acknowledged above.
     }
 });
 
 bot.command("start", async (ctx) => {
-    const message = ctx.message;
+    const message = ctx?.message || {};
+
     const chatId = String(message.chat.id);
 
     if (chatId !== ADMIN_CHAT_ID) {
@@ -576,7 +603,8 @@ bot.command("start", async (ctx) => {
 
     await bot.api.sendMessage({
         chat_id: chatId,
-        text: "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
+        text:
+            "🎧 <b>GAMERZADDA Support Bot</b>\n\n" +
             "I will notify you when users send support messages.\n\n" +
             "👀 ATTEND → stops reminders for that ticket\n" +
             "✅ CLOSE → closes the ticket",
@@ -598,10 +626,10 @@ async function startBot() {
 
     await bot.api.getMe();
 
-    await checkSupportTickets({ initialize: true });
+    await checkSupportTickets();
 
     setInterval(
-        () => checkSupportTickets(),
+        checkSupportTickets,
         POLL_MS
     );
 
