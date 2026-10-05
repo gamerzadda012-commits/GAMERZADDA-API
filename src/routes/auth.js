@@ -49,6 +49,28 @@ function normalizePhone(phone) {
 }
 
 
+// Get the real client IP from common reverse-proxy headers.
+// Priority: Cloudflare -> X-Forwarded-For -> X-Real-IP -> Express/socket.
+function getClientIP(req) {
+    const cloudflareIP = req.headers["cf-connecting-ip"];
+    if (cloudflareIP) {
+        return String(cloudflareIP).trim();
+    }
+
+    const forwardedFor = req.headers["x-forwarded-for"];
+    if (forwardedFor) {
+        return String(forwardedFor).split(",")[0].trim();
+    }
+
+    const realIP = req.headers["x-real-ip"];
+    if (realIP) {
+        return String(realIP).trim();
+    }
+
+    return req.ip || req.socket?.remoteAddress || null;
+}
+
+
 function generateOtp() {
     return crypto
         .randomInt(100000, 1000000)
@@ -866,6 +888,13 @@ router.post(
                 // SAVE OTP
                 // ----------------------------------------------
 
+                const clientIP = getClientIP(req);
+
+                console.log(
+                    "OTP REQUEST IP:",
+                    clientIP || "UNKNOWN"
+                );
+
                 const {
                     error:
                         insertError
@@ -887,7 +916,9 @@ router.post(
                                 ? String(
                                       deviceId
                                   )
-                                : null
+                                : null,
+                        ip_address:
+                            clientIP
                     });
 
 
