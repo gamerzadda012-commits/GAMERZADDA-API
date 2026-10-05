@@ -1603,9 +1603,80 @@ router.get("/support", async (req, res) => {
             });
         }
 
+        const conversations = data || [];
+
+        // Attach the real user profile to every support conversation.
+        // This keeps the Support page independent from the Members API.
+        const userIds = [
+            ...new Set(
+                conversations
+                    .map((conversation) => conversation?.user_id)
+                    .filter(Boolean)
+                    .map(String)
+            )
+        ];
+
+        let userMap = new Map();
+
+        if (userIds.length > 0) {
+            const { data: users, error: usersError } = await supabase
+                .from("users")
+                .select(`
+                    id,
+                    email,
+                    full_name,
+                    game_name,
+                    free_fire_uid,
+                    level,
+                    role,
+                    status,
+                    phone,
+                    phone_verified,
+                    created_at,
+                    last_login_at,
+                    profile_pic,
+                    avatar_url
+                `)
+                .in("id", userIds);
+
+            if (usersError) {
+                console.error("ADMIN SUPPORT USERS ERROR:", usersError);
+            } else {
+                userMap = new Map(
+                    (users || []).map((user) => [String(user.id), user])
+                );
+            }
+        }
+
+        const enrichedConversations = conversations.map((conversation) => {
+            const user = userMap.get(String(conversation?.user_id || ""));
+
+            return {
+                ...conversation,
+                user: user
+                    ? {
+                        id: user.id,
+                        email: user.email || "",
+                        full_name: user.full_name || "",
+                        game_name: user.game_name || "",
+                        free_fire_uid: user.free_fire_uid || "",
+                        level: user.level ?? null,
+                        role: user.role || "user",
+                        status: user.status || "active",
+                        phone: user.phone || "",
+                        phone_verified: Boolean(user.phone_verified),
+                        created_at: user.created_at || null,
+                        last_login_at: user.last_login_at || null,
+                        profile_pic: user.profile_pic || user.avatar_url || "",
+                        avatar_url: user.avatar_url || ""
+                    }
+                    : null
+            };
+        });
+
         return res.status(200).json({
             success: true,
-            conversations: data || []
+            conversations: enrichedConversations
         });
     } catch (error) {
         console.error("ADMIN SUPPORT LIST EXCEPTION:", error);
