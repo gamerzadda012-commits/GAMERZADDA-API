@@ -2,7 +2,6 @@ const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
 const supabase = require("../config/supabase");
-const { checkUserRestriction } = require("../utils/userRestrictions");
 const OTP_EXPIRY_SECONDS = 300;
 const MAX_OTP_ATTEMPTS = 5;
 // ======================================================
@@ -30,7 +29,7 @@ async function generateReferralCode(fullName) {
         .toUpperCase()
         .replace(/[^A-Z0-9]/g, "");
     const safeName = cleanName || "USER";
-    const baseCode = `GZ${safeName}`;
+    const baseCode = \`GZ${safeName}\`;
     // First try: GZ + name
     const {
         data: baseExisting,
@@ -63,7 +62,7 @@ async function generateReferralCode(fullName) {
                 ];
         }
         const newCode =
-            `${baseCode}${suffix}`;
+            \`${baseCode}${suffix}\`;
         const {
             data: existingCode,
             error: existingCodeError
@@ -90,36 +89,196 @@ async function generateReferralCode(fullName) {
     );
 }
 // ======================================================
+// FULL APP RESTRICTION DETAILS
+// ======================================================
+
+function formatFullAppRestrictionMessage(restriction) {
+    if (!restriction) {
+        return "You are restricted from GamerzAdda.";
+    }
+
+    const reason = String(
+        restriction.reason || "No reason provided."
+    ).trim();
+
+    if (restriction.is_permanent === true) {
+        return [
+            "You are permanently restricted from GamerzAdda.",
+            "",
+            "Reason: " + reason
+        ].join("\n");
+    }
+
+    const expiresAt = restriction.expires_at
+        ? new Date(restriction.expires_at)
+        : null;
+
+    let untilText = "Not specified";
+    let remainingText = "Not specified";
+
+    if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+        untilText = expiresAt.toLocaleString("en-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+            hour12: true
+        });
+
+        const remainingMs =
+            expiresAt.getTime() - Date.now();
+
+        if (remainingMs > 0) {
+            const totalMinutes =
+                Math.ceil(remainingMs / 60000);
+
+            const days =
+                Math.floor(totalMinutes / 1440);
+
+            const hours =
+                Math.floor((totalMinutes % 1440) / 60);
+
+            const minutes =
+                totalMinutes % 60;
+
+            const parts = [];
+
+            if (days > 0) {
+                parts.push(days + (days === 1 ? " day" : " days"));
+            }
+
+            if (hours > 0) {
+                parts.push(hours + (hours === 1 ? " hour" : " hours"));
+            }
+
+            if (minutes > 0 || parts.length === 0) {
+                parts.push(
+                    minutes +
+                    (minutes === 1 ? " minute" : " minutes")
+                );
+            }
+
+            remainingText = parts.join(" ");
+        }
+    }
+
+    return [
+        "You are temporarily restricted from GamerzAdda.",
+        "",
+        "Restricted until: " + untilText,
+        "Remaining: " + remainingText,
+        "Reason: " + reason
+    ].join("\n");
+}
+
+// ======================================================
+// FULL APP RESTRICTION CHECK
 // GET /api/auth/restriction/:userId
 // ======================================================
+
 router.get("/restriction/:userId", async (req, res) => {
     try {
-        const userId = String(req.params.userId || "").trim();
+        const userId = String(
+            req.params.userId || ""
+        ).trim();
+
         if (!userId) {
-            return res.status(400).json({ success: false, code: "USER_ID_REQUIRED", message: "User ID is required." });
+            return res.status(400).json({
+                success: false,
+                code: "USER_ID_REQUIRED",
+                message: "User ID is required."
+            });
         }
-        const result = await checkUserRestriction(userId, null);
-        if (!result.restricted) {
-            return res.json({ success: true, restricted: false });
+
+        const {
+            data: restriction,
+            error
+        } = await supabase
+            .from("user_restrictions")
+            .select(
+                "id, user_id, feature, expires_at, is_permanent, is_active, reason"
+            )
+            .eq("user_id", userId)
+            .eq("feature", "full_app")
+            .eq("is_active", true)
+            .maybeSingle();
+
+        if (error) {
+            console.error(
+                "FULL APP RESTRICTION CHECK ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                code: "DATABASE_ERROR",
+                message: "Unable to check account restriction."
+            });
         }
-        const r = result.restriction || {};
+
+        if (!restriction) {
+            return res.json({
+                success: true,
+                code: "NOT_RESTRICTED",
+                message: "Account is not restricted."
+            });
+        }
+
+        if (
+            restriction.is_permanent !== true &&
+            restriction.expires_at
+        ) {
+            const expiresAt =
+                new Date(restriction.expires_at);
+
+            if (
+                !Number.isNaN(expiresAt.getTime()) &&
+                expiresAt.getTime() <= Date.now()
+            ) {
+                await supabase
+                    .from("user_restrictions")
+                    .update({
+                        is_active: false,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq("id", restriction.id);
+
+                return res.json({
+                    success: true,
+                    code: "NOT_RESTRICTED",
+                    message: "Account is not restricted."
+                });
+            }
+        }
+
         return res.status(403).json({
-            success: false, restricted: true, code: "FULL_APP_RESTRICTED", feature: "full_app",
-            restriction_type: r.is_permanent === true ? "permanent" : "temporary",
-            message: r.is_permanent === true
-                ? "You are permanently restricted from Gamerzadda."
-                : "You are temporarily restricted from Gamerzadda.",
-            reason: r.reason || null, expires_at: r.expires_at || null, is_permanent: r.is_permanent === true
+            success: false,
+            code: "FULL_APP_RESTRICTED",
+            message:
+                formatFullAppRestrictionMessage(restriction),
+            reason: restriction.reason || null,
+            expires_at: restriction.expires_at || null,
+            is_permanent:
+                restriction.is_permanent === true
         });
+
     } catch (error) {
-        console.error("AUTH RESTRICTION CHECK ERROR:", error);
-        return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Unable to check account restriction." });
+        console.error(
+            "FULL APP RESTRICTION ROUTE ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            code: "INTERNAL_ERROR",
+            message:
+                "Unable to check account restriction."
+        });
     }
 });
 
 // ======================================================
 // POST /api/auth/otp
 // ======================================================
+
 router.post("/otp", async (req, res) => {
     try {
         const {
@@ -217,22 +376,6 @@ router.post("/otp", async (req, res) => {
                             "Account not found. Please create an account first."
                     });
                 }
-                const restrictionCheck = await checkUserRestriction(user.id, null);
-                if (restrictionCheck.restricted) {
-                    const r = restrictionCheck.restriction || {};
-                    return res.status(403).json({
-                        success: false,
-                        code: "FULL_APP_RESTRICTED",
-                        feature: "full_app",
-                        restriction_type: r.is_permanent === true ? "permanent" : "temporary",
-                        message: r.is_permanent === true
-                            ? "You are permanently restricted from Gamerzadda."
-                            : "You are temporarily restricted from Gamerzadda.",
-                        reason: r.reason || null,
-                        expires_at: r.expires_at || null,
-                        is_permanent: r.is_permanent === true
-                    });
-                }
                 if (
                     user.status &&
                     String(user.status)
@@ -245,6 +388,102 @@ router.post("/otp", async (req, res) => {
                         message:
                             "Your account is currently disabled."
                     });
+                }
+
+                // FULL APP RESTRICTION
+                // Never send an OTP to a fully restricted account.
+                const {
+                    data: fullAppRestriction,
+                    error: restrictionError
+                } = await supabase
+                    .from("user_restrictions")
+                    .select(
+                        "id, user_id, feature, expires_at, is_permanent, is_active, reason"
+                    )
+                    .eq("user_id", user.id)
+                    .eq("feature", "full_app")
+                    .eq("is_active", true)
+                    .maybeSingle();
+
+                if (restrictionError) {
+                    console.error(
+                        "LOGIN FULL APP RESTRICTION ERROR:",
+                        restrictionError
+                    );
+
+                    return res.status(500).json({
+                        success: false,
+                        code: "DATABASE_ERROR",
+                        message:
+                            "Unable to check account restriction."
+                    });
+                }
+
+                if (fullAppRestriction) {
+                    if (
+                        fullAppRestriction.is_permanent !== true &&
+                        fullAppRestriction.expires_at
+                    ) {
+                        const expiresAt =
+                            new Date(
+                                fullAppRestriction.expires_at
+                            );
+
+                        if (
+                            !Number.isNaN(expiresAt.getTime()) &&
+                            expiresAt.getTime() <= Date.now()
+                        ) {
+                            await supabase
+                                .from("user_restrictions")
+                                .update({
+                                    is_active: false,
+                                    updated_at:
+                                        new Date().toISOString()
+                                })
+                                .eq(
+                                    "id",
+                                    fullAppRestriction.id
+                                );
+                        } else {
+                            return res.status(403).json({
+                                success: false,
+                                code:
+                                    "FULL_APP_RESTRICTED",
+                                message:
+                                    formatFullAppRestrictionMessage(
+                                        fullAppRestriction
+                                    ),
+                                reason:
+                                    fullAppRestriction.reason ||
+                                    null,
+                                expires_at:
+                                    fullAppRestriction.expires_at ||
+                                    null,
+                                is_permanent:
+                                    fullAppRestriction
+                                        .is_permanent === true
+                            });
+                        }
+                    } else {
+                        return res.status(403).json({
+                            success: false,
+                            code:
+                                "FULL_APP_RESTRICTED",
+                            message:
+                                formatFullAppRestrictionMessage(
+                                    fullAppRestriction
+                                ),
+                            reason:
+                                fullAppRestriction.reason ||
+                                null,
+                            expires_at:
+                                fullAppRestriction.expires_at ||
+                                null,
+                            is_permanent:
+                                fullAppRestriction
+                                    .is_permanent === true
+                        });
+                    }
                 }
             }
             // ----------------------------------------------
@@ -304,7 +543,7 @@ router.post("/otp", async (req, res) => {
             const expiresAt =
                 new Date(
                     Date.now() +
-                    OTP_EXPIRY_SECONDS * 1000
+                    OTP_EXPIRY_SECONDS \* 1000
                 ).toISOString();
             // ----------------------------------------------
             // INVALIDATE OLD OTPs
@@ -407,7 +646,7 @@ router.post("/otp", async (req, res) => {
                     generatedOtp
                 );
             const smsUrl =
-                `${smsBaseUrl}?` +
+                \`${smsBaseUrl}?\` +
                 new URLSearchParams({
                     username:
                         smsUsername,
@@ -492,7 +731,7 @@ router.post("/otp", async (req, res) => {
                 });
             }
             console.log(
-                `OTP sent successfully to ${cleanPhone}`
+                \`OTP sent successfully to ${cleanPhone}\`
             );
             return res.json({
                 success: true,
@@ -729,16 +968,6 @@ router.post("/otp", async (req, res) => {
                         code: "ACCOUNT_DISABLED",
                         message:
                             "Your account is currently disabled."
-                    });
-                }
-                const verifyRestrictionCheck = await checkUserRestriction(user.id, null);
-                if (verifyRestrictionCheck.restricted) {
-                    const r = verifyRestrictionCheck.restriction || {};
-                    return res.status(403).json({
-                        success: false, code: "FULL_APP_RESTRICTED", feature: "full_app",
-                        restriction_type: r.is_permanent === true ? "permanent" : "temporary",
-                        message: r.is_permanent === true ? "You are permanently restricted from Gamerzadda." : "You are temporarily restricted from Gamerzadda.",
-                        reason: r.reason || null, expires_at: r.expires_at || null, is_permanent: r.is_permanent === true
                     });
                 }
                 if (fcmToken && String(fcmToken).trim()) {
