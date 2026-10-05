@@ -1,598 +1,549 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AdminShell from "../AdminShell";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
-);
+const RED = "#ff174f";
 
-/* AbuseRecord shape: see API response */
-/*
-  id: string;
-  phone: string;
-  flow: string;
-  wrong_attempts: number;
-  locked_until: string | null;
-  is_blocked: boolean;
-  blocked_at: string | null;
-  unblocked_at: string | null;
-  resend_attempts: number;
-  resend_locked_until: string | null;
-  resend_is_blocked: boolean;
-  created_at: string;
-  updated_at: string;
-};
+function formatDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
-type OtpRecord = {
-  id: string;
-  phone: string;
-  flow: string;
-  expires_at: string | null;
-  attempts: number;
-  verified: boolean;
-  created_at: string;
-};
+function remaining(value) {
+  if (!value) return "—";
+  const ms = new Date(value).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return "Expired";
+  const minutes = Math.ceil(ms / 60000);
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.ceil(minutes / 60)} hr`;
+}
 
-export default function AdminOtpPage() {
-  const router = useRouter();
+function Badge({ children, tone = "gray" }) {
+  const styles = {
+    green: { background: "#ecfdf3", color: "#15803d", border: "#bbf7d0" },
+    red: { background: "#fff1f2", color: "#be123c", border: "#fecdd3" },
+    orange: { background: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+    blue: { background: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+    gray: { background: "#f8fafc", color: "#475569", border: "#e2e8f0" },
+  };
+  const s = styles[tone] || styles.gray;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "5px 10px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        background: s.background,
+        color: s.color,
+        border: `1px solid ${s.border}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
+function Stat({ label, value, sub, danger = false }) {
+  return (
+    <div
+      style={{
+        flex: "1 1 190px",
+        minWidth: 170,
+        background: "#fff",
+        border: "1px solid #e9edf3",
+        borderRadius: 18,
+        padding: 18,
+        boxShadow: "0 8px 28px rgba(15,23,42,.05)",
+      }}
+    >
+      <div style={{ color: "#64748b", fontSize: 12, fontWeight: 700 }}>{label}</div>
+      <div style={{ marginTop: 7, fontSize: 27, fontWeight: 800, color: danger ? "#e11d48" : "#0f172a" }}>
+        {value}
+      </div>
+      <div style={{ marginTop: 4, color: "#94a3b8", fontSize: 12 }}>{sub}</div>
+    </div>
+  );
+}
+
+export default function Page() {
   const [phone, setPhone] = useState("");
-  const [records, setRecords] = useState([]);
-  const [latestOtp, setLatestOtp] = useState([]);
+  const [flow, setFlow] = useState("login");
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [tick, setTick] = useState(0);
 
-  async function getToken() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  const cleanPhone = useMemo(
+    () => String(phone || "").replace(/\D/g, "").slice(-10),
+    [phone]
+  );
 
-    if (!session?.access_token) {
-      throw new Error("Admin session not found. Please login again.");
-    }
-
-    return session.access_token;
-  }
-
-  function cleanPhone(value: string) {
-    return value.replace(/\D/g, "");
-  }
-
-  function validPhone(value: string) {
-    const clean = cleanPhone(value);
-
-    return (
-      /^[6-9]\d{9}$/.test(clean) ||
-      /^91[6-9]\d{9}$/.test(clean)
-    );
-  }
-
-  function formatDate(value: string | null) {
-    if (!value) return "—";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) return "—";
-
-    return date.toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  }
-
-  function activeUntil(value: string | null) {
-    if (!value) return null;
-
-    const time = new Date(value).getTime();
-
-    if (Number.isNaN(time) || time <= Date.now()) {
-      return null;
-    }
-
-    return value;
-  }
-
-  async function searchOtp() {
-    const clean = cleanPhone(phone);
-
-    if (!validPhone(clean)) {
-      setError("Enter a valid 10-digit Indian mobile number.");
-      setMessage("");
+  const load = useCallback(async () => {
+    if (cleanPhone.length !== 10) {
+      setError("Enter a valid 10-digit phone number.");
+      setData(null);
       return;
     }
 
+    setLoading(true);
+    setError("");
+    setMessage("");
+
     try {
-      setLoading(true);
-      setError("");
-      setMessage("");
-
-      const token = await getToken();
-
       const response = await fetch(
-        `/api/admin/otp?phone=${encodeURIComponent(clean)}`,
+        `/api/admin/otp?phone=${encodeURIComponent(cleanPhone)}&flow=${encodeURIComponent(flow)}`,
         {
           method: "GET",
-          cache: "no-store",
           credentials: "include",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          cache: "no-store",
         }
       );
 
-      const raw = await response.text();
-      const result = raw ? JSON.parse(raw) : null;
+      const result = await response.json();
 
-      if (!response.ok || !result?.success) {
-        throw new Error(
-          result?.error || "Unable to load OTP security information."
-        );
+      if (!response.ok) {
+        throw new Error(result?.error || "Unable to load OTP control data.");
       }
 
-      setRecords(result.abuse || []);
-      setLatestOtp(result.latestOtp || []);
-
-      if (!(result.abuse || []).length) {
-        setMessage("No OTP abuse record found. This number is clean.");
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message || "Unable to load OTP security information."
-      );
-      setRecords([]);
-      setLatestOtp([]);
+      setData(result);
+    } catch (err) {
+      setData(null);
+      setError(err?.message || "Unable to load OTP control data.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [cleanPhone, flow]);
 
-  async function performAction(action) {
-    const clean = cleanPhone(phone);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((v) => v + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
-    if (!validPhone(clean)) {
-      setError("Enter a valid 10-digit Indian mobile number first.");
+  useEffect(() => {
+    if (data?.record) setData((old) => ({ ...old }));
+  }, [tick]);
+
+  async function runAction(action) {
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError("Enter a valid 10-digit phone number first.");
       return;
     }
 
-    const confirmText =
-      action === "unblock_wrong"
-        ? "Unblock wrong OTP attempts? Resend protection will remain active."
-        : action === "unblock_resend"
-          ? "Unblock OTP resend? Wrong-OTP protection will remain active."
-          : "FULL RESET: Clear all OTP limits and invalidate all current OTPs for this number?";
+    const labels = {
+      unblock_wrong: "Unblock wrong-OTP attempts",
+      unblock_resend: "Unblock OTP resend",
+      reset: "FULL RESET for this phone",
+    };
 
-    if (!window.confirm(confirmText)) return;
+    if (!window.confirm(`${labels[action]}?\n\nPhone: ${cleanPhone}\nFlow: ${flow}`)) {
+      return;
+    }
+
+    setActionLoading(action);
+    setError("");
+    setMessage("");
 
     try {
-      setActionLoading(action);
-      setError("");
-      setMessage("");
-
-      const token = await getToken();
-
       const response = await fetch("/api/admin/otp", {
         method: "PATCH",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: clean,
+          phone: cleanPhone,
+          flow,
           action,
         }),
       });
 
-      const raw = await response.text();
-      const result = raw ? JSON.parse(raw) : null;
+      const result = await response.json();
 
-      if (!response.ok || !result?.success) {
-        throw new Error(
-          result?.error || "Unable to update OTP protection."
-        );
+      if (!response.ok) {
+        throw new Error(result?.error || "Action failed.");
       }
 
-      setRecords(result.abuse || []);
-      setMessage(
-        result.message || "OTP security setting updated successfully."
-      );
-
-      await searchOtp();
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message || "Unable to update OTP protection."
-      );
+      setMessage(result?.message || "OTP control updated successfully.");
+      await load();
+    } catch (err) {
+      setError(err?.message || "Action failed.");
     } finally {
       setActionLoading("");
     }
   }
 
-  const summary = useMemo(() => {
-    const login = records.find((r) => r.flow === "login");
-    const signup = records.find((r) => r.flow === "signup");
-
-    return {
-      login,
-      signup,
-      anyWrongBlocked: records.some((r) => r.is_blocked),
-      anyResendBlocked: records.some((r) => r.resend_is_blocked),
-    };
-  }, [records]);
+  const record = data?.record || null;
+  const recentOtps = data?.recentOtps || [];
+  const wrongBlocked = Boolean(record?.is_blocked);
+  const resendBlocked = Boolean(record?.resend_is_blocked);
 
   return (
-    <main className="min-h-screen bg-[#f7f8fa] text-slate-900">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-[#ff174f]/10 blur-3xl" />
-        <div className="absolute right-[-120px] top-24 h-96 w-96 rounded-full bg-purple-400/10 blur-3xl" />
-        <div className="absolute bottom-[-160px] left-1/3 h-96 w-96 rounded-full bg-pink-300/10 blur-3xl" />
-      </div>
-
-      <div className="relative mx-auto min-h-screen max-w-6xl p-3 sm:p-6">
-        <header className="mb-5 flex items-center justify-between rounded-[24px] border border-white/90 bg-white/80 px-4 py-3 shadow-[0_12px_40px_rgba(15,23,42,0.06)] backdrop-blur-2xl sm:px-5">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/admin")}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-xl text-slate-600 transition active:scale-95"
-            >
-              ‹
-            </button>
-
-            <div>
-              <p className="text-[8px] font-black uppercase tracking-[0.22em] text-[#ff174f]">
-                GAMERZADDA ADMIN
-              </p>
-              <h1 className="text-base font-black sm:text-lg">
-                OTP Security Control
-              </h1>
+    <AdminShell title="OTP">
+      <div style={{ padding: "8px 4px 32px" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 20,
+            marginBottom: 22,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 30, fontWeight: 850, color: "#0f172a", letterSpacing: -0.7 }}>
+              OTP Security
+            </div>
+            <div style={{ color: "#94a3b8", marginTop: 5 }}>
+              Control wrong-OTP locks, resend limits and permanent OTP blocks.
             </div>
           </div>
+          <Badge tone="blue">ADMIN CONTROL</Badge>
+        </div>
 
-          <div className="rounded-full bg-[#ff174f]/10 px-3 py-1.5 text-[9px] font-black tracking-wider text-[#ff174f]">
-            SECURITY
-          </div>
-        </header>
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e9edf3",
+            borderRadius: 20,
+            padding: 18,
+            boxShadow: "0 10px 35px rgba(15,23,42,.05)",
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ flex: "1 1 280px" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#475569", marginBottom: 7 }}>
+                PHONE NUMBER
+              </label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(-10))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") load();
+                }}
+                placeholder="Enter 10-digit phone number"
+                inputMode="numeric"
+                maxLength={10}
+                style={{
+                  width: "100%",
+                  height: 48,
+                  border: "1px solid #dbe2ea",
+                  borderRadius: 12,
+                  padding: "0 14px",
+                  outline: "none",
+                  fontSize: 15,
+                  color: "#0f172a",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
 
-        <section className="rounded-[28px] border border-white/90 bg-white/75 p-4 shadow-[0_25px_70px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:p-6">
-          <div className="mb-5">
-            <h2 className="text-xl font-black sm:text-2xl">
-              Manage OTP Protection
-            </h2>
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
-              Control wrong-OTP locks, progressive resend limits and permanent
-              OTP blocks for any user. Full reset also invalidates the current
-              OTP.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") searchOtp();
-              }}
-              placeholder="Enter mobile number"
-              inputMode="numeric"
-              className="h-12 flex-1 rounded-2xl border border-white bg-white/90 px-4 text-sm font-semibold outline-none shadow-inner focus:border-[#ff174f]/40 focus:ring-4 focus:ring-[#ff174f]/10"
-            />
+            <div style={{ width: 150 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#475569", marginBottom: 7 }}>
+                FLOW
+              </label>
+              <select
+                value={flow}
+                onChange={(e) => {
+                  setFlow(e.target.value);
+                  setData(null);
+                  setError("");
+                  setMessage("");
+                }}
+                style={{
+                  width: "100%",
+                  height: 48,
+                  border: "1px solid #dbe2ea",
+                  borderRadius: 12,
+                  padding: "0 12px",
+                  background: "#fff",
+                  fontSize: 15,
+                  color: "#0f172a",
+                }}
+              >
+                <option value="login">Login</option>
+                <option value="signup">Signup</option>
+              </select>
+            </div>
 
             <button
-              onClick={searchOtp}
+              onClick={load}
               disabled={loading}
-              className="h-12 rounded-2xl bg-[#ff174f] px-6 text-sm font-black text-white shadow-[0_10px_25px_rgba(255,23,79,0.22)] transition active:scale-[0.98] disabled:opacity-50"
+              style={{
+                height: 48,
+                padding: "0 24px",
+                border: 0,
+                borderRadius: 12,
+                background: RED,
+                color: "#fff",
+                fontWeight: 800,
+                cursor: loading ? "wait" : "pointer",
+                marginTop: 19,
+                boxShadow: "0 8px 20px rgba(255,23,79,.22)",
+              }}
             >
               {loading ? "Checking..." : "Check OTP"}
             </button>
           </div>
 
           {error && (
-            <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold text-red-600">
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "#fff1f2", color: "#be123c", fontSize: 13, fontWeight: 700 }}>
               {error}
             </div>
           )}
-
           {message && (
-            <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "#ecfdf3", color: "#15803d", fontSize: 13, fontWeight: 700 }}>
               {message}
             </div>
           )}
+        </div>
 
-          {(records.length > 0 || latestOtp.length > 0) && (
-            <div className="mt-6 space-y-5">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <Stat
-                  label="Wrong OTP"
-                  value={String(
-                    records.reduce(
-                      (sum, r) => sum + Number(r.wrong_attempts || 0),
-                      0
-                    )
-                  )}
-                />
-                <Stat
-                  label="Resends"
-                  value={String(
-                    records.reduce(
-                      (sum, r) => sum + Number(r.resend_attempts || 0),
-                      0
-                    )
-                  )}
-                />
-                <Stat
-                  label="Wrong Block"
-                  value={summary.anyWrongBlocked ? "BLOCKED" : "CLEAR"}
-                  danger={summary.anyWrongBlocked}
-                />
-                <Stat
-                  label="Resend Block"
-                  value={summary.anyResendBlocked ? "BLOCKED" : "CLEAR"}
-                  danger={summary.anyResendBlocked}
-                />
-              </div>
+        {!data && !loading && (
+          <div
+            style={{
+              background: "#fff",
+              border: "1px dashed #d7dee8",
+              borderRadius: 20,
+              padding: "54px 24px",
+              textAlign: "center",
+              color: "#94a3b8",
+            }}
+          >
+            <div style={{ fontSize: 46 }}>🔐</div>
+            <div style={{ marginTop: 12, fontSize: 18, fontWeight: 800, color: "#334155" }}>
+              Search a phone number
+            </div>
+            <div style={{ marginTop: 5, fontSize: 13 }}>
+              Enter a user phone number above to manage OTP limits.
+            </div>
+          </div>
+        )}
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                {["login", "signup"].map((flow) => {
-                  const record =
-                    flow === "login"
-                      ? summary.login
-                      : summary.signup;
+        {data && (
+          <>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+              <Stat
+                label="WRONG OTP ATTEMPTS"
+                value={record?.wrong_attempts ?? 0}
+                sub={wrongBlocked ? "Permanently blocked" : record?.locked_until ? `Locked for ${remaining(record.locked_until)}` : "No active wrong-OTP lock"}
+                danger={wrongBlocked}
+              />
+              <Stat
+                label="RESEND ATTEMPTS"
+                value={record?.resend_attempts ?? 0}
+                sub={resendBlocked ? "Permanently blocked" : record?.resend_locked_until ? `Locked for ${remaining(record.resend_locked_until)}` : "No active resend lock"}
+                danger={resendBlocked}
+              />
+              <Stat
+                label="WRONG-OTP STATUS"
+                value={wrongBlocked ? "BLOCKED" : record?.locked_until ? "LOCKED" : "CLEAR"}
+                sub={record?.blocked_at ? `Blocked ${formatDate(record.blocked_at)}` : "Current status"}
+                danger={wrongBlocked}
+              />
+              <Stat
+                label="RESEND STATUS"
+                value={resendBlocked ? "BLOCKED" : record?.resend_locked_until ? "LOCKED" : "CLEAR"}
+                sub={record?.resend_locked_until ? `Until ${formatDate(record.resend_locked_until)}` : "Current status"}
+                danger={resendBlocked}
+              />
+            </div>
 
-                  return (
-                    <div
-                      key={flow}
-                      className="rounded-[24px] border border-white bg-white/80 p-4 shadow-[0_12px_35px_rgba(15,23,42,0.06)] backdrop-blur-xl"
-                    >
-                      <div className="mb-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-[#ff174f]">
-                            OTP FLOW
-                          </p>
-                          <h3 className="text-lg font-black capitalize">
-                            {flow}
-                          </h3>
-                        </div>
-
-                        <StatusPill
-                          blocked={
-                            !!record &&
-                            (record.is_blocked ||
-                              record.resend_is_blocked)
-                          }
-                        />
-                      </div>
-
-                      {record ? (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <Info
-                            label="Wrong attempts"
-                            value={String(record.wrong_attempts)}
-                          />
-                          <Info
-                            label="Resend attempts"
-                            value={String(record.resend_attempts)}
-                          />
-                          <Info
-                            label="Wrong lock"
-                            value={
-                              activeUntil(record.locked_until)
-                                ? formatDate(record.locked_until)
-                                : "Clear"
-                            }
-                          />
-                          <Info
-                            label="Resend lock"
-                            value={
-                              activeUntil(record.resend_locked_until)
-                                ? formatDate(
-                                    record.resend_locked_until
-                                  )
-                                : "Clear"
-                            }
-                          />
-                          <Info
-                            label="Permanent wrong block"
-                            value={record.is_blocked ? "YES" : "NO"}
-                          />
-                          <Info
-                            label="Permanent resend block"
-                            value={
-                              record.resend_is_blocked
-                                ? "YES"
-                                : "NO"
-                            }
-                          />
-                        </div>
-                      ) : (
-                        <p className="rounded-2xl bg-slate-50 px-4 py-5 text-center text-xs text-slate-400">
-                          No {flow} abuse record.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {latestOtp.length > 0 && (
-                <div className="rounded-[24px] border border-white bg-white/80 p-4 shadow-[0_12px_35px_rgba(15,23,42,0.06)] backdrop-blur-xl">
-                  <h3 className="mb-3 text-sm font-black">
-                    Recent OTP Records
-                  </h3>
-
-                  <div className="space-y-2">
-                    {latestOtp.map((otp) => (
-                      <div
-                        key={otp.id}
-                        className="flex flex-col gap-2 rounded-2xl bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <p className="text-xs font-black capitalize">
-                            {otp.flow}
-                          </p>
-                          <p className="text-[10px] text-slate-500">
-                            Created: {formatDate(otp.created_at)}
-                          </p>
-                        </div>
-
-                        <div className="flex gap-2 text-[10px] font-bold">
-                          <span className="rounded-full bg-white px-3 py-1">
-                            Attempts: {otp.attempts}
-                          </span>
-                          <span
-                            className={`rounded-full px-3 py-1 ${
-                              otp.verified
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {otp.verified
-                              ? "Verified"
-                              : "Active"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #e9edf3",
+                borderRadius: 20,
+                padding: 20,
+                boxShadow: "0 10px 35px rgba(15,23,42,.05)",
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 15, flexWrap: "wrap", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 850, color: "#0f172a" }}>
+                    OTP Control — {cleanPhone}
+                  </div>
+                  <div style={{ marginTop: 5, color: "#94a3b8", fontSize: 13 }}>
+                    Flow: <b style={{ color: "#475569" }}>{flow}</b>
+                    {record?.updated_at ? ` • Updated ${formatDate(record.updated_at)}` : ""}
                   </div>
                 </div>
-              )}
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                <ActionButton
-                  label="Unblock Wrong OTP"
-                  description="Clear wrong-attempt lock only"
-                  loading={
-                    actionLoading === "unblock_wrong"
-                  }
-                  onClick={() =>
-                    performAction("unblock_wrong")
-                  }
-                  tone="amber"
-                />
+                <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => runAction("unblock_wrong")}
+                    disabled={Boolean(actionLoading)}
+                    style={{
+                      border: "1px solid #bbf7d0",
+                      background: "#f0fdf4",
+                      color: "#15803d",
+                      padding: "10px 14px",
+                      borderRadius: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {actionLoading === "unblock_wrong" ? "Working..." : "Unblock Wrong OTP"}
+                  </button>
 
-                <ActionButton
-                  label="Unblock Resend"
-                  description="Clear resend cooldown/block"
-                  loading={
-                    actionLoading === "unblock_resend"
-                  }
-                  onClick={() =>
-                    performAction("unblock_resend")
-                  }
-                  tone="blue"
-                />
+                  <button
+                    onClick={() => runAction("unblock_resend")}
+                    disabled={Boolean(actionLoading)}
+                    style={{
+                      border: "1px solid #bfdbfe",
+                      background: "#eff6ff",
+                      color: "#1d4ed8",
+                      padding: "10px 14px",
+                      borderRadius: 11,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {actionLoading === "unblock_resend" ? "Working..." : "Unblock Resend"}
+                  </button>
 
-                <ActionButton
-                  label="FULL RESET"
-                  description="Clear everything + invalidate OTP"
-                  loading={actionLoading === "reset"}
-                  onClick={() => performAction("reset")}
-                  tone="red"
-                />
+                  <button
+                    onClick={() => runAction("reset")}
+                    disabled={Boolean(actionLoading)}
+                    style={{
+                      border: "1px solid #fecdd3",
+                      background: "#fff1f2",
+                      color: "#be123c",
+                      padding: "10px 14px",
+                      borderRadius: 11,
+                      fontWeight: 850,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {actionLoading === "reset" ? "Resetting..." : "FULL RESET"}
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit,minmax(250px,1fr))",
+                  gap: 12,
+                }}
+              >
+                <div style={{ border: "1px solid #eef1f5", borderRadius: 14, padding: 15 }}>
+                  <div style={{ fontWeight: 800, color: "#334155" }}>Wrong OTP Lock</div>
+                  <div style={{ marginTop: 8, fontSize: 13, color: "#64748b" }}>
+                    Attempts: <b>{record?.wrong_attempts ?? 0}</b>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                    Lock:{" "}
+                    {record?.locked_until ? (
+                      <Badge tone={wrongBlocked ? "red" : "orange"}>
+                        {wrongBlocked ? "Permanent block" : remaining(record.locked_until)}
+                      </Badge>
+                    ) : (
+                      <Badge tone="green">Clear</Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ border: "1px solid #eef1f5", borderRadius: 14, padding: 15 }}>
+                  <div style={{ fontWeight: 800, color: "#334155" }}>Resend Lock</div>
+                  <div style={{ marginTop: 8, fontSize: 13, color: "#64748b" }}>
+                    Resends: <b>{record?.resend_attempts ?? 0}</b>
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                    Lock:{" "}
+                    {record?.resend_locked_until ? (
+                      <Badge tone={resendBlocked ? "red" : "orange"}>
+                        {resendBlocked ? "Permanent block" : remaining(record.resend_locked_until)}
+                      </Badge>
+                    ) : (
+                      <Badge tone="green">Clear</Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ border: "1px solid #eef1f5", borderRadius: 14, padding: 15 }}>
+                  <div style={{ fontWeight: 800, color: "#334155" }}>Record</div>
+                  <div style={{ marginTop: 8, fontSize: 13, color: "#64748b" }}>
+                    Created: {formatDate(record?.created_at)}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                    Unblocked: {formatDate(record?.unblocked_at)}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-        </section>
+
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #e9edf3",
+                borderRadius: 20,
+                overflow: "hidden",
+                boxShadow: "0 10px 35px rgba(15,23,42,.05)",
+              }}
+            >
+              <div style={{ padding: "18px 20px", borderBottom: "1px solid #eef1f5" }}>
+                <div style={{ fontSize: 18, fontWeight: 850, color: "#0f172a" }}>Recent OTP Requests</div>
+                <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
+                  OTP values are never displayed. Only security metadata is shown.
+                </div>
+              </div>
+
+              {recentOtps.length === 0 ? (
+                <div style={{ padding: 30, textAlign: "center", color: "#94a3b8" }}>
+                  No OTP records found for this phone and flow.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        {["Created", "Expires", "Attempts", "Verified", "Device ID"].map((h) => (
+                          <th key={h} style={{ textAlign: "left", padding: "12px 16px", color: "#64748b", fontSize: 12, fontWeight: 800 }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentOtps.map((otp) => (
+                        <tr key={otp.id} style={{ borderTop: "1px solid #eef1f5" }}>
+                          <td style={{ padding: "13px 16px", fontSize: 13, color: "#334155" }}>{formatDate(otp.created_at)}</td>
+                          <td style={{ padding: "13px 16px", fontSize: 13, color: "#334155" }}>{formatDate(otp.expires_at)}</td>
+                          <td style={{ padding: "13px 16px", fontSize: 13, color: "#334155" }}>{otp.attempts ?? 0}</td>
+                          <td style={{ padding: "13px 16px" }}>
+                            <Badge tone={otp.verified ? "green" : "orange"}>
+                              {otp.verified ? "Verified" : "Pending"}
+                            </Badge>
+                          </td>
+                          <td style={{ padding: "13px 16px", fontSize: 12, color: "#64748b", maxWidth: 260 }}>
+                            {otp.device_id || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
-    </main>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  danger = false,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-white bg-white/75 p-3 shadow-sm">
-      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-        {label}
-      </p>
-      <p
-        className={`mt-1 text-sm font-black ${
-          danger ? "text-red-500" : "text-slate-900"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Info({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-[9px] font-bold text-slate-400">{label}</p>
-      <p className="mt-1 break-words text-[11px] font-black text-slate-700">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function StatusPill({ blocked }: { blocked: boolean }) {
-  return (
-    <span
-      className={`rounded-full px-3 py-1 text-[9px] font-black ${
-        blocked
-          ? "bg-red-100 text-red-600"
-          : "bg-emerald-100 text-emerald-700"
-      }`}
-    >
-      {blocked ? "RESTRICTED" : "CLEAR"}
-    </span>
-  );
-}
-
-function ActionButton({
-  label,
-  description,
-  loading,
-  onClick,
-  tone,
-}: {
-  label: string;
-  description: string;
-  loading: boolean;
-  onClick: () => void;
-  tone: "amber" | "blue" | "red";
-}) {
-  const styles = {
-    amber:
-      "border-amber-100 bg-amber-50 text-amber-700 hover:bg-amber-100",
-    blue:
-      "border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100",
-    red:
-      "border-red-100 bg-red-50 text-red-600 hover:bg-red-100",
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={loading}
-      className={`rounded-[20px] border p-4 text-left transition active:scale-[0.99] disabled:opacity-50 ${styles[tone]}`}
-    >
-      <p className="text-sm font-black">
-        {loading ? "Processing..." : label}
-      </p>
-      <p className="mt-1 text-[10px] font-semibold opacity-70">
-        {description}
-      </p>
-    </button>
+    </AdminShell>
   );
 }

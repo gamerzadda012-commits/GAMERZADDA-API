@@ -1,30 +1,32 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-function hashValue(value: string) {
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
+
+function hashValue(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function normalizePhone(phone): string | null {
-  const cleaned = String(phone || "").replace(/\D/g, "");
+function cleanPhone(value) {
+  return String(value || "").replace(/\D/g, "").slice(-10);
+}
 
-  if (cleaned.length === 10 && /^[6-9]\d{9}$/.test(cleaned)) {
-    return cleaned;
-  }
-
-  if (
-    cleaned.length === 12 &&
-    cleaned.startsWith("91") &&
-    /^[6-9]\d{9}$/.test(cleaned.slice(2))
-  ) {
-    return cleaned.slice(2);
-  }
-
-  return null;
+function cleanFlow(value) {
+  const flow = String(value || "login").toLowerCase().trim();
+  return ["login", "signup"].includes(flow) ? flow : "login";
 }
 
 async function requireAdmin(request) {
@@ -34,140 +36,125 @@ async function requireAdmin(request) {
     : "";
 
   if (bearerToken) {
-    const { data, error } =
-      await supabaseAdmin.auth.getUser(bearerToken);
+    const { data, error } = await supabaseAdmin.auth.getUser(bearerToken);
 
     if (!error && data?.user?.id) {
-      const { data: admin, error: adminError } =
-        await supabaseAdmin
+      let { data: admin, error: adminError } = await supabaseAdmin
+        .from("users")
+        .select("id, role, email")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (admin?.role !== "admin" && data.user.email) {
+        const result = await supabaseAdmin
           .from("users")
-          .select("role")
-          .eq("id", data.user.id)
+          .select("id, role, email")
+          .ilike("email", data.user.email.trim().toLowerCase())
           .maybeSingle();
 
-      if (!adminError && admin?.role === "admin") {
-        return { ok: true, userId: data.user.id };
+        admin = result.data;
+        adminError = result.error;
       }
 
-      return {
-        ok: false,
-        error: "Access denied. Admin only.",
-      };
+      if (!adminError && admin?.role === "admin") {
+        return { ok: true, userId: admin.id };
+      }
+
+      return { ok: false, error: "Access denied. Admin only." };
     }
   }
 
-  const token =
-    request.cookies.get("gamerzadda_session")?.value;
+  const rawToken = request.cookies.get("gamerzadda_session")?.value;
 
-  if (!token) {
-    return {
-      ok: false,
-      error: "Admin login required.",
-    };
+  if (!rawToken) {
+    return { ok: false, error: "Admin login required." };
   }
 
-  let sessionToken = token;
+  let decodedToken = rawToken;
 
   try {
-    sessionToken = decodeURIComponent(token);
-  } catch {}
+    decodedToken = decodeURIComponent(rawToken);
+  } catch (_) {}
 
-  const tokenHash = hashValue(sessionToken);
+  const candidates = [
+    ...new Set([
+      decodedToken,
+      rawToken,
+      hashValue(decodedToken),
+      hashValue(rawToken),
+    ]),
+  ];
 
-  const { data: session, error: sessionError } =
-    await supabaseAdmin
+  let session = null;
+  let sessionError = null;
+
+  for (const candidate of candidates) {
+    const result = await supabaseAdmin
       .from("user_sessions")
       .select("user_id, expires_at")
-      .eq("token_hash", tokenHash)
+      .eq("token_hash", candidate)
       .maybeSingle();
 
+    if (result.data?.user_id) {
+      session = result.data;
+      sessionError = null;
+      break;
+    }
+
+    sessionError = result.error;
+  }
+
   if (sessionError || !session?.user_id) {
-    return {
-      ok: false,
-      error: "Invalid session.",
-    };
+    return { ok: false, error: "Invalid session." };
   }
 
   if (
     session.expires_at &&
-    new Date(session.expires_at) <= new Date()
+    new Date(session.expires_at).getTime() <= Date.now()
   ) {
-    return {
-      ok: false,
-      error: "Session expired.",
-    };
+    return { ok: false, error: "Session expired." };
   }
 
-  const { data: admin, error: adminError } =
-    await supabaseAdmin
-      .from("users")
-      .select("role")
-      .eq("id", session.user_id)
-      .maybeSingle();
+  const { data: admin, error: adminError } = await supabaseAdmin
+    .from("users")
+    .select("id, role")
+    .eq("id", session.user_id)
+    .maybeSingle();
 
   if (adminError || admin?.role !== "admin") {
-    return {
-      ok: false,
-      error: "Access denied. Admin only.",
-    };
+    return { ok: false, error: "Access denied. Admin only." };
   }
+
+  return { ok: true, userId: admin.id };
+}
+
+async function getOtpControl(phone, flow) {
+  const [abuseResult, otpResult] = await Promise.all([
+    supabaseAdmin
+      .from("otp_abuse_limits")
+      .select(
+        "id, phone, flow, wrong_attempts, locked_until, is_blocked, blocked_at, unblocked_at, resend_attempts, resend_locked_until, resend_is_blocked, created_at, updated_at"
+      )
+      .eq("phone", phone)
+      .eq("flow", flow)
+      .maybeSingle(),
+
+    supabaseAdmin
+      .from("otp_codes")
+      .select("id, phone, flow, attempts, verified, expires_at, created_at, device_id")
+      .eq("phone", phone)
+      .eq("flow", flow)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+
+  if (abuseResult.error) throw abuseResult.error;
+  if (otpResult.error) throw otpResult.error;
 
   return {
-    ok: true,
-    userId: session.user_id,
+    record: abuseResult.data || null,
+    recentOtps: otpResult.data || [],
   };
-}
-
-async function getOtpAbuseRecord(phone: string) {
-  const { data, error } = await supabaseAdmin
-    .from("otp_abuse_limits")
-    .select(
-      [
-        "id",
-        "phone",
-        "flow",
-        "wrong_attempts",
-        "locked_until",
-        "is_blocked",
-        "blocked_at",
-        "unblocked_at",
-        "resend_attempts",
-        "resend_locked_until",
-        "resend_is_blocked",
-        "created_at",
-        "updated_at",
-      ].join(", ")
-    )
-    .eq("phone", phone)
-    .order("updated_at", { ascending: false })
-    .limit(10);
-
-  if (error) {
-    console.error("Admin OTP abuse lookup error:", error);
-    throw new Error("Unable to load OTP security information.");
-  }
-
-  return data || [];
-}
-
-async function getLatestOtp(phone: string) {
-  const { data, error } = await supabaseAdmin
-    .from("otp_codes")
-    .select(
-      "id, phone, flow, expires_at, attempts, verified, created_at"
-    )
-    .eq("phone", phone)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (error) {
-    console.error("Admin OTP code lookup error:", error);
-    // Do not make the whole control page unusable if this optional
-    // diagnostic query fails.
-    return [];
-  }
-
-  return data || [];
 }
 
 export async function GET(request) {
@@ -181,38 +168,45 @@ export async function GET(request) {
       );
     }
 
-    const phone = normalizePhone(
+    const phone = cleanPhone(
       request.nextUrl.searchParams.get("phone")
     );
+    const flow = cleanFlow(
+      request.nextUrl.searchParams.get("flow")
+    );
 
-    if (!phone) {
+    if (phone.length !== 10) {
       return NextResponse.json(
         {
           success: false,
-          error: "Enter a valid 10-digit Indian mobile number.",
+          error: "Enter a valid 10-digit phone number.",
         },
         { status: 400 }
       );
     }
 
-    const [abuse, latestOtp] = await Promise.all([
-      getOtpAbuseRecord(phone),
-      getLatestOtp(phone),
-    ]);
+    const result = await getOtpControl(phone, flow);
 
-    return NextResponse.json({
-      success: true,
-      phone,
-      abuse,
-      latestOtp,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        phone,
+        flow,
+        ...result,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
-    console.error("Admin OTP GET error:", error);
+    console.error("ADMIN OTP GET ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Something went wrong.",
+        error: error?.message || "Unable to load OTP control data.",
       },
       { status: 500 }
     );
@@ -231,28 +225,24 @@ export async function PATCH(request) {
     }
 
     const body = await request.json();
-    const phone = normalizePhone(body?.phone);
-    const action = String(body?.action || "")
-      .trim()
-      .toLowerCase();
 
-    if (!phone) {
+    const phone = cleanPhone(body?.phone);
+    const flow = cleanFlow(body?.flow);
+    const action = String(body?.action || "").trim();
+
+    if (phone.length !== 10) {
       return NextResponse.json(
         {
           success: false,
-          error: "Enter a valid 10-digit Indian mobile number.",
+          error: "Enter a valid 10-digit phone number.",
         },
         { status: 400 }
       );
     }
 
-    const allowed = [
-      "unblock_wrong",
-      "unblock_resend",
-      "reset",
-    ];
-
-    if (!allowed.includes(action)) {
+    if (
+      !["unblock_wrong", "unblock_resend", "reset"].includes(action)
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -262,175 +252,98 @@ export async function PATCH(request) {
       );
     }
 
-    const { data: existing, error: lookupError } =
-      await supabaseAdmin
+    if (action === "reset") {
+      const { error: abuseDeleteError } = await supabaseAdmin
         .from("otp_abuse_limits")
-        .select("id, phone, flow")
+        .delete()
         .eq("phone", phone)
-        .order("updated_at", { ascending: false })
-        .limit(10);
+        .eq("flow", flow);
 
-    if (lookupError) {
-      console.error(
-        "Admin OTP abuse action lookup error:",
-        lookupError
-      );
+      if (abuseDeleteError) throw abuseDeleteError;
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unable to load OTP security record.",
-        },
-        { status: 500 }
-      );
-    }
+      const { error: otpInvalidateError } = await supabaseAdmin
+        .from("otp_codes")
+        .update({ verified: true })
+        .eq("phone", phone)
+        .eq("flow", flow)
+        .eq("verified", false);
 
-    /*
-     * If no abuse record exists, create clean login/signup rows
-     * so admin actions remain deterministic.
-     */
-    if (!existing?.length) {
-      if (action === "reset") {
-        await supabaseAdmin
-          .from("otp_codes")
-          .update({ verified: true })
-          .eq("phone", phone)
-          .eq("verified", false);
-
-        return NextResponse.json({
-          success: true,
-          action,
-          message:
-            "OTP security reset. The current OTP, if any, was invalidated.",
-          abuse: [],
-        });
-      }
+      if (otpInvalidateError) throw otpInvalidateError;
 
       return NextResponse.json({
         success: true,
-        action,
-        message: "No active OTP abuse record exists for this number.",
-        abuse: [],
+        message: `OTP limits fully reset for ${phone} (${flow}).`,
       });
     }
 
-    if (action === "unblock_wrong") {
-      const { error } = await supabaseAdmin
-        .from("otp_abuse_limits")
-        .update({
-          wrong_attempts: 0,
-          locked_until: null,
-          is_blocked: false,
-          unblocked_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("phone", phone);
+    const update =
+      action === "unblock_wrong"
+        ? {
+            wrong_attempts: 0,
+            locked_until: null,
+            is_blocked: false,
+            unblocked_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        : {
+            resend_attempts: 0,
+            resend_locked_until: null,
+            resend_is_blocked: false,
+            updated_at: new Date().toISOString(),
+          };
 
-      if (error) {
-        console.error("OTP wrong-attempt unblock error:", error);
-
-        return NextResponse.json(
-          {
-            success: false,
-            error: error.message || "Unable to unblock OTP attempts.",
-          },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        action,
-        message:
-          "Wrong-OTP block removed. Resend restriction was preserved.",
-        abuse: await getOtpAbuseRecord(phone),
-      });
-    }
-
-    if (action === "unblock_resend") {
-      const { error } = await supabaseAdmin
-        .from("otp_abuse_limits")
-        .update({
-          resend_attempts: 0,
-          resend_locked_until: null,
-          resend_is_blocked: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("phone", phone);
-
-      if (error) {
-        console.error("OTP resend unblock error:", error);
-
-        return NextResponse.json(
-          {
-            success: false,
-            error: error.message || "Unable to unblock OTP resend.",
-          },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        action,
-        message:
-          "OTP resend restriction removed. Wrong-OTP protection was preserved.",
-        abuse: await getOtpAbuseRecord(phone),
-      });
-    }
-
-    /*
-     * FULL RESET
-     *
-     * Clears both wrong-OTP and resend protection and invalidates
-     * every currently unverified OTP for this phone.
-     */
-    const { error: deleteError } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from("otp_abuse_limits")
-      .delete()
-      .eq("phone", phone);
-
-    if (deleteError) {
-      console.error("OTP full reset error:", deleteError);
-
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            deleteError.message ||
-            "Unable to fully reset OTP protection.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const { error: invalidateError } = await supabaseAdmin
-      .from("otp_codes")
-      .update({ verified: true })
+      .select("id")
       .eq("phone", phone)
-      .eq("verified", false);
+      .eq("flow", flow)
+      .maybeSingle();
 
-    if (invalidateError) {
-      console.error(
-        "OTP invalidation after reset error:",
-        invalidateError
-      );
+    if (existingError) throw existingError;
+
+    if (existing?.id) {
+      const { error: updateError } = await supabaseAdmin
+        .from("otp_abuse_limits")
+        .update(update)
+        .eq("id", existing.id);
+
+      if (updateError) throw updateError;
+    } else {
+      const insertData = {
+        phone,
+        flow,
+        wrong_attempts: 0,
+        locked_until: null,
+        is_blocked: false,
+        blocked_at: null,
+        resend_attempts: 0,
+        resend_locked_until: null,
+        resend_is_blocked: false,
+        unblocked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: insertError } = await supabaseAdmin
+        .from("otp_abuse_limits")
+        .insert(insertData);
+
+      if (insertError) throw insertError;
     }
 
     return NextResponse.json({
       success: true,
-      action: "reset",
       message:
-        "OTP protection fully reset. Wrong-attempt and resend limits were cleared and current OTPs were invalidated.",
-      abuse: [],
+        action === "unblock_wrong"
+          ? `Wrong-OTP lock unblocked for ${phone} (${flow}).`
+          : `OTP resend lock unblocked for ${phone} (${flow}).`,
     });
   } catch (error) {
-    console.error("Admin OTP PATCH error:", error);
+    console.error("ADMIN OTP PATCH ERROR:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Something went wrong.",
+        error: error?.message || "Unable to update OTP control.",
       },
       { status: 500 }
     );
