@@ -12,6 +12,7 @@ export default function Page() {
   const [messages, setMessages] = useState([]);
   const [member, setMember] = useState(null);
   const [wallet, setWallet] = useState(null);
+  const [conversationProfiles, setConversationProfiles] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -52,6 +53,29 @@ export default function Page() {
       const data = await api("/api/admin/support");
       const list = data.conversations || [];
       setConversations(list);
+
+      // Load real profile data for the conversation list so each chat shows
+      // the user's real name and profile photo instead of the fallback User/UID.
+      const profileEntries = await Promise.all(
+        list.map(async (conversation) => {
+          const userId = conversation.user_id;
+          if (!userId) return [String(conversation.id), null];
+
+          try {
+            const profile = await api(
+              `/api/admin/members?userId=${encodeURIComponent(userId)}`
+            );
+            return [String(conversation.id), profile.member || null];
+          } catch {
+            return [String(conversation.id), null];
+          }
+        })
+      );
+
+      setConversationProfiles((prev) => ({
+        ...prev,
+        ...Object.fromEntries(profileEntries),
+      }));
 
       if (selectedId) {
         const updated = list.find(
@@ -181,37 +205,6 @@ export default function Page() {
       setError(err.message || "Unable to send reply.");
     } finally {
       setSending(false);
-    }
-  }
-
-  async function attendTicket() {
-    if (!selectedId || selected?.status !== "open") return;
-
-    try {
-      setError("");
-
-      const data = await api(
-        `/api/admin/support/${selectedId}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ action: "attend" }),
-        }
-      );
-
-      if (data.conversation) {
-        setSelected(data.conversation);
-        setConversations((prev) =>
-          prev.map((item) =>
-            String(item.id) === String(selectedId)
-              ? data.conversation
-              : item
-          )
-        );
-      }
-
-      await loadMessages(selectedId, true);
-    } catch (err) {
-      setError(err.message || "Unable to attend ticket.");
     }
   }
 
@@ -357,11 +350,26 @@ export default function Page() {
                     String(conversation.id) ===
                     String(selectedId);
 
+                  const profile = conversationProfiles[String(conversation.id)] || {};
                   const name =
-                    conversation.user_name ||
+                    profile.full_name ||
                     conversation.full_name ||
+                    conversation.user_name ||
+                    profile.game_name ||
                     conversation.game_name ||
                     `User ${shortId(conversation.user_id)}`;
+
+                  const profilePhoto =
+                    profile.profile_pic ||
+                    profile.profile_image ||
+                    profile.avatar_url ||
+                    profile.photo_url ||
+                    profile.photo ||
+                    conversation.profile_pic ||
+                    conversation.profile_image ||
+                    conversation.avatar_url ||
+                    conversation.photo_url ||
+                    null;
 
                   return (
                     <button
@@ -375,7 +383,17 @@ export default function Page() {
                       }
                     >
                       <div className="avatar">
-                        {String(name).charAt(0).toUpperCase()}
+                        {profilePhoto ? (
+                          <img
+                            src={profilePhoto}
+                            alt={name}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          String(name).charAt(0).toUpperCase()
+                        )}
                       </div>
 
                       <div className="conversation-info">
@@ -465,26 +483,16 @@ export default function Page() {
                       {selected.status}
                     </span>
 
-                    {selected.status === "open" && (
-                      <>
-                        <button
-                          className="attend-btn"
-                          onClick={attendTicket}
-                        >
-                          👀 Attend
-                        </button>
-                        <button
-                          className="close-btn"
-                          onClick={() => changeStatus("closed")}
-                        >
-                          ✅ Close
-                        </button>
-                      </>
-                    )}
-
-                    {selected.status === "closed" && (
+                    {selected.status === "open" ? (
                       <button
-                        className="reopen-btn"
+                        onClick={() =>
+                          changeStatus("closed")
+                        }
+                      >
+                        Close
+                      </button>
+                    ) : (
+                      <button
                         onClick={() => changeStatus("open")}
                       >
                         Reopen
@@ -830,7 +838,7 @@ export default function Page() {
 
         <style jsx>{`
           .support-page {
-            padding: 12px 14px;
+            padding: 20px;
             min-height: 100vh;
             box-sizing: border-box;
           }
@@ -839,12 +847,12 @@ export default function Page() {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 20px;
           }
 
           .support-top h1 {
             margin: 0;
-            font-size: 21px;
+            font-size: 25px;
             font-weight: 900;
           }
 
@@ -859,8 +867,8 @@ export default function Page() {
             border: 0;
             background: #ff174f;
             color: #fff;
-            padding: 8px 12px;
-            border-radius: 10px;
+            padding: 10px 16px;
+            border-radius: 12px;
             cursor: pointer;
             font-weight: 800;
           }
@@ -868,22 +876,22 @@ export default function Page() {
           .stats-row {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 14px;
+            margin-bottom: 18px;
           }
 
           .stat-card {
             background: #fff;
             border: 1px solid #eee;
             border-radius: 16px;
-            padding: 10px 12px;
+            padding: 16px;
             display: flex;
             gap: 12px;
             align-items: center;
           }
 
           .stat-card > span {
-            font-size: 21px;
+            font-size: 25px;
           }
 
           .stat-card small {
@@ -893,7 +901,7 @@ export default function Page() {
 
           .stat-card strong {
             display: block;
-            font-size: 18px;
+            font-size: 22px;
             margin-top: 3px;
           }
 
@@ -902,7 +910,7 @@ export default function Page() {
             color: #d60032;
             border: 1px solid #ffd0da;
             padding: 12px 14px;
-            border-radius: 10px;
+            border-radius: 12px;
             margin-bottom: 15px;
             font-size: 13px;
           }
@@ -910,11 +918,11 @@ export default function Page() {
           .support-layout {
             display: grid;
             grid-template-columns: 350px minmax(0, 1fr);
-            height: calc(100vh - 205px);
-            min-height: 500px;
+            height: calc(100vh - 260px);
+            min-height: 560px;
             background: #fff;
             border: 1px solid #e9e9ed;
-            border-radius: 16px;
+            border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 8px 35px rgba(0, 0, 0, 0.05);
           }
@@ -938,7 +946,7 @@ export default function Page() {
           .panel-title b {
             background: #ff174f;
             color: white;
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 4px 9px;
             font-size: 11px;
           }
@@ -984,9 +992,17 @@ export default function Page() {
           .avatar {
             width: 43px;
             height: 43px;
-            border-radius: 14px;
+            border-radius: 50%;
             background: #ffe8ee;
             color: #ff174f;
+            overflow: hidden;
+          }
+
+          .avatar img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
           }
 
           .conversation-info {
@@ -997,7 +1013,7 @@ export default function Page() {
           .conversation-info strong {
             display: block;
             font-size: 13px;
-            overflow: hidden;
+            overflow: hidden;      
             text-overflow: ellipsis;
             white-space: nowrap;
           }
@@ -1024,31 +1040,6 @@ export default function Page() {
             background: #aaa;
           }
 
-
-
-          .chat-actions {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            flex-wrap: wrap;
-          }
-
-          .chat-actions .attend-btn {
-            background: #16a34a;
-          }
-
-          .chat-actions .close-btn {
-            background: #dc2626;
-          }
-
-          .chat-actions .reopen-btn {
-            background: #ff174f;
-          }
-
-          .chat-actions .status-pill {
-            font-size: 10px;
-            padding: 5px 8px;
-          }
           .chat-panel {
             display: flex;
             flex-direction: column;
@@ -1058,8 +1049,8 @@ export default function Page() {
           }
 
           .chat-header {
-            min-height: 58px;
-            padding: 8px 12px;
+            min-height: 70px;
+            padding: 10px 16px;
             border-bottom: 1px solid #eee;
             display: flex;
             align-items: center;
@@ -1132,7 +1123,7 @@ export default function Page() {
 
           .status-pill {
             padding: 6px 10px;
-            border-radius: 16px;
+            border-radius: 20px;
             font-size: 10px;
             font-weight: 800;
             text-transform: capitalize;
@@ -1191,7 +1182,7 @@ export default function Page() {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
-            padding: 12px 14px;
+            padding: 20px;
             background: #f7f7f8;
           }
 
@@ -1330,7 +1321,7 @@ export default function Page() {
             width: 34px;
             height: 34px;
             border-radius: 10px;
-            font-size: 21px;
+            font-size: 25px;
             line-height: 1;
             cursor: pointer;
             margin-right: 5px;
@@ -1593,7 +1584,7 @@ export default function Page() {
 
             .stat-card {
               padding: 10px;
-              border-radius: 10px;
+              border-radius: 12px;
             }
 
             .stat-card > span {
