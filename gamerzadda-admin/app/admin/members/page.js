@@ -29,13 +29,17 @@ export default function MembersPage() {
   const [actionLoading, setActionLoading] = useState(null);
 
   const [error, setError] = useState("");
-  const [selectedMember,setSelectedMember]=useState(null),[memberDetail,setMemberDetail]=useState(null),[transactions,setTransactions]=useState([]),[referrals,setReferrals]=useState([]),[referrer,setReferrer]=useState(null),[loginHistory,setLoginHistory]=useState([]),[wallet,setWallet]=useState(null),[modalLoading,setModalLoading]=useState(false),[modalError,setModalError]=useState(""),[walletAmount,setWalletAmount]=useState(""),[walletReason,setWalletReason]=useState(""),[walletAction,setWalletAction]=useState("add"),[walletType,setWalletType]=useState("winning"),[walletSaving,setWalletSaving]=useState(false);
-  async function session(){const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token)throw new Error("Admin login required.");return session}
-  async function openMember(member){setSelectedMember(member);setModalLoading(true);setModalError("");try{const ss=await session();const r=await fetch(`/api/admin/members?userId=${encodeURIComponent(member.id)}`,{cache:"no-store",credentials:"include",headers:{Authorization:`Bearer ${ss.access_token}`}});const raw=await r.text(),x=raw?JSON.parse(raw):null;if(!r.ok||!x?.success)throw new Error(x?.error||"Unable to load member details.");setMemberDetail(x.member||member);setWallet(x.wallet||null);setTransactions(x.history||[]);setReferrals(x.referral?.users||[]);setReferrer(x.referral?.referrer||null);setLoginHistory(x.loginHistory||[]);setSelectedMember(x.member||member)}catch(e){setModalError(e?.message||"Unable to load member details.")}finally{setModalLoading(false)}}
-  async function refreshMember(){if(selectedMember)await openMember(selectedMember)}
-  async function onWalletChange(){if(!selectedMember)return;const n=Number(walletAmount);if(!Number.isFinite(n)||n<=0)return setModalError("Enter a valid wallet amount.");if(!walletReason.trim())return setModalError("Reason is required for wallet changes.");setWalletSaving(true);setModalError("");try{const ss=await session();const r=await fetch("/api/admin/members",{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json",Authorization:`Bearer ${ss.access_token}`},body:JSON.stringify({userId:selectedMember.id,walletType,amount:walletAction==="deduct"?-Math.abs(n):Math.abs(n),note:walletReason.trim()})});const raw=await r.text(),x=raw?JSON.parse(raw):null;if(!r.ok||!x?.success)throw new Error(x?.error||"Unable to change wallet.");setWallet(x.wallet||null);setTransactions(o=>[x.transaction,...o].filter(Boolean));setWalletAmount("");setWalletReason("");await loadMembers()}catch(e){setModalError(e?.message||"Unable to change wallet.")}finally{setWalletSaving(false)}}
-  async function onModalToggleStatus(){if(selectedMember){await toggleMember(selectedMember);await refreshMember()}}
 
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [memberTransactions, setMemberTransactions] = useState([]);
+  const [memberReferrals, setMemberReferrals] = useState([]);
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [memberError, setMemberError] = useState("");
+  const [walletAmount, setWalletAmount] = useState("");
+  const [walletReason, setWalletReason] = useState("");
+  const [walletAction, setWalletAction] = useState("add");
+  const [walletType, setWalletType] = useState("bonus");
+  const [walletSaving, setWalletSaving] = useState(false);
 
 
 
@@ -274,6 +278,82 @@ export default function MembersPage() {
   }
 
 
+
+  async function openMember(member) {
+    try {
+      setSelectedMember(member);
+      setMemberLoading(true);
+      setMemberError("");
+      setMemberTransactions([]);
+      setMemberReferrals([]);
+      setWalletAmount("");
+      setWalletReason("");
+      setWalletAction("add");
+      setWalletType("bonus");
+
+      const response = await fetch(`/api/admin/members?userId=${encodeURIComponent(member.id)}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || "Unable to load member details.");
+
+      setSelectedMember((prev) => ({ ...(prev || member), ...(data.member || {}), ...(data.wallet || {}) }));
+      setMemberTransactions(data.history || []);
+      setMemberReferrals(data.referral?.users || []);
+    } catch (err) {
+      console.error("Member detail load error:", err);
+      setMemberError(err?.message || "Unable to load member details.");
+    } finally {
+      setMemberLoading(false);
+    }
+  }
+
+  async function refreshMember() {
+    if (selectedMember?.id) await openMember(selectedMember);
+  }
+
+  async function onWalletChange() {
+    if (!selectedMember?.id || walletSaving) return;
+    const amount = Number(walletAmount);
+    const reason = walletReason.trim();
+    if (!Number.isFinite(amount) || amount <= 0) return alert("Enter a valid amount.");
+    if (!reason) return alert("Reason is required.");
+
+    const labels = { bonus: "Bonus Balance", deposit: "Deposit Balance", winning: "Winning Balance" };
+    if (!window.confirm(`${walletAction === "add" ? "Add" : "Deduct"} ₹${amount.toFixed(2)} ${labels[walletType]} for ${displayName(selectedMember)}?\n\nReason: ${reason}`)) return;
+
+    try {
+      setWalletSaving(true);
+      setMemberError("");
+      const response = await fetch("/api/admin/members", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedMember.id, walletType, action: walletAction, amount, reason }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) throw new Error(data.error || "Wallet update failed.");
+
+      setWalletAmount("");
+      setWalletReason("");
+      await loadMembers();
+      await openMember({ ...selectedMember, ...(data.wallet || {}) });
+      alert(`${walletAction === "add" ? "Added" : "Deducted"} ₹${amount.toFixed(2)} ${labels[walletType]} successfully.`);
+    } catch (err) {
+      console.error("Wallet update error:", err);
+      setMemberError(err?.message || "Wallet update failed.");
+      alert(err?.message || "Wallet update failed.");
+    } finally {
+      setWalletSaving(false);
+    }
+  }
+
+  function closeMember() {
+    if (walletSaving) return;
+    setSelectedMember(null);
+    setMemberError("");
+  }
 
   function displayName(member) {
 
@@ -856,6 +936,33 @@ export default function MembersPage() {
       </div>
 
 
+
+      {selectedMember && (
+        <MemberDetailModal
+          member={selectedMember}
+          transactions={memberTransactions}
+          referrals={memberReferrals}
+          loading={memberLoading}
+          error={memberError}
+          walletAmount={walletAmount}
+          setWalletAmount={setWalletAmount}
+          walletReason={walletReason}
+          setWalletReason={setWalletReason}
+          walletAction={walletAction}
+          setWalletAction={setWalletAction}
+          walletType={walletType}
+          setWalletType={setWalletType}
+          walletSaving={walletSaving}
+          onWalletChange={onWalletChange}
+          onRefresh={refreshMember}
+          onClose={closeMember}
+          onToggleStatus={async () => { await toggleMember(selectedMember); await refreshMember(); }}
+          displayName={displayName}
+          formatDate={formatDate}
+          walletBalance={walletBalance}
+          getInitial={getInitial}
+        />
+      )}
 
       <style jsx>{`
 
@@ -1699,8 +1806,6 @@ export default function MembersPage() {
 
       `}</style>
 
-      {selectedMember && <MemberDetailModal member={memberDetail||selectedMember} transactions={transactions} referrals={referrals} referrer={referrer} loginHistory={loginHistory} wallet={wallet} loading={modalLoading} error={modalError} walletAmount={walletAmount} setWalletAmount={setWalletAmount} walletReason={walletReason} setWalletReason={setWalletReason} walletAction={walletAction} setWalletAction={setWalletAction} walletType={walletType} setWalletType={setWalletType} walletSaving={walletSaving} onWalletChange={onWalletChange} onRefresh={refreshMember} onClose={()=>setSelectedMember(null)} onToggleStatus={onModalToggleStatus} displayName={displayName} formatDate={formatDate} walletBalance={walletBalance} getInitial={getInitial} />}
-
     </AdminShell>
 
   );
@@ -1813,9 +1918,6 @@ function MemberDetailModal({
   member,
   transactions,
   referrals,
-  referrer,
-  loginHistory,
-  wallet,
   loading,
   error,
   walletAmount,
@@ -1936,7 +2038,7 @@ function MemberDetailModal({
             <div className="wallet-top">
               <div>
                 <span>WALLET BALANCE</span>
-                <strong>₹{(Number(wallet?.deposit_balance||0)+Number(wallet?.bonus_balance||0)+Number(wallet?.winning_balance||0)).toFixed(2)}</strong><div className="wallet-breakdown"><span>Deposit ₹{Number(wallet?.deposit_balance||0).toFixed(2)}</span><span>Bonus ₹{Number(wallet?.bonus_balance||0).toFixed(2)}</span><span>Winning ₹{Number(wallet?.winning_balance||0).toFixed(2)}</span></div>
+                <strong>{walletBalance(member)}</strong>
               </div>
               <div className={isActive ? "modal-status active" : "modal-status blocked"}>
                 <i />
@@ -1945,6 +2047,12 @@ function MemberDetailModal({
             </div>
 
             <div className="wallet-controls">
+              <div className="wallet-type-toggle">
+                <button type="button" className={walletType === "bonus" ? "selected" : ""} onClick={() => setWalletType("bonus")}>Bonus</button>
+                <button type="button" className={walletType === "deposit" ? "selected" : ""} onClick={() => setWalletType("deposit")}>Deposit</button>
+                <button type="button" className={walletType === "winning" ? "selected" : ""} onClick={() => setWalletType("winning")}>Winning</button>
+              </div>
+
               <div className="wallet-toggle">
                 <button
                   className={walletAction === "add" ? "selected add" : ""}
@@ -1961,8 +2069,6 @@ function MemberDetailModal({
                   − Deduct
                 </button>
               </div>
-
-              <select className="wallet-input" value={walletType} onChange={e=>setWalletType(e.target.value)}><option value="winning">Winning</option><option value="deposit">Deposit</option><option value="bonus">Bonus</option></select>
 
               <input
                 className="wallet-input"
@@ -2104,9 +2210,6 @@ function MemberDetailModal({
               )}
             </section>
           </div>
-
-          <div className="extra-detail-panels"><section className="mini-section"><div className="section-title"><h3>Referral Details</h3><span>{referrals.length} referred member(s)</span></div><div className="extra-detail-body"><b>Referral Code: {member.referral_code||"Not set"}</b><span>Referred By: {referrer?.full_name||referrer?.email||member.referred_by||"None"}</span></div></section><section className="mini-section"><div className="section-title"><h3>Login / Device History</h3><span>{loginHistory.length} records</span></div><div className="login-history-list">{loginHistory.slice(0,8).map((x,i)=><div className="login-history-row" key={x.id||i}><b>{x.ip_address||"IP unavailable"}</b><span>{x.device_id||x.user_agent||"Device unavailable"}</span><small>{x.created_at?new Date(x.created_at).toLocaleString("en-IN"):"—"}</small></div>)}{!loginHistory.length&&<div className="mini-empty">No login history found</div>}</div></section></div>
-          <RestrictionManager member={member}/>
 
           <div className="modal-footer">
             <div className="account-meta">
@@ -2348,8 +2451,33 @@ function MemberDetailModal({
 
         .wallet-controls {
           display: grid;
-          grid-template-columns: auto 130px minmax(180px, 1fr) auto;
+          grid-template-columns: auto auto 130px minmax(180px, 1fr) auto;
           gap: 8px;
+        }
+
+        .wallet-type-toggle {
+          display: flex;
+          align-items: center;
+          gap: 3px;
+          background: #303342;
+          padding: 3px;
+          border-radius: 8px;
+        }
+
+        .wallet-type-toggle button {
+          border: 0;
+          background: transparent;
+          color: #bfc4ce;
+          border-radius: 6px;
+          padding: 7px 8px;
+          font-size: 10px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .wallet-type-toggle button.selected {
+          background: #ff174f;
+          color: white;
         }
 
         .wallet-toggle {
@@ -2604,7 +2732,6 @@ function MemberDetailModal({
           background: #ecfdf3;
         }
 
-.wallet-breakdown{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.wallet-breakdown span{font-size:8px;background:#303342;color:#c4c8d1;padding:4px 6px;border-radius:6px}.extra-detail-panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.extra-detail-body{padding:12px;display:flex;flex-direction:column;gap:6px;font-size:10px;color:#555b67}.login-history-list{max-height:180px;overflow:auto}.login-history-row{padding:8px 10px;border-bottom:1px solid #f1f2f4;display:flex;flex-direction:column;gap:2px}.login-history-row b{font-size:10px}.login-history-row span,.login-history-row small{font-size:8px;color:#969ca8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.restriction-manager{margin-top:12px;border:1px solid #edf0f4;border-radius:13px;overflow:hidden}.restriction-head{padding:12px;background:#fbfcfd;border-bottom:1px solid #edf0f4}.restriction-head h3{margin:0;font-size:13px}.restriction-form{padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px}.restriction-form select,.restriction-form input{height:36px;border:1px solid #e1e4ea;border-radius:8px;padding:0 9px;font-size:10px}.restriction-form .full{grid-column:1/-1}.restriction-save{height:36px;border:0;border-radius:8px;background:#ff174f;color:#fff;font-weight:800}.restriction-list{border-top:1px solid #edf0f4}.restriction-row{padding:9px 12px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #f1f2f4}.restriction-row b{font-size:10px}.restriction-row span{display:block;font-size:8px;color:#969ca8;margin-top:2px}.restriction-remove{border:0;border-radius:7px;padding:6px 9px;background:#fff1f2;color:#dc2626;font-size:9px;font-weight:800}.restriction-error{padding:8px 12px;color:#b91c1c;background:#fff5f5;font-size:9px}
         @media (max-width: 900px) {
           .detail-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2662,8 +2789,6 @@ function MemberDetailModal({
     </div>
   );
 }
-
-function RestrictionManager({member}){const F=[["full_app","Full App"],["support","Support"],["freefire","Free Fire"],["freefiremax","Free Fire MAX"],["clashsquad","Clash Squad"],["lonewolf","Lone Wolf"],["spin","Spin"],["scratch_card","Scratch Card"],["withdrawal","Withdrawal"],["deposit","Add Money"]],G=[["freefire","Free Fire"],["freefiremax","Free Fire MAX"],["clashsquad","Clash Squad"],["lonewolf","Lone Wolf"]];const[rs,setRs]=useState([]),[ls,setLs]=useState([]),[f,setF]=useState("full_app"),[d,setD]=useState("24h"),[c,setC]=useState(""),[p,setP]=useState(false),[rr,setR]=useState(""),[g,setG]=useState("freefire"),[n,setN]=useState("1"),[ld,setLD]=useState("24h"),[lp,setLP]=useState(false),[lr,setLR]=useState(""),[saving,setSaving]=useState(false),[err,setErr]=useState("");async function load(){const[a,b]=await Promise.all([supabase.from("user_restrictions").select("*").eq("user_id",member.id).eq("is_active",true).order("created_at",{ascending:false}),supabase.from("user_game_limits").select("*").eq("user_id",member.id).eq("is_active",true).order("created_at",{ascending:false})]);if(a.error||b.error)throw(a.error||b.error);setRs(a.data||[]);setLs(b.data||[])}useEffect(()=>{load().catch(e=>setErr(e.message))},[member.id]);const ex=(x,z,q)=>q?null:x==="custom"?(z?new Date(z).toISOString():null):new Date(Date.now()+(x==="24h"?24:x==="7d"?168:720)*36e5).toISOString();async function saveR(){if(!p&&d==="custom"&&!c)return setErr("Select custom expiry.");setSaving(true);setErr("");try{const e=ex(d,c,p),{data:o}=await supabase.from("user_restrictions").select("id").eq("user_id",member.id).eq("feature",f).eq("is_active",true).maybeSingle(),v={user_id:member.id,feature:f,expires_at:e,is_permanent:p,is_active:true,reason:rr.trim()||null},q=o?.id?await supabase.from("user_restrictions").update(v).eq("id",o.id):await supabase.from("user_restrictions").insert(v);if(q.error)throw q.error;setR("");await load()}catch(e){setErr(e.message)}finally{setSaving(false)}}async function saveL(){const x=Number(n);if(!Number.isInteger(x)||x<0)return setErr("Daily limit must be valid.");setSaving(true);setErr("");try{const e=ex(ld,"",lp),{data:o}=await supabase.from("user_game_limits").select("id").eq("user_id",member.id).eq("game",g).eq("is_active",true).maybeSingle(),v={user_id:member.id,game:g,daily_limit:x,expires_at:e,is_permanent:lp,is_active:true,reason:lr.trim()||null},q=o?.id?await supabase.from("user_game_limits").update(v).eq("id",o.id):await supabase.from("user_game_limits").insert(v);if(q.error)throw q.error;setLR("");await load()}catch(e){setErr(e.message)}finally{setSaving(false)}}async function rm(t,id){const{error:e}=await supabase.from(t).update({is_active:false,updated_at:new Date().toISOString()}).eq("id",id);if(e)setErr(e.message);else load()}return <div className="restriction-manager"><div className="restriction-head"><h3>🔒 Restriction Control</h3></div>{err&&<div className="restriction-error">⚠️ {err}</div>}<div className="restriction-form"><select value={f} onChange={e=>setF(e.target.value)}>{F.map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select><select value={d} onChange={e=>setD(e.target.value)} disabled={p}><option value="24h">24 Hours</option><option value="7d">7 Days</option><option value="30d">30 Days</option><option value="custom">Custom</option></select>{d==="custom"&&!p&&<input type="datetime-local" value={c} onChange={e=>setC(e.target.value)}/>}<input className="full" value={rr} onChange={e=>setR(e.target.value)} placeholder="Restriction reason"/><label><input type="checkbox" checked={p} onChange={e=>setP(e.target.checked)}/> Permanent</label><button className="restriction-save" onClick={saveR} disabled={saving}>Add / Update Restriction</button></div><div className="restriction-form"><select value={g} onChange={e=>setG(e.target.value)}>{G.map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select><input type="number" min="0" value={n} onChange={e=>setN(e.target.value)} placeholder="Daily join limit"/><select value={ld} onChange={e=>setLD(e.target.value)} disabled={lp}><option value="24h">24 Hours</option><option value="7d">7 Days</option><option value="30d">30 Days</option></select><input className="full" value={lr} onChange={e=>setLR(e.target.value)} placeholder="Daily limit reason"/><label><input type="checkbox" checked={lp} onChange={e=>setLP(e.target.checked)}/> Permanent limit</label><button className="restriction-save" onClick={saveL} disabled={saving}>Set Daily Game Limit</button></div><div className="restriction-list">{rs.map(x=><div className="restriction-row" key={x.id}><div><b>{F.find(y=>y[0]===x.feature)?.[1]||x.feature}</b><span>{x.is_permanent?"Permanent":x.expires_at?`Until ${new Date(x.expires_at).toLocaleString("en-IN")}`:"Active"} · {x.reason||"No reason"}</span></div><button className="restriction-remove" onClick={()=>rm("user_restrictions",x.id)}>Remove</button></div>)}{ls.map(x=><div className="restriction-row" key={x.id}><div><b>{G.find(y=>y[0]===x.game)?.[1]||x.game} — {x.daily_limit}/day</b><span>{x.is_permanent?"Permanent":x.expires_at?`Until ${new Date(x.expires_at).toLocaleString("en-IN")}`:"Active"} · {x.reason||"No reason"}</span></div><button className="restriction-remove" onClick={()=>rm("user_game_limits",x.id)}>Remove</button></div>)}</div></div>}
 
 function DetailItem({ icon, label, value, copy = false, wide = false }) {
   function copyValue() {

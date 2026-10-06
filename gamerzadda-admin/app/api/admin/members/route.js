@@ -309,13 +309,38 @@ export async function PATCH(request) {
     if (!["add", "deduct"].includes(action)) return NextResponse.json({ success: false, error: "Invalid wallet action." }, { status: 400 });
     if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ success: false, error: "Enter a valid amount." }, { status: 400 });
 
-    const { data: current, error: fetchError } = await supabaseAdmin
+    let { data: current, error: fetchError } = await supabaseAdmin
       .from("wallet_balances")
       .select("deposit_balance, bonus_balance, winning_balance")
       .eq("user_id", userId)
       .maybeSingle();
     if (fetchError) throw fetchError;
-    if (!current) return NextResponse.json({ success: false, error: "Wallet row not found for this member." }, { status: 404 });
+
+    if (!current) {
+      const { data: createdWallet, error: createWalletError } = await supabaseAdmin
+        .from("wallet_balances")
+        .insert({ user_id: userId, deposit_balance: 0, bonus_balance: 0, winning_balance: 0 })
+        .select("deposit_balance, bonus_balance, winning_balance")
+        .single();
+
+      if (createWalletError) {
+        if (createWalletError.code === "23505") {
+          const retry = await supabaseAdmin
+            .from("wallet_balances")
+            .select("deposit_balance, bonus_balance, winning_balance")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (retry.error) throw retry.error;
+          current = retry.data;
+        } else {
+          throw createWalletError;
+        }
+      } else {
+        current = createdWallet;
+      }
+    }
+
+    if (!current) return NextResponse.json({ success: false, error: "Unable to create wallet for this member." }, { status: 409 });
 
     const oldValue = Number(current[column] || 0);
     const newValue = Number((action === "add" ? oldValue + amount : oldValue - amount).toFixed(2));
