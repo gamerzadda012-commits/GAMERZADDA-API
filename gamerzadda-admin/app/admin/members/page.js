@@ -394,7 +394,7 @@ export default function MembersPage() {
         </div>
       </div>}
 
-      <style jsx>{`
+      <style jsx global>{`
         .members-page{width:100%;max-width:100%;padding:2px 0 32px;color:#171923}
         .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
         .search-wrap{height:46px;flex:1;display:flex;align-items:center;gap:8px;padding:0 14px;background:#fff;border:1px solid #e8eaf0;border-radius:14px;box-shadow:0 5px 18px rgba(16,24,40,.05)}
