@@ -1,2823 +1,337 @@
-"use client";
-
-
+ "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import AdminShell from "../AdminShell";
 
-import { supabase } from "../../../lib/supabase.js";
-
-
-
-const PAGE_SIZE = 20;
-
-
+const PAGE_SIZE = 15;
 
 export default function MembersPage() {
-
   const [members, setMembers] = useState([]);
-
+  const [selected, setSelected] = useState(null);
+  const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  const [detailLoading, setDetailLoading] = useState(false);
   const [search, setSearch] = useState("");
-
-  const [status, setStatus] = useState("all");
-
   const [page, setPage] = useState(1);
-
-  const [actionLoading, setActionLoading] = useState(null);
-
   const [error, setError] = useState("");
-
-  const [selectedMember, setSelectedMember] = useState(null);
-  const [memberTransactions, setMemberTransactions] = useState([]);
-  const [memberReferrals, setMemberReferrals] = useState([]);
-  const [memberLoading, setMemberLoading] = useState(false);
-  const [memberError, setMemberError] = useState("");
-  const [walletAmount, setWalletAmount] = useState("");
-  const [walletReason, setWalletReason] = useState("");
-  const [walletAction, setWalletAction] = useState("add");
+  const [walletModal, setWalletModal] = useState(null);
   const [walletType, setWalletType] = useState("bonus");
-  const [walletSaving, setWalletSaving] = useState(false);
+  const [walletAction, setWalletAction] = useState("add");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [restrictionDays, setRestrictionDays] = useState("7");
+  const [restrictionReason, setRestrictionReason] = useState("");
+  const [busy, setBusy] = useState(false);
 
-
+  const authHeaders = async () => {
+    try {
+      const { supabase } = await import("../../../lib/supabase.js");
+      const { data } = await supabase.auth.getSession();
+      return data?.session?.access_token
+        ? { Authorization: `Bearer ${data.session.access_token}` }
+        : {};
+    } catch {
+      return {};
+    }
+  };
 
   async function loadMembers() {
-
     try {
-
       setLoading(true);
-
       setError("");
-
-
-
-      const { data, error } = await supabase
-
-        .from("users")
-
-        .select("*")
-
-        .order("created_at", { ascending: false });
-
-
-
-      if (error) throw error;
-
-
-
-      setMembers(data || []);
-
-    } catch (err) {
-
-      console.error("Members load error:", err);
-
-      setError(err?.message || "Failed to load members.");
-
+      const res = await fetch("/api/admin/members", {
+        cache: "no-store",
+        headers: await authHeaders(),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Unable to load members.");
+      setMembers(json.members || []);
+    } catch (e) {
+      setError(e.message || "Unable to load members.");
     } finally {
-
       setLoading(false);
-
     }
-
   }
-
-
-
-  useEffect(() => {
-
-    loadMembers();
-
-  }, []);
-
-
-
-  const filteredMembers = useMemo(() => {
-
-    const q = search.trim().toLowerCase();
-
-
-
-    return members.filter((member) => {
-
-      const memberStatus = String(member.status || "active").toLowerCase();
-
-
-
-      const matchesStatus =
-
-        status === "all" ||
-
-        (status === "active" && memberStatus === "active") ||
-
-        (status === "blocked" &&
-
-          ["blocked", "banned", "suspended"].includes(memberStatus));
-
-
-
-      if (!matchesStatus) return false;
-
-
-
-      if (!q) return true;
-
-
-
-      return [
-
-        member.name,
-
-        member.full_name,
-
-        member.username,
-
-        member.email,
-
-        member.uid,
-
-        member.game_uid,
-
-        member.ign,
-
-        member.phone,
-
-      ]
-
-        .filter(Boolean)
-
-        .some((value) =>
-
-          String(value).toLowerCase().includes(q)
-
-        );
-
-    });
-
-  }, [members, search, status]);
-
-
-
-  const totalPages = Math.max(
-
-    1,
-
-    Math.ceil(filteredMembers.length / PAGE_SIZE)
-
-  );
-
-
-
-  const visibleMembers = filteredMembers.slice(
-
-    (page - 1) * PAGE_SIZE,
-
-    page * PAGE_SIZE
-
-  );
-
-
-
-  useEffect(() => {
-
-    setPage(1);
-
-  }, [search, status]);
-
-
-
-  const activeCount = members.filter(
-
-    (m) => String(m.status || "active").toLowerCase() === "active"
-
-  ).length;
-
-
-
-  const blockedCount = members.filter((m) =>
-
-    ["blocked", "banned", "suspended"].includes(
-
-      String(m.status || "").toLowerCase()
-
-    )
-
-  ).length;
-
-
-
-  async function toggleMember(member) {
-
-    const current = String(member.status || "active").toLowerCase();
-
-    const nextStatus = current === "active" ? "blocked" : "active";
-
-
-
-    const ok = window.confirm(
-
-      nextStatus === "blocked"
-
-        ? `Block ${displayName(member)}?`
-
-        : `Unblock ${displayName(member)}?`
-
-    );
-
-
-
-    if (!ok) return;
-
-
-
-    try {
-
-      setActionLoading(member.id);
-
-
-
-      const { error } = await supabase
-
-        .from("users")
-
-        .update({ status: nextStatus })
-
-        .eq("id", member.id);
-
-
-
-      if (error) throw error;
-
-
-
-      setMembers((prev) =>
-
-        prev.map((m) =>
-
-          m.id === member.id
-
-            ? { ...m, status: nextStatus }
-
-            : m
-
-        )
-
-      );
-
-    } catch (err) {
-
-      alert(err?.message || "Failed to update member.");
-
-    } finally {
-
-      setActionLoading(null);
-
-    }
-
-  }
-
-
 
   async function openMember(member) {
+    setSelected(member);
+    setDetailLoading(true);
+    setDetail(null);
     try {
-      setSelectedMember(member);
-      setMemberLoading(true);
-      setMemberError("");
-      setMemberTransactions([]);
-      setMemberReferrals([]);
-      setWalletAmount("");
-      setWalletReason("");
-      setWalletAction("add");
-      setWalletType("bonus");
-
-      const response = await fetch(`/api/admin/members?userId=${encodeURIComponent(member.id)}`, {
-        credentials: "include",
+      const res = await fetch(`/api/admin/members?userId=${encodeURIComponent(member.id)}`, {
         cache: "no-store",
+        headers: await authHeaders(),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error || "Unable to load member details.");
-
-      setSelectedMember((prev) => ({ ...(prev || member), ...(data.member || {}), ...(data.wallet || {}) }));
-      setMemberTransactions(data.history || []);
-      setMemberReferrals(data.referral?.users || []);
-    } catch (err) {
-      console.error("Member detail load error:", err);
-      setMemberError(err?.message || "Unable to load member details.");
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Unable to load member.");
+      setDetail({ member, ...json });
+    } catch (e) {
+      alert(e.message || "Unable to load member.");
+      setSelected(null);
     } finally {
-      setMemberLoading(false);
+      setDetailLoading(false);
     }
   }
 
-  async function refreshMember() {
-    if (selectedMember?.id) await openMember(selectedMember);
-  }
+  useEffect(() => { loadMembers(); }, []);
 
-  async function onWalletChange() {
-    if (!selectedMember?.id || walletSaving) return;
-    const amount = Number(walletAmount);
-    const reason = walletReason.trim();
-    if (!Number.isFinite(amount) || amount <= 0) return alert("Enter a valid amount.");
-    if (!reason) return alert("Reason is required.");
-
-    const labels = { bonus: "Bonus Balance", deposit: "Deposit Balance", winning: "Winning Balance" };
-    if (!window.confirm(`${walletAction === "add" ? "Add" : "Deduct"} ₹${amount.toFixed(2)} ${labels[walletType]} for ${displayName(selectedMember)}?\n\nReason: ${reason}`)) return;
-
-    try {
-      setWalletSaving(true);
-      setMemberError("");
-      const response = await fetch("/api/admin/members", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: selectedMember.id, walletType, action: walletAction, amount, reason }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) throw new Error(data.error || "Wallet update failed.");
-
-      setWalletAmount("");
-      setWalletReason("");
-      await loadMembers();
-      await openMember({ ...selectedMember, ...(data.wallet || {}) });
-      alert(`${walletAction === "add" ? "Added" : "Deducted"} ₹${amount.toFixed(2)} ${labels[walletType]} successfully.`);
-    } catch (err) {
-      console.error("Wallet update error:", err);
-      setMemberError(err?.message || "Wallet update failed.");
-      alert(err?.message || "Wallet update failed.");
-    } finally {
-      setWalletSaving(false);
-    }
-  }
-
-  function closeMember() {
-    if (walletSaving) return;
-    setSelectedMember(null);
-    setMemberError("");
-  }
-
-  function displayName(member) {
-
-    return (
-
-      member.name ||
-
-      member.full_name ||
-
-      member.username ||
-
-      member.email ||
-
-      "Unknown User"
-
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) =>
+      [
+        m.id, m.full_name, m.name, m.username, m.email, m.phone,
+        m.game_name, m.ign, m.uid, m.game_uid, m.free_fire_uid,
+        m.referral_code, m.referred_by, m.last_ip, m.ip_address
+      ].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
     );
+  }, [members, search]);
 
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => setPage(1), [search]);
+
+  const restricted = members.filter(m => String(m.status || "").toLowerCase() === "restricted").length;
+  const active = members.length - restricted;
+
+  function name(m) {
+    return m?.full_name || m?.name || m?.username || m?.email || "Unknown User";
   }
 
-
-
-  function getInitial(member) {
-
-    return displayName(member).charAt(0).toUpperCase();
-
+  function avatar(m) {
+    return m?.profile_pic || m?.profile_picture || m?.avatar_url || "";
   }
 
+  function money(v) {
+    return `₹${Number(v || 0).toFixed(2)}`;
+  }
 
-
-  function formatDate(value) {
-
-    if (!value) return "—";
-
-
-
-    const date = new Date(value);
-
-
-
-    if (Number.isNaN(date.getTime())) return "—";
-
-
-
-    return date.toLocaleDateString("en-IN", {
-
-      day: "2-digit",
-
-      month: "short",
-
-      year: "numeric",
-
+  function date(v) {
+    if (!v) return "—";
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
     });
-
   }
 
-
-
-  function walletBalance(member) {
-
-    const value =
-
-      member.wallet_balance ??
-
-      member.balance ??
-
-      member.winning_balance ??
-
-      member.wallet ??
-
-      0;
-
-
-
-    const number = Number(value);
-
-
-
-    return Number.isFinite(number)
-
-      ? `₹${number.toFixed(2)}`
-
-      : "₹0.00";
-
+  function copy(v) {
+    if (!v) return;
+    navigator.clipboard?.writeText(String(v));
   }
 
+  async function walletSubmit() {
+    if (!walletModal || !amount || Number(amount) <= 0) return alert("Enter a valid amount.");
+    try {
+      setBusy(true);
+      const res = await fetch("/api/admin/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          userId: walletModal.id,
+          walletType,
+          action: walletAction,
+          amount: Number(amount),
+          reason,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Wallet update failed.");
+      setWalletModal(null);
+      setAmount("");
+      setReason("");
+      await loadMembers();
+      if (selected) await openMember(walletModal);
+    } catch (e) {
+      alert(e.message || "Wallet update failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
+  async function restrictionSubmit(action) {
+    if (!selected) return;
+    if (action === "restrict" && !restrictionReason.trim()) return alert("Restriction reason is required.");
+    try {
+      setBusy(true);
+      const res = await fetch("/api/admin/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({
+          userId: selected.id,
+          action,
+          durationDays: Number(restrictionDays),
+          reason: restrictionReason.trim(),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || "Restriction update failed.");
+      await loadMembers();
+      await openMember({ ...selected, ...(json.member || {}) });
+      setRestrictionReason("");
+    } catch (e) {
+      alert(e.message || "Restriction update failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const w = detail?.wallet || {};
+  const referrals = detail?.referral?.users || [];
+  const txns = detail?.history || [];
+  const m = detail?.member || selected;
+  const isRestricted = String(m?.status || "").toLowerCase() === "restricted";
 
   return (
-
     <AdminShell title="Members">
-
-      <div className="members-page">
-
-
-
-        {/* TOP STATS */}
-
-        <div className="stats-grid">
-
-          <StatCard
-
-            icon="👥"
-
-            title="Total Members"
-
-            value={members.length}
-
-            subtitle="Registered users"
-
-          />
-
-
-
-          <StatCard
-
-            icon="🟢"
-
-            title="Active Members"
-
-            value={activeCount}
-
-            subtitle="Currently active"
-
-          />
-
-
-
-          <StatCard
-
-            icon="🔴"
-
-            title="Blocked"
-
-            value={blockedCount}
-
-            subtitle="Blocked accounts"
-
-          />
-
+      <div className="page">
+        <div className="hero">
+          <div>
+            <span className="eyebrow">GAMERZADDA • USER CONTROL</span>
+            <h1>Members</h1>
+            <p>Manage profiles, wallets, referrals and account restrictions.</p>
+          </div>
+          <button className="pill refresh" onClick={loadMembers} disabled={loading}>↻ Refresh</button>
         </div>
 
-
-
-        {/* TOOLBAR */}
+        <div className="stats">
+          <Stat icon="👥" title="Total Members" value={members.length} sub="Registered accounts" />
+          <Stat icon="🟢" title="Active" value={active} sub="Available accounts" />
+          <Stat icon="🔒" title="Restricted" value={restricted} sub="Limited accounts" />
+          <Stat icon="💰" title="Profiles Loaded" value={filtered.length} sub="Current results" />
+        </div>
 
         <div className="toolbar">
-
-          <div className="search-box">
-
-            <span>🔎</span>
-
-            <input
-
-              value={search}
-
-              onChange={(e) => setSearch(e.target.value)}
-
-              placeholder="Search name, email, UID, IGN..."
-
-            />
-
-          </div>
-
-
-
-          <select
-
-            value={status}
-
-            onChange={(e) => setStatus(e.target.value)}
-
-          >
-
-            <option value="all">All Members</option>
-
-            <option value="active">Active</option>
-
-            <option value="blocked">Blocked</option>
-
-          </select>
-
-
-
-          <button
-
-            className="refresh-btn"
-
-            onClick={loadMembers}
-
-            disabled={loading}
-
-          >
-
-            ↻ Refresh
-
-          </button>
-
+          <div className="search">⌕<input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, UID, referral code, User ID..." /></div>
+          <span className="result-pill">{filtered.length} members</span>
         </div>
 
+        {error && <div className="error">⚠️ {error}<button onClick={loadMembers}>Retry</button></div>}
 
-
-        {/* ERROR */}
-
-        {error && (
-
-          <div className="error-box">
-
-            <span>⚠️</span>
-
-            <div>
-
-              <b>Unable to load members</b>
-
-              <p>{error}</p>
-
-            </div>
-
-            <button onClick={loadMembers}>Retry</button>
-
+        <section className="card">
+          <div className="section-head">
+            <div><b>Member Directory</b><small>Click any member for complete details</small></div>
+            <span>Page {page} / {pages}</span>
           </div>
 
-        )}
-
-
-
-        {/* TABLE */}
-
-        <div className="members-card">
-
-          <div className="card-head">
-
-            <div>
-
-              <h2>All Members</h2>
-
-              <p>
-
-                {filteredMembers.length} member
-
-                {filteredMembers.length !== 1 ? "s" : ""} found
-
-              </p>
-
-            </div>
-
-
-
-            <div className="page-info">
-
-              Page {page} of {totalPages}
-
-            </div>
-
-          </div>
-
-
-
-          {loading ? (
-
-            <LoadingTable />
-
-          ) : visibleMembers.length === 0 ? (
-
-            <div className="empty">
-
-              <div>👥</div>
-
-              <h3>No members found</h3>
-
-              <p>
-
-                Try changing your search or filter.
-
-              </p>
-
-            </div>
-
-          ) : (
-
-            <div className="table-wrap">
-
-              <table>
-
-                <thead>
-
-                  <tr>
-
-                    <th>MEMBER</th>
-
-                    <th>UID / IGN</th>
-
-                    <th>EMAIL</th>
-
-                    <th>WALLET</th>
-
-                    <th>JOINED</th>
-
-                    <th>STATUS</th>
-
-                    <th>ACTION</th>
-
-                  </tr>
-
-                </thead>
-
-
-
-                <tbody>
-
-                  {visibleMembers.map((member) => {
-
-                    const memberStatus = String(
-
-                      member.status || "active"
-
-                    ).toLowerCase();
-
-
-
-                    const isActive = memberStatus === "active";
-
-
-
-                    return (
-
-                      <tr
-                          key={member.id}
-                          className="member-row"
-                          onClick={() => openMember(member)}
-                        >
-
-                        <td>
-
-                          <div className="member-cell">
-
-                            <div className="avatar">
-
-                              {getInitial(member)}
-
-                            </div>
-
-
-
-                            <div>
-
-                              <strong>{displayName(member)}</strong>
-
-                              <small>
-
-                                {member.id
-
-                                  ? String(member.id).slice(0, 12)
-
-                                  : "—"}
-
-                              </small>
-
-                            </div>
-
-                          </div>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <div className="uid-cell">
-
-                            <b>
-
-                              {member.uid ||
-
-                                member.game_uid ||
-
-                                "—"}
-
-                            </b>
-
-
-
-                            <span>
-
-                              {member.ign ||
-
-                                member.game_name ||
-
-                                "IGN not set"}
-
-                            </span>
-
-                          </div>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <span className="email">
-
-                            {member.email || "—"}
-
-                          </span>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <b className="wallet">
-
-                            {walletBalance(member)}
-
-                          </b>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <span className="date">
-
-                            {formatDate(member.created_at)}
-
-                          </span>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <span
-
-                            className={
-
-                              isActive
-
-                                ? "status active"
-
-                                : "status blocked"
-
-                            }
-
-                          >
-
-                            <i />
-
-                            {isActive ? "Active" : "Blocked"}
-
-                          </span>
-
-                        </td>
-
-
-
-                        <td>
-
-                          <button
-
-                            className={
-
-                              isActive
-
-                                ? "action danger"
-
-                                : "action success"
-
-                            }
-
-                            onClick={() =>
-
-                              toggleMember(member)
-
-                            }
-
-                            disabled={
-
-                              actionLoading === member.id
-
-                            }
-
-                          >
-
-                            {actionLoading === member.id
-
-                              ? "..."
-
-                              : isActive
-
-                              ? "Block"
-
-                              : "Unblock"}
-
-                          </button>
-
-                        </td>
-
-                      </tr>
-
-                    );
-
-                  })}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          )}
-
-
-
-          {/* PAGINATION */}
-
-          {!loading && filteredMembers.length > 0 && (
-
-            <div className="pagination">
-
-              <button
-
-                disabled={page <= 1}
-
-                onClick={() =>
-
-                  setPage((p) => Math.max(1, p - 1))
-
-                }
-
-              >
-
-                ← Previous
-
-              </button>
-
-
-
-              <div>
-
-                <b>{page}</b>
-
-                <span>/</span>
-
-                {totalPages}
-
-              </div>
-
-
-
-              <button
-
-                disabled={page >= totalPages}
-
-                onClick={() =>
-
-                  setPage((p) =>
-
-                    Math.min(totalPages, p + 1)
-
-                  )
-
-                }
-
-              >
-
-                Next →
-
-              </button>
-
-            </div>
-
-          )}
-
-        </div>
-
+          {loading ? <div className="loading">Loading members…</div> : !rows.length ? <div className="empty">👥<b>No members found</b><small>Try another search.</small></div> :
+          <div className="table-wrap"><table><thead><tr>
+            <th>MEMBER</th><th>GAME</th><th>EMAIL</th><th>WALLET</th><th>REFERRAL</th><th>ACCOUNT</th><th>STATUS</th><th></th>
+          </tr></thead><tbody>{rows.map(member => {
+            const walletTotal = Number(member.wallet_total || 0);
+            const status = String(member.status || "active").toLowerCase();
+            return <tr key={member.id} onClick={() => openMember(member)}>
+              <td><div className="member"><Avatar m={member}/><div><b>{name(member)}</b><small>{String(member.id || "—").slice(0, 18)}</small></div></div></td>
+              <td><b>{member.game_name || member.ign || "—"}</b><small>UID: {member.uid || member.game_uid || member.free_fire_uid || "—"}</small></td>
+              <td>{member.email || "—"}</td>
+              <td><strong className="pink">{money(walletTotal)}</strong></td>
+              <td><span className="ref">🎁 {member.referral_code || "—"}</span></td>
+              <td>{date(member.created_at)}</td>
+              <td><span className={`status ${status}`}>{status === "restricted" ? "🔒 Restricted" : "● Active"}</span></td>
+              <td><button className="view" onClick={e => { e.stopPropagation(); openMember(member); }}>View →</button></td>
+            </tr>;
+          })}</tbody></table></div>}
+
+          {!loading && rows.length > 0 && <div className="pagination">
+            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>←</button>
+            <b>{page}</b><span>of {pages}</span>
+            <button disabled={page >= pages} onClick={() => setPage(p => p + 1)}>→</button>
+          </div>}
+        </section>
       </div>
 
+      {selected && <div className="overlay" onMouseDown={e => e.target === e.currentTarget && setSelected(null)}>
+        <aside className="drawer">
+          <button className="close" onClick={() => setSelected(null)}>×</button>
+          {detailLoading ? <div className="drawer-loading">Loading profile…</div> : m && <>
+            <div className="profile-head">
+              <Avatar m={m} big />
+              <div><span className="eyebrow">MEMBER PROFILE</span><h2>{name(m)}</h2><p>{m.email || "No email"}</p></div>
+            </div>
 
+            <div className="identity">
+              <Info label="Real Name" value={m.full_name || m.name} />
+              <Info label="User ID" value={m.id} copy={copy} />
+              <Info label="Email" value={m.email} />
+              <Info label="Phone" value={m.phone} />
+              <Info label="IGN" value={m.game_name || m.ign} />
+              <Info label="UID" value={m.uid || m.game_uid || m.free_fire_uid} copy={copy} />
+              <Info label="Last IP" value={m.last_ip || m.ip_address || m.ip} copy={copy} />
+              <Info label="FCM Token" value={m.fcm_token || m.fcmToken} copy={copy} />
+              <Info label="Account Created" value={date(m.created_at)} />
+              <Info label="Status" value={isRestricted ? "Restricted" : "Active"} />
+            </div>
 
-      {selectedMember && (
-        <MemberDetailModal
-          member={selectedMember}
-          transactions={memberTransactions}
-          referrals={memberReferrals}
-          loading={memberLoading}
-          error={memberError}
-          walletAmount={walletAmount}
-          setWalletAmount={setWalletAmount}
-          walletReason={walletReason}
-          setWalletReason={setWalletReason}
-          walletAction={walletAction}
-          setWalletAction={setWalletAction}
-          walletType={walletType}
-          setWalletType={setWalletType}
-          walletSaving={walletSaving}
-          onWalletChange={onWalletChange}
-          onRefresh={refreshMember}
-          onClose={closeMember}
-          onToggleStatus={async () => { await toggleMember(selectedMember); await refreshMember(); }}
-          displayName={displayName}
-          formatDate={formatDate}
-          walletBalance={walletBalance}
-          getInitial={getInitial}
-        />
-      )}
+            <div className="wallet-grid">
+              <Wallet title="Bonus" value={w.bonus_balance} onClick={() => {setWalletModal(m);setWalletType("bonus");}} />
+              <Wallet title="Deposit" value={w.deposit_balance} onClick={() => {setWalletModal(m);setWalletType("deposit");}} />
+              <Wallet title="Winning" value={w.winning_balance} onClick={() => {setWalletModal(m);setWalletType("winning");}} />
+            </div>
+
+            <div className="block">
+              <div className="block-title"><span>💳 Wallet Control</span><small>Add / Deduct balance with audit reason</small></div>
+              <div className="wallet-actions">
+                <button onClick={() => {setWalletModal(m);setWalletAction("add");}}>＋ Add Money</button>
+                <button className="deduct" onClick={() => {setWalletModal(m);setWalletAction("deduct");}}>− Deduct Money</button>
+              </div>
+            </div>
+
+            <div className="block">
+              <div className="block-title"><span>🎁 Referral Network</span><small>{detail?.referral?.total_referrals || 0} referred users</small></div>
+              <div className="ref-grid">
+                <Info label="Referral Code" value={m.referral_code} copy={copy} />
+                <Info label="Referred By" value={m.referred_by || "Direct / None"} />
+              </div>
+              {referrals.length ? <div className="ref-list">{referrals.map(u => <div className="ref-user" key={u.id}><Avatar m={u}/><div><b>{u.full_name || u.email || "User"}</b><small>{u.email || "—"} • {u.game_name || "IGN not set"}</small></div></div>)}</div> : <div className="muted">No referred users.</div>}
+            </div>
+
+            <div className="block">
+              <div className="block-title"><span>📜 Wallet Transactions</span><small>Latest 8</small></div>
+              {txns.length ? <div className="tx-list">{txns.map(t => <div className="tx" key={t.id}><span className={Number(t.amount) >= 0 ? "plus" : "minus"}>{Number(t.amount) >= 0 ? "+" : ""}{money(t.amount)}</span><div><b>{t.type || "Transaction"}</b><small>{t.description || "—"} • {date(t.created_at)}</small></div></div>)}</div> : <div className="muted">No wallet transactions.</div>}
+            </div>
+
+            <div className="block restriction">
+              <div className="block-title"><span>🔒 Account Restriction</span><small>{isRestricted ? "Currently restricted" : "No restriction active"}</small></div>
+              {isRestricted ? <div className="restriction-active"><b>Restricted</b><span>{m.restricted_until ? `Until ${date(m.restricted_until)}` : "Active"}</span><p>{m.status_reason || "No reason provided."}</p><button disabled={busy} onClick={() => restrictionSubmit("unrestrict")}>✓ Remove Restriction</button></div> :
+              <><div className="restrict-form"><input value={restrictionDays} onChange={e => setRestrictionDays(e.target.value)} type="number" min="1" max="365" placeholder="Days"/><input value={restrictionReason} onChange={e => setRestrictionReason(e.target.value)} placeholder="Reason for restriction"/></div><button className="restrict-btn" disabled={busy} onClick={() => restrictionSubmit("restrict")}>🔒 Restrict Account</button></>}
+            </div>
+          </>}
+        </aside>
+      </div>}
+
+      {walletModal && <div className="overlay" onMouseDown={e => e.target === e.currentTarget && setWalletModal(null)}>
+        <div className="wallet-modal">
+          <button className="close" onClick={() => setWalletModal(null)}>×</button>
+          <span className="eyebrow">WALLET CONTROL</span><h2>{walletAction === "add" ? "Add Balance" : "Deduct Balance"}</h2><p>{name(walletModal)}</p>
+          <div className="seg"><button className={walletAction==="add"?"on":""} onClick={()=>setWalletAction("add")}>＋ Add</button><button className={walletAction==="deduct"?"on danger-on":""} onClick={()=>setWalletAction("deduct")}>− Deduct</button></div>
+          <label>Wallet Type<select value={walletType} onChange={e=>setWalletType(e.target.value)}><option value="bonus">Bonus Balance</option><option value="deposit">Deposit Balance</option><option value="winning">Winning Balance</option></select></label>
+          <label>Amount<input value={amount} onChange={e=>setAmount(e.target.value)} type="number" min="0" step="0.01" placeholder="₹ 0.00"/></label>
+          <label>Reason<input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Why is this adjustment being made?"/></label>
+          <button className={`submit ${walletAction}`} disabled={busy} onClick={walletSubmit}>{busy ? "Processing…" : walletAction === "add" ? "＋ Confirm Add" : "− Confirm Deduct"}</button>
+        </div>
+      </div>}
 
       <style jsx>{`
-
-        .members-page {
-
-          width: 100%;
-
-        }
-
-
-
-        .stats-grid {
-
-          display: grid;
-
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-
-          gap: 14px;
-
-          margin-bottom: 16px;
-
-        }
-
-
-
-        .stat-card {
-
-          background: #fff;
-
-          border: 1px solid #e8eaf0;
-
-          border-radius: 14px;
-
-          padding: 16px;
-
-          display: flex;
-
-          align-items: center;
-
-          gap: 13px;
-
-          box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
-
-        }
-
-
-
-        .stat-icon {
-
-          width: 43px;
-
-          height: 43px;
-
-          border-radius: 12px;
-
-          background: #fff1f4;
-
-          display: grid;
-
-          place-items: center;
-
-          font-size: 21px;
-
-          flex: 0 0 auto;
-
-        }
-
-
-
-        .stat-title {
-
-          color: #7b8190;
-
-          font-size: 12px;
-
-          margin-bottom: 3px;
-
-        }
-
-
-
-        .stat-value {
-
-          font-size: 22px;
-
-          line-height: 1;
-
-          font-weight: 800;
-
-          color: #171923;
-
-        }
-
-
-
-        .stat-sub {
-
-          color: #9aa0ad;
-
-          font-size: 11px;
-
-          margin-top: 4px;
-
-        }
-
-
-
-        .toolbar {
-
-          background: #fff;
-
-          border: 1px solid #e8eaf0;
-
-          border-radius: 14px;
-
-          padding: 11px;
-
-          display: flex;
-
-          gap: 10px;
-
-          margin-bottom: 14px;
-
-        }
-
-
-
-        .search-box {
-
-          height: 40px;
-
-          flex: 1;
-
-          min-width: 220px;
-
-          display: flex;
-
-          align-items: center;
-
-          gap: 8px;
-
-          padding: 0 12px;
-
-          border: 1px solid #e1e4ea;
-
-          border-radius: 9px;
-
-          background: #fafbfc;
-
-        }
-
-
-
-        .search-box span {
-
-          font-size: 14px;
-
-        }
-
-
-
-        .search-box input {
-
-          border: 0;
-
-          outline: none;
-
-          background: transparent;
-
-          width: 100%;
-
-          font-size: 13px;
-
-          color: #171923;
-
-        }
-
-
-
-        .toolbar select {
-
-          height: 40px;
-
-          min-width: 145px;
-
-          border: 1px solid #e1e4ea;
-
-          border-radius: 9px;
-
-          padding: 0 10px;
-
-          background: #fff;
-
-          color: #343844;
-
-          outline: none;
-
-        }
-
-
-
-        .refresh-btn {
-
-          height: 40px;
-
-          padding: 0 15px;
-
-          border: 0;
-
-          border-radius: 9px;
-
-          background: #171923;
-
-          color: #fff;
-
-          font-weight: 700;
-
-          cursor: pointer;
-
-        }
-
-
-
-        .refresh-btn:disabled {
-
-          opacity: 0.55;
-
-          cursor: default;
-
-        }
-
-
-
-        .error-box {
-
-          background: #fff5f5;
-
-          border: 1px solid #ffd4d4;
-
-          color: #991b1b;
-
-          border-radius: 12px;
-
-          padding: 12px 14px;
-
-          margin-bottom: 14px;
-
-          display: flex;
-
-          align-items: center;
-
-          gap: 10px;
-
-        }
-
-
-
-        .error-box div {
-
-          flex: 1;
-
-        }
-
-
-
-        .error-box b {
-
-          font-size: 13px;
-
-        }
-
-
-
-        .error-box p {
-
-          margin: 2px 0 0;
-
-          font-size: 12px;
-
-        }
-
-
-
-        .error-box button {
-
-          border: 0;
-
-          background: #991b1b;
-
-          color: white;
-
-          border-radius: 7px;
-
-          padding: 7px 12px;
-
-          cursor: pointer;
-
-        }
-
-
-
-        .members-card {
-
-          background: #fff;
-
-          border: 1px solid #e8eaf0;
-
-          border-radius: 14px;
-
-          overflow: hidden;
-
-          box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
-
-        }
-
-
-
-        .card-head {
-
-          min-height: 64px;
-
-          padding: 12px 16px;
-
-          display: flex;
-
-          align-items: center;
-
-          justify-content: space-between;
-
-          border-bottom: 1px solid #eef0f4;
-
-        }
-
-
-
-        .card-head h2 {
-
-          margin: 0;
-
-          font-size: 16px;
-
-          color: #171923;
-
-        }
-
-
-
-        .card-head p {
-
-          margin: 3px 0 0;
-
-          font-size: 11px;
-
-          color: #9298a5;
-
-        }
-
-
-
-        .page-info {
-
-          font-size: 12px;
-
-          color: #777d89;
-
-        }
-
-
-
-        .table-wrap {
-
-          width: 100%;
-
-          overflow-x: auto;
-
-        }
-
-
-
-        table {
-
-          width: 100%;
-
-          border-collapse: collapse;
-
-          min-width: 950px;
-
-        }
-
-
-
-        th {
-
-          text-align: left;
-
-          background: #fafbfc;
-
-          color: #8a909d;
-
-          font-size: 10px;
-
-          letter-spacing: 0.04em;
-
-          padding: 11px 14px;
-
-          border-bottom: 1px solid #eef0f4;
-
-          white-space: nowrap;
-
-        }
-
-
-
-        td {
-
-          padding: 11px 14px;
-
-          border-bottom: 1px solid #f0f1f4;
-
-          color: #363a45;
-
-          font-size: 12px;
-
-          vertical-align: middle;
-
-        }
-
-
-
-        tbody tr:hover {
-
-          background: #fcfcfd;
-
-        }
-
-
-
-        .member-cell {
-
-          display: flex;
-
-          align-items: center;
-
-          gap: 9px;
-
-          min-width: 170px;
-
-        }
-
-
-
-        .avatar {
-
-          width: 34px;
-
-          height: 34px;
-
-          border-radius: 10px;
-
-          background: #fff1f4;
-
-          color: #ff174f;
-
-          display: grid;
-
-          place-items: center;
-
-          font-weight: 800;
-
-          font-size: 13px;
-
-          flex: 0 0 auto;
-
-        }
-
-
-
-        .member-cell strong {
-
-          display: block;
-
-          color: #20232d;
-
-          font-size: 12px;
-
-          max-width: 170px;
-
-          overflow: hidden;
-
-          text-overflow: ellipsis;
-
-          white-space: nowrap;
-
-        }
-
-
-
-        .member-cell small {
-
-          display: block;
-
-          margin-top: 2px;
-
-          color: #a0a5af;
-
-          font-size: 9px;
-
-        }
-
-
-
-        .uid-cell b {
-
-          display: block;
-
-          color: #282c36;
-
-          font-size: 11px;
-
-        }
-
-
-
-        .uid-cell span {
-
-          display: block;
-
-          color: #9298a5;
-
-          margin-top: 2px;
-
-          font-size: 10px;
-
-        }
-
-
-
-        .email {
-
-          color: #646a76;
-
-          font-size: 11px;
-
-        }
-
-
-
-        .wallet {
-
-          color: #111827;
-
-          font-size: 12px;
-
-        }
-
-
-
-        .date {
-
-          color: #737985;
-
-          white-space: nowrap;
-
-          font-size: 11px;
-
-        }
-
-
-
-        .status {
-
-          display: inline-flex;
-
-          align-items: center;
-
-          gap: 5px;
-
-          border-radius: 999px;
-
-          padding: 5px 8px;
-
-          font-size: 10px;
-
-          font-weight: 700;
-
-          white-space: nowrap;
-
-        }
-
-
-
-        .status i {
-
-          width: 6px;
-
-          height: 6px;
-
-          border-radius: 50%;
-
-          display: block;
-
-        }
-
-
-
-        .status.active {
-
-          color: #15803d;
-
-          background: #ecfdf3;
-
-        }
-
-
-
-        .status.active i {
-
-          background: #22c55e;
-
-        }
-
-
-
-        .status.blocked {
-
-          color: #b91c1c;
-
-          background: #fef2f2;
-
-        }
-
-
-
-        .status.blocked i {
-
-          background: #ef4444;
-
-        }
-
-
-
-        .action {
-
-          border: 0;
-
-          border-radius: 7px;
-
-          padding: 6px 10px;
-
-          font-size: 10px;
-
-          font-weight: 700;
-
-          cursor: pointer;
-
-        }
-
-
-
-        .action.danger {
-
-          color: #dc2626;
-
-          background: #fff1f2;
-
-        }
-
-
-
-        .action.success {
-
-          color: #15803d;
-
-          background: #ecfdf3;
-
-        }
-
-
-
-        .action:disabled {
-
-          opacity: 0.5;
-
-          cursor: default;
-
-        }
-
-
-
-        .empty {
-
-          padding: 65px 20px;
-
-          text-align: center;
-
-        }
-
-
-
-        .empty > div {
-
-          font-size: 35px;
-
-          margin-bottom: 8px;
-
-        }
-
-
-
-        .empty h3 {
-
-          margin: 0;
-
-          font-size: 15px;
-
-          color: #272a33;
-
-        }
-
-
-
-        .empty p {
-
-          margin: 5px 0 0;
-
-          color: #969ba7;
-
-          font-size: 12px;
-
-        }
-
-
-
-        .pagination {
-
-          padding: 11px 14px;
-
-          border-top: 1px solid #eef0f4;
-
-          display: flex;
-
-          align-items: center;
-
-          justify-content: center;
-
-          gap: 14px;
-
-        }
-
-
-
-        .pagination button {
-
-          border: 1px solid #e1e4ea;
-
-          background: #fff;
-
-          color: #4b505c;
-
-          border-radius: 7px;
-
-          padding: 7px 11px;
-
-          font-size: 11px;
-
-          cursor: pointer;
-
-        }
-
-
-
-        .pagination button:disabled {
-
-          opacity: 0.4;
-
-          cursor: default;
-
-        }
-
-
-
-        .pagination div {
-
-          display: flex;
-
-          gap: 6px;
-
-          align-items: center;
-
-          color: #858b97;
-
-          font-size: 11px;
-
-        }
-
-
-
-        .pagination b {
-
-          color: #171923;
-
-        }
-
-
-
-        @media (max-width: 800px) {
-
-          .stats-grid {
-
-            grid-template-columns: 1fr;
-
-          }
-
-
-
-          .toolbar {
-
-            flex-wrap: wrap;
-
-          }
-
-
-
-          .search-box {
-
-            min-width: 100%;
-
-          }
-
-
-
-          .toolbar select,
-
-          .refresh-btn {
-
-            flex: 1;
-
-          }
-
-        }
-
+        .page{padding:4px 2px 40px;color:#171923}.hero{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.eyebrow{font-size:10px;font-weight:900;letter-spacing:1.5px;color:#ff174f}.hero h1{font-size:30px;margin:5px 0 3px;font-weight:900}.hero p{margin:0;color:#8a8f9c;font-size:13px}.pill,.result-pill,.view,.status,.ref{border:0;border-radius:999px;padding:9px 14px;font-weight:800;font-size:12px}.refresh{background:#fff;box-shadow:7px 7px 16px #d9dce5,-7px -7px 16px #fff;color:#ff174f;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}.stats :global(.stat){background:#edf0f5;border-radius:20px;padding:18px;box-shadow:inset 3px 3px 7px #d5d8df,inset -3px -3px 7px #fff}.stats b{display:block;font-size:24px}.stats small{color:#8d92a0}.toolbar,.card,.block{background:#edf0f5;border-radius:22px;box-shadow:8px 8px 20px #d7dae2,-8px -8px 20px #fff}.toolbar{padding:12px;display:flex;gap:10px;margin-bottom:16px}.search{flex:1;display:flex;align-items:center;gap:8px;background:#edf0f5;border-radius:14px;padding:0 14px;box-shadow:inset 3px 3px 7px #d5d8df,inset -3px -3px 7px #fff;color:#9297a4}.search input{border:0;outline:0;background:transparent;width:100%;height:44px;font-size:13px}.result-pill{background:#fff;color:#777}.error{padding:14px;background:#fff0f3;color:#c51645;border-radius:15px;margin-bottom:14px}.error button{float:right;border:0;border-radius:999px;padding:6px 12px}.card{overflow:hidden}.section-head{padding:18px 20px;display:flex;justify-content:space-between}.section-head b{display:block;font-size:16px}.section-head small{color:#9297a4}.section-head>span{font-size:12px;color:#9297a4}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:1050px}th{font-size:10px;color:#969ba8;text-align:left;padding:11px 15px;border-bottom:1px solid #dde0e7}td{padding:13px 15px;border-bottom:1px solid #e1e3e9;font-size:12px;vertical-align:middle}tbody tr{cursor:pointer;transition:.15s}tbody tr:hover{background:#f7f8fa}.member{display:flex;align-items:center;gap:10px}.member small,td small{display:block;color:#9297a4;margin-top:3px}.avatar{width:42px;height:42px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#ff416c,#ff174f);color:#fff;font-weight:900;overflow:hidden;flex:none;box-shadow:4px 4px 9px #d4d6dd,-3px -3px 7px #fff}.avatar img{width:100%;height:100%;object-fit:cover}.avatar.big{width:70px;height:70px;border-radius:22px;font-size:25px}.pink{color:#ff174f}.ref{background:#fff0f4;color:#e91549}.status{background:#e5f8ed;color:#0d8a49}.status.restricted{background:#fff0e8;color:#d95b13}.view{background:#fff;color:#ff174f;cursor:pointer}.pagination{display:flex;justify-content:center;align-items:center;gap:14px;padding:16px}.pagination button{width:36px;height:36px;border:0;border-radius:12px;background:#edf0f5;box-shadow:4px 4px 8px #d7dae2,-4px -4px 8px #fff;cursor:pointer}.pagination button:disabled{opacity:.4}.loading,.empty{text-align:center;padding:60px;color:#8d92a0}.empty>*{display:block;margin:8px auto}.overlay{position:fixed;inset:0;background:rgba(17,20,29,.42);backdrop-filter:blur(7px);z-index:1000;display:flex;justify-content:flex-end}.drawer{width:min(720px,96vw);height:100%;overflow:auto;background:#edf0f5;padding:26px;position:relative;box-shadow:-15px 0 35px rgba(0,0,0,.18)}.close{position:absolute;right:20px;top:18px;width:36px;height:36px;border:0;border-radius:50%;background:#edf0f5;box-shadow:4px 4px 9px #d1d4dc,-4px -4px 9px #fff;font-size:23px;cursor:pointer}.profile-head{display:flex;gap:16px;align-items:center;margin:15px 40px 22px 0}.profile-head h2{margin:4px 0;font-size:25px}.profile-head p{margin:0;color:#888e9c}.identity{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.identity>div,.ref-grid>div{background:#edf0f5;border-radius:14px;padding:12px;box-shadow:inset 2px 2px 6px #d8dbe2,inset -2px -2px 6px #fff}.label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#969ba8;margin-bottom:5px}.value{font-size:12px;font-weight:800;word-break:break-all}.copy{float:right;border:0;background:transparent;color:#ff174f;cursor:pointer}.wallet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.wallet{padding:15px;border-radius:17px;background:#fff;box-shadow:5px 5px 12px #d7dae2,-5px -5px 12px #fff;cursor:pointer}.wallet small{color:#9297a4}.wallet b{display:block;margin-top:5px;font-size:18px;color:#ff174f}.block{padding:17px;margin-bottom:14px}.block-title{display:flex;justify-content:space-between;margin-bottom:13px}.block-title span{font-weight:900}.block-title small{color:#9499a5}.wallet-actions{display:flex;gap:10px}.wallet-actions button,.restrict-btn,.restriction-active button{flex:1;border:0;border-radius:13px;padding:12px;background:#ff174f;color:white;font-weight:900;cursor:pointer}.wallet-actions .deduct{background:#fff;color:#e54848}.ref-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.ref-list{margin-top:10px}.ref-user{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #ddd}.ref-user .avatar{width:34px;height:34px;border-radius:10px}.tx{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #ddd}.tx>span{font-weight:900;min-width:85px}.plus{color:#07944b}.minus{color:#e54848}.tx small{display:block;color:#9297a4}.muted{color:#9297a4;font-size:12px}.restriction-active{background:#fff2ed;border-radius:14px;padding:14px}.restriction-active b{color:#d95b13}.restriction-active span{margin-left:10px;font-size:11px;color:#777}.restriction-active p{font-size:12px;color:#666}.restriction-active button{background:#fff;color:#d95b13}.restrict-form{display:grid;grid-template-columns:110px 1fr;gap:9px;margin-bottom:10px}.restrict-form input,.wallet-modal input,.wallet-modal select{border:0;outline:0;background:#edf0f5;border-radius:12px;padding:12px;box-shadow:inset 3px 3px 7px #d5d8df,inset -3px -3px 7px #fff;width:100%;box-sizing:border-box}.wallet-modal{width:min(430px,92vw);background:#edf0f5;border-radius:25px;padding:28px;position:relative;box-shadow:12px 12px 30px #c8cbd2,-12px -12px 30px #fff}.wallet-modal h2{margin:5px 0}.wallet-modal>p{color:#8c919e}.wallet-modal label{display:block;font-size:11px;font-weight:800;margin:12px 0}.wallet-modal input,.wallet-modal select{margin-top:6px}.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:18px 0}.seg button{border:0;border-radius:12px;padding:11px;background:#fff;font-weight:900;cursor:pointer}.seg .on{background:#ff174f;color:#fff}.seg .danger-on{background:#e54848}.submit{width:100%;border:0;border-radius:14px;padding:13px;margin-top:15px;background:#ff174f;color:#fff;font-weight:900;cursor:pointer}.submit.deduct{background:#e54848}.drawer-loading{text-align:center;padding-top:80px;color:#8c919e}@media(max-width:900px){.stats{grid-template-columns:1fr 1fr}.identity{grid-template-columns:1fr}.wallet-grid{grid-template-columns:1fr}.hero{align-items:flex-start;gap:10px}.toolbar{flex-direction:column}}@media(max-width:500px){.stats{grid-template-columns:1fr}.drawer{padding:18px}.ref-grid{grid-template-columns:1fr}}
       `}</style>
-
     </AdminShell>
-
-  );
-
-}
-
-
-
-function StatCard({ icon, title, value, subtitle }) {
-
-  return (
-
-    <div className="stat-card">
-
-      <div className="stat-icon">{icon}</div>
-
-
-
-      <div>
-
-        <div className="stat-title">{title}</div>
-
-        <div className="stat-value">{value}</div>
-
-        <div className="stat-sub">{subtitle}</div>
-
-      </div>
-
-    </div>
-
-  );
-
-}
-
-
-
-function LoadingTable() {
-
-  return (
-
-    <div style={{ padding: "12px 14px" }}>
-
-      {Array.from({ length: 7 }).map((_, index) => (
-
-        <div
-
-          key={index}
-
-          style={{
-
-            height: 52,
-
-            borderBottom: "1px solid #f0f1f4",
-
-            display: "flex",
-
-            alignItems: "center",
-
-            gap: 12,
-
-          }}
-
-        >
-
-          <div
-
-            style={{
-
-              width: 34,
-
-              height: 34,
-
-              borderRadius: 10,
-
-              background: "#f1f2f5",
-
-            }}
-
-          />
-
-
-
-          <div
-
-            style={{
-
-              width: `${180 + (index % 3) * 45}px`,
-
-              height: 10,
-
-              borderRadius: 5,
-
-              background: "#f1f2f5",
-
-            }}
-
-          />
-
-        </div>
-
-      ))}
-
-    </div>
-
-  );
-
-}
-
-function MemberDetailModal({
-  member,
-  transactions,
-  referrals,
-  loading,
-  error,
-  walletAmount,
-  setWalletAmount,
-  walletReason,
-  setWalletReason,
-  walletAction,
-  setWalletAction,
-  walletType,
-  setWalletType,
-  walletSaving,
-  onWalletChange,
-  onRefresh,
-  onClose,
-  onToggleStatus,
-  displayName,
-  formatDate,
-  walletBalance,
-  getInitial,
-}) {
-  const status = String(member.status || "active").toLowerCase();
-  const isActive = status === "active";
-  const createdAt = member.created_at
-    ? new Date(member.created_at).toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—";
-
-  const ip =
-    member.ip_address ??
-    member.last_ip ??
-    member.ip ??
-    "Not available";
-
-  const fcm =
-    member.fcm_token ??
-    member.fcmToken ??
-    member.push_token ??
-    "Not available";
-
-  const phone =
-    member.phone ??
-    member.phone_number ??
-    member.mobile ??
-    "Not available";
-
-  const gameUid =
-    member.uid ??
-    member.game_uid ??
-    member.freefire_uid ??
-    "Not set";
-
-  const ign =
-    member.ign ??
-    member.game_name ??
-    member.gameName ??
-    "Not set";
-
-  const referralCode =
-    member.referral_code ??
-    member.referralCode ??
-    "Not set";
-
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="member-modal">
-        <div className="modal-header">
-          <div className="modal-profile">
-            <div className="modal-avatar">
-              {getInitial(member)}
-            </div>
-            <div>
-              <h2>{displayName(member)}</h2>
-              <p>
-                ID: {member.id || "—"} · Joined {formatDate(member.created_at)}
-              </p>
-            </div>
-          </div>
-
-          <div className="modal-head-actions">
-            <button className="icon-btn" onClick={onRefresh} title="Refresh">
-              ↻
-            </button>
-            <button className="close-btn" onClick={onClose}>
-              ×
-            </button>
-          </div>
-        </div>
-
-        <div className="modal-body">
-          {error && (
-            <div className="modal-error">
-              ⚠️ {error}
-            </div>
-          )}
-
-          <div className="detail-grid">
-            <DetailItem icon="📱" label="Mobile Number" value={phone} copy />
-            <DetailItem icon="📧" label="Email" value={member.email || "Not available"} copy />
-            <DetailItem icon="🎮" label="Game UID" value={gameUid} copy />
-            <DetailItem icon="👤" label="IGN" value={ign} />
-            <DetailItem icon="🌐" label="Last IP" value={ip} copy />
-            <DetailItem icon="🔔" label="FCM Token" value={fcm} copy wide />
-            <DetailItem icon="🕐" label="Created At" value={createdAt} wide />
-            <DetailItem icon="🎁" label="Referral Code" value={referralCode} copy />
-          </div>
-
-          <div className="wallet-panel">
-            <div className="wallet-top">
-              <div>
-                <span>WALLET BALANCE</span>
-                <strong>{walletBalance(member)}</strong>
-              </div>
-              <div className={isActive ? "modal-status active" : "modal-status blocked"}>
-                <i />
-                {isActive ? "Active" : "Blocked"}
-              </div>
-            </div>
-
-            <div className="wallet-controls">
-              <div className="wallet-type-toggle">
-                <button type="button" className={walletType === "bonus" ? "selected" : ""} onClick={() => setWalletType("bonus")}>Bonus</button>
-                <button type="button" className={walletType === "deposit" ? "selected" : ""} onClick={() => setWalletType("deposit")}>Deposit</button>
-                <button type="button" className={walletType === "winning" ? "selected" : ""} onClick={() => setWalletType("winning")}>Winning</button>
-              </div>
-
-              <div className="wallet-toggle">
-                <button
-                  className={walletAction === "add" ? "selected add" : ""}
-                  onClick={() => setWalletAction("add")}
-                  type="button"
-                >
-                  + Add
-                </button>
-                <button
-                  className={walletAction === "deduct" ? "selected deduct" : ""}
-                  onClick={() => setWalletAction("deduct")}
-                  type="button"
-                >
-                  − Deduct
-                </button>
-              </div>
-
-              <input
-                className="wallet-input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={walletAmount}
-                onChange={(e) => setWalletAmount(e.target.value)}
-                placeholder="Amount ₹"
-              />
-
-              <input
-                className="reason-input"
-                value={walletReason}
-                onChange={(e) => setWalletReason(e.target.value)}
-                placeholder="Reason (required)"
-              />
-
-              <button
-                className={
-                  walletAction === "add"
-                    ? "wallet-submit add"
-                    : "wallet-submit deduct"
-                }
-                onClick={onWalletChange}
-                disabled={walletSaving}
-              >
-                {walletSaving
-                  ? "Updating..."
-                  : walletAction === "add"
-                  ? "Add Balance"
-                  : "Deduct Balance"}
-              </button>
-            </div>
-
-            <small>
-              Every manual balance change should have a clear reason for audit.
-            </small>
-          </div>
-
-          <div className="modal-columns">
-            <section className="mini-section">
-              <div className="section-title">
-                <div>
-                  <h3>Recent Transactions</h3>
-                  <span>Latest 8 wallet records</span>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="mini-loading">Loading...</div>
-              ) : transactions.length === 0 ? (
-                <div className="mini-empty">
-                  🧾
-                  <span>No transactions found</span>
-                </div>
-              ) : (
-                <div className="transaction-list">
-                  {transactions.map((tx, index) => {
-                    const amount = Number(
-                      tx.amount ??
-                      tx.value ??
-                      tx.amount_inr ??
-                      0
-                    );
-
-                    const positive =
-                      amount > 0 ||
-                      ["credit", "deposit", "admin_credit", "bonus", "winning"]
-                        .includes(String(tx.type || "").toLowerCase());
-
-                    return (
-                      <div className="transaction-row" key={tx.id || index}>
-                        <div className="tx-icon">
-                          {positive ? "↗" : "↘"}
-                        </div>
-
-                        <div className="tx-main">
-                          <b>
-                            {tx.description ||
-                              tx.title ||
-                              tx.type ||
-                              "Wallet transaction"}
-                          </b>
-                          <span>
-                            {tx.created_at
-                              ? new Date(tx.created_at).toLocaleString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "—"}
-                          </span>
-                        </div>
-
-                        <strong className={positive ? "credit" : "debit"}>
-                          {positive ? "+" : "-"}₹
-                          {Math.abs(amount).toFixed(2)}
-                        </strong>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="mini-section">
-              <div className="section-title">
-                <div>
-                  <h3>Referrals</h3>
-                  <span>{referrals.length} referred member(s)</span>
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="mini-loading">Loading...</div>
-              ) : referrals.length === 0 ? (
-                <div className="mini-empty">
-                  🎁
-                  <span>No referrals found</span>
-                </div>
-              ) : (
-                <div className="referral-list">
-                  {referrals.map((ref, index) => (
-                    <div className="referral-row" key={ref.id || index}>
-                      <div className="ref-avatar">
-                        {getInitial(ref)}
-                      </div>
-                      <div>
-                        <b>{displayName(ref)}</b>
-                        <span>
-                          {ref.email || ref.uid || "Member"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-
-          <div className="modal-footer">
-            <div className="account-meta">
-              <span>Account created</span>
-              <b>{createdAt}</b>
-            </div>
-
-            <button
-              className={isActive ? "modal-block" : "modal-unblock"}
-              onClick={onToggleStatus}
-            >
-              {isActive ? "🚫 Block Member" : "✓ Unblock Member"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <style jsx>{`
-        .modal-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 9999;
-          background: rgba(15, 23, 42, 0.55);
-          backdrop-filter: blur(5px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 22px;
-        }
-
-        .member-modal {
-          width: min(1080px, 100%);
-          max-height: calc(100vh - 44px);
-          overflow: auto;
-          background: #fff;
-          border-radius: 20px;
-          box-shadow: 0 25px 80px rgba(15, 23, 42, 0.25);
-        }
-
-        .modal-header {
-          position: sticky;
-          top: 0;
-          z-index: 2;
-          background: rgba(255,255,255,.96);
-          backdrop-filter: blur(10px);
-          border-bottom: 1px solid #edf0f4;
-          padding: 16px 18px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .modal-profile {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .modal-avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          background: #fff1f4;
-          color: #ff174f;
-          display: grid;
-          place-items: center;
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        .modal-profile h2 {
-          margin: 0;
-          font-size: 18px;
-          color: #171923;
-        }
-
-        .modal-profile p {
-          margin: 4px 0 0;
-          color: #8c929e;
-          font-size: 10px;
-          max-width: 650px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .modal-head-actions {
-          display: flex;
-          gap: 7px;
-        }
-
-        .icon-btn,
-        .close-btn {
-          width: 34px;
-          height: 34px;
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          border-radius: 9px;
-          cursor: pointer;
-          font-size: 16px;
-        }
-
-        .close-btn {
-          font-size: 22px;
-          line-height: 1;
-        }
-
-        .modal-body {
-          padding: 16px;
-        }
-
-        .modal-error {
-          background: #fff5f5;
-          border: 1px solid #fecaca;
-          color: #991b1b;
-          border-radius: 10px;
-          padding: 10px 12px;
-          margin-bottom: 13px;
-          font-size: 11px;
-        }
-
-        .detail-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 9px;
-        }
-
-        .detail-item {
-          border: 1px solid #edf0f4;
-          border-radius: 11px;
-          padding: 10px;
-          background: #fbfcfd;
-          min-width: 0;
-        }
-
-        .detail-item.wide {
-          grid-column: span 2;
-        }
-
-        .detail-label {
-          display: flex;
-          gap: 6px;
-          align-items: center;
-          color: #9298a5;
-          font-size: 9px;
-          text-transform: uppercase;
-          letter-spacing: .04em;
-          margin-bottom: 5px;
-        }
-
-        .detail-value {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          min-width: 0;
-          color: #242833;
-          font-size: 11px;
-          font-weight: 700;
-        }
-
-        .detail-value span {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .copy-btn {
-          border: 0;
-          background: #eef2f7;
-          color: #525866;
-          border-radius: 5px;
-          padding: 3px 5px;
-          font-size: 9px;
-          cursor: pointer;
-          flex: 0 0 auto;
-        }
-
-        .wallet-panel {
-          margin-top: 12px;
-          padding: 14px;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #171923, #252938);
-          color: white;
-        }
-
-        .wallet-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-
-        .wallet-top span {
-          display: block;
-          color: #9da3b0;
-          font-size: 9px;
-          letter-spacing: .06em;
-        }
-
-        .wallet-top strong {
-          display: block;
-          margin-top: 2px;
-          font-size: 25px;
-        }
-
-        .modal-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 9px;
-          border-radius: 999px;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .modal-status i {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-        }
-
-        .modal-status.active {
-          color: #86efac;
-          background: rgba(34,197,94,.12);
-        }
-
-        .modal-status.active i {
-          background: #22c55e;
-        }
-
-        .modal-status.blocked {
-          color: #fca5a5;
-          background: rgba(239,68,68,.12);
-        }
-
-        .modal-status.blocked i {
-          background: #ef4444;
-        }
-
-        .wallet-controls {
-          display: grid;
-          grid-template-columns: auto auto 130px minmax(180px, 1fr) auto;
-          gap: 8px;
-        }
-
-        .wallet-type-toggle {
-          display: flex;
-          align-items: center;
-          gap: 3px;
-          background: #303342;
-          padding: 3px;
-          border-radius: 8px;
-        }
-
-        .wallet-type-toggle button {
-          border: 0;
-          background: transparent;
-          color: #bfc4ce;
-          border-radius: 6px;
-          padding: 7px 8px;
-          font-size: 10px;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .wallet-type-toggle button.selected {
-          background: #ff174f;
-          color: white;
-        }
-
-        .wallet-toggle {
-          display: flex;
-          background: #303342;
-          padding: 3px;
-          border-radius: 8px;
-        }
-
-        .wallet-toggle button {
-          border: 0;
-          background: transparent;
-          color: #bfc4ce;
-          border-radius: 6px;
-          padding: 7px 9px;
-          font-size: 10px;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .wallet-toggle button.selected.add {
-          background: #16a34a;
-          color: white;
-        }
-
-        .wallet-toggle button.selected.deduct {
-          background: #dc2626;
-          color: white;
-        }
-
-        .wallet-input,
-        .reason-input {
-          border: 1px solid #3a3d4c;
-          background: #2a2d39;
-          color: white;
-          outline: none;
-          border-radius: 8px;
-          padding: 0 10px;
-          min-width: 0;
-          font-size: 11px;
-        }
-
-        .wallet-input::placeholder,
-        .reason-input::placeholder {
-          color: #7f8491;
-        }
-
-        .wallet-submit {
-          border: 0;
-          border-radius: 8px;
-          padding: 0 14px;
-          color: white;
-          font-size: 10px;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .wallet-submit.add {
-          background: #16a34a;
-        }
-
-        .wallet-submit.deduct {
-          background: #dc2626;
-        }
-
-        .wallet-submit:disabled {
-          opacity: .5;
-        }
-
-        .wallet-panel > small {
-          display: block;
-          color: #777d8b;
-          margin-top: 8px;
-          font-size: 9px;
-        }
-
-        .modal-columns {
-          display: grid;
-          grid-template-columns: 1.2fr .8fr;
-          gap: 12px;
-          margin-top: 12px;
-        }
-
-        .mini-section {
-          border: 1px solid #edf0f4;
-          border-radius: 13px;
-          overflow: hidden;
-        }
-
-        .section-title {
-          padding: 11px 12px;
-          border-bottom: 1px solid #edf0f4;
-          background: #fbfcfd;
-        }
-
-        .section-title h3 {
-          margin: 0;
-          font-size: 12px;
-          color: #252934;
-        }
-
-        .section-title span {
-          display: block;
-          margin-top: 2px;
-          font-size: 9px;
-          color: #969ca8;
-        }
-
-        .mini-loading,
-        .mini-empty {
-          min-height: 115px;
-          display: grid;
-          place-items: center;
-          color: #969ca8;
-          font-size: 10px;
-          gap: 4px;
-        }
-
-        .transaction-row {
-          min-height: 54px;
-          padding: 8px 10px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          border-bottom: 1px solid #f1f2f4;
-        }
-
-        .transaction-row:last-child {
-          border-bottom: 0;
-        }
-
-        .tx-icon {
-          width: 29px;
-          height: 29px;
-          border-radius: 8px;
-          background: #f3f4f6;
-          display: grid;
-          place-items: center;
-          font-weight: 900;
-        }
-
-        .tx-main {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .tx-main b {
-          display: block;
-          color: #333741;
-          font-size: 10px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .tx-main span {
-          display: block;
-          margin-top: 2px;
-          color: #a0a5af;
-          font-size: 8px;
-        }
-
-        .transaction-row > strong {
-          font-size: 11px;
-        }
-
-        .credit {
-          color: #16a34a;
-        }
-
-        .debit {
-          color: #dc2626;
-        }
-
-        .referral-row {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          padding: 9px 10px;
-          border-bottom: 1px solid #f1f2f4;
-        }
-
-        .referral-row:last-child {
-          border-bottom: 0;
-        }
-
-        .ref-avatar {
-          width: 29px;
-          height: 29px;
-          border-radius: 8px;
-          background: #fff1f4;
-          color: #ff174f;
-          display: grid;
-          place-items: center;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .referral-row b {
-          display: block;
-          font-size: 10px;
-          color: #333741;
-        }
-
-        .referral-row span {
-          display: block;
-          margin-top: 2px;
-          font-size: 8px;
-          color: #969ca8;
-        }
-
-        .modal-footer {
-          margin-top: 12px;
-          padding-top: 12px;
-          border-top: 1px solid #edf0f4;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-
-        .account-meta span {
-          display: block;
-          color: #9aa0ab;
-          font-size: 9px;
-        }
-
-        .account-meta b {
-          display: block;
-          color: #424752;
-          font-size: 10px;
-          margin-top: 2px;
-        }
-
-        .modal-block,
-        .modal-unblock {
-          border: 0;
-          border-radius: 8px;
-          padding: 8px 12px;
-          font-size: 10px;
-          font-weight: 800;
-          cursor: pointer;
-        }
-
-        .modal-block {
-          color: #dc2626;
-          background: #fff1f2;
-        }
-
-        .modal-unblock {
-          color: #15803d;
-          background: #ecfdf3;
-        }
-
-        @media (max-width: 900px) {
-          .detail-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .wallet-controls {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .reason-input {
-            height: 38px;
-          }
-
-          .wallet-submit {
-            height: 38px;
-          }
-        }
-
-        @media (max-width: 650px) {
-          .modal-backdrop {
-            padding: 8px;
-          }
-
-          .member-modal {
-            max-height: calc(100vh - 16px);
-            border-radius: 15px;
-          }
-
-          .detail-grid,
-          .modal-columns {
-            grid-template-columns: 1fr;
-          }
-
-          .detail-item.wide {
-            grid-column: auto;
-          }
-
-          .wallet-controls {
-            grid-template-columns: 1fr;
-          }
-
-          .wallet-toggle {
-            width: 100%;
-          }
-
-          .wallet-toggle button {
-            flex: 1;
-          }
-
-          .modal-profile p {
-            max-width: 220px;
-          }
-        }
-      `}</style>
-    </div>
   );
 }
 
-function DetailItem({ icon, label, value, copy = false, wide = false }) {
-  function copyValue() {
-    if (!value || value === "—" || value === "Not available") return;
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(String(value)).catch(() => {});
-    }
-  }
+function Avatar({ m, big }) {
+  const src = m?.profile_pic || m?.profile_picture || m?.avatar_url || "";
+  const label = (m?.full_name || m?.name || m?.username || m?.email || "U").charAt(0).toUpperCase();
+  return <div className={`avatar ${big ? "big" : ""}`}>{src ? <img src={src} alt="" /> : label}</div>;
+}
 
-  return (
-    <div className={`detail-item ${wide ? "wide" : ""}`}>
-      <div className="detail-label">
-        <span>{icon}</span>
-        {label}
-      </div>
+function Info({ label, value, copy }) {
+  return <div><span className="label">{label}</span><span className="value">{value || "—"}</span>{copy && value ? <button className="copy" onClick={() => copy(value)}>Copy</button> : null}</div>;
+}
 
-      <div className="detail-value">
-        <span title={String(value)}>{value}</span>
+function Wallet({ title, value, onClick }) {
+  return <div className="wallet" onClick={onClick}><small>{title} Balance</small><b>₹{Number(value || 0).toFixed(2)}</b><small>Tap to manage</small></div>;
+}
 
-        {copy && value && value !== "—" && value !== "Not available" && (
-          <button
-            type="button"
-            className="copy-btn"
-            onClick={copyValue}
-          >
-            Copy
-          </button>
-        )}
-      </div>
-    </div>
-  );
+function Stat({ icon, title, value, sub }) {
+  return <div className="stat"><span style={{fontSize:22}}>{icon}</span><small>{title}</small><b>{value}</b><small>{sub}</small></div>;
 }
