@@ -39,6 +39,195 @@ const OTP_RESEND_PERMANENT_BLOCK_AFTER = 7;
 
 
 // ======================================================
+// SINGLE-DEVICE SESSION
+// ======================================================
+
+const SESSION_COOKIE_NAME = "gamerzadda_session";
+const SESSION_DAYS = 30;
+const SESSION_MAX_AGE_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
+
+function generateSessionToken() {
+    return crypto.randomBytes(48).toString("hex");
+}
+
+function hashSessionToken(token) {
+    return crypto
+        .createHash("sha256")
+        .update(String(token))
+        .digest("hex");
+}
+
+async function createMobileSession(userId, deviceId) {
+    const sessionToken = generateSessionToken();
+    const tokenHash = hashSessionToken(sessionToken);
+    const now = new Date();
+    const expiresAt = new Date(
+        now.getTime() + SESSION_MAX_AGE_MS
+    ).toISOString();
+
+    // ONE USER = ONE MOBILE SESSION.
+    // Any previous mobile device becomes invalid immediately.
+    const { error: revokeError } = await supabase
+        .from("user_sessions")
+        .update({
+            revoked_at: now.toISOString(),
+        })
+        .eq("user_id", String(userId))
+        .eq("session_type", "mobile")
+        .is("revoked_at", null);
+
+    if (revokeError) {
+        throw revokeError;
+    }
+
+    const { error: insertError } = await supabase
+        .from("user_sessions")
+        .insert({
+            user_id: String(userId),
+            token_hash: tokenHash,
+            device_id: deviceId ? String(deviceId) : null,
+            session_type: "mobile",
+            created_at: now.toISOString(),
+            last_seen_at: now.toISOString(),
+            expires_at: expiresAt,
+            revoked_at: null,
+        });
+
+    if (insertError) {
+        throw insertError;
+    }
+
+    return {
+        sessionToken,
+        expiresAt,
+    };
+}
+
+function setMobileSessionCookie(res, sessionToken) {
+    res.setHeader(
+        "Set-Cookie",
+        `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionToken)}; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; Path=/; HttpOnly; Secure; SameSite=None`
+    );
+}
+
+async function getSessionTokenFromRequest(req) {
+    const authorization =
+        req.headers.authorization || "";
+
+    if (
+        authorization.startsWith("Bearer ")
+    ) {
+        const token =
+            authorization
+                .slice(7)
+                .trim();
+
+        if (token) {
+            return token;
+        }
+    }
+
+    const cookieHeader =
+        String(req.headers.cookie || "");
+
+    const cookiePart =
+        cookieHeader
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) =>
+                part.startsWith(
+                    `${SESSION_COOKIE_NAME}=`
+                )
+            );
+
+    if (!cookiePart) {
+        return "";
+    }
+
+    return decodeURIComponent(
+        cookiePart.slice(
+            SESSION_COOKIE_NAME.length + 1
+        )
+    );
+}
+
+async function validateMobileSession(req) {
+    const token =
+        await getSessionTokenFromRequest(req);
+
+    if (!token) {
+        return null;
+    }
+
+    const tokenHash =
+        hashSessionToken(token);
+
+    const {
+        data: session,
+        error,
+    } = await supabase
+        .from("user_sessions")
+        .select(
+            "user_id, device_id, session_type, expires_at, revoked_at"
+        )
+        .eq(
+            "token_hash",
+            tokenHash
+        )
+        .eq(
+            "session_type",
+            "mobile"
+        )
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    if (!session) {
+        return null;
+    }
+
+    if (session.revoked_at) {
+        return null;
+    }
+
+    if (
+        session.expires_at &&
+        new Date(session.expires_at).getTime() <=
+            Date.now()
+    ) {
+        return null;
+    }
+
+    // Keep activity timestamp fresh.
+    await supabase
+        .from("user_sessions")
+        .update({
+            last_seen_at:
+                new Date().toISOString(),
+        })
+        .eq(
+            "token_hash",
+            tokenHash
+        )
+        .eq(
+            "session_type",
+            "mobile"
+        );
+
+    return {
+        userId: String(session.user_id),
+        deviceId:
+            session.device_id
+                ? String(session.device_id)
+                : "",
+        tokenHash,
+    };
+}
+
+
+// ======================================================
 // HELPERS
 // ======================================================
 
@@ -1780,6 +1969,21 @@ router.post(
                     }
 
 
+                    // ------------------------------------------
+                    // CREATE SINGLE-DEVICE SESSION
+                    // ------------------------------------------
+
+                    const loginSession =
+                        await createMobileSession(
+                            user.id,
+                            deviceId
+                        );
+
+                    setMobileSessionCookie(
+                        res,
+                        loginSession.sessionToken
+                    );
+
                     return res.json({
                         success: true,
                         code:
@@ -1788,6 +1992,10 @@ router.post(
                             "Login successful.",
                         userId:
                             user.id,
+                        sessionToken:
+                            loginSession.sessionToken,
+                        sessionExpiresAt:
+                            loginSession.expiresAt,
                         redirect:
                             "/"
                     });
@@ -2115,6 +2323,21 @@ router.post(
                     }
 
 
+                    // ---------------------------------------------
+                    // CREATE SINGLE-DEVICE SESSION
+                    // ---------------------------------------------
+
+                    const signupSession =
+                        await createMobileSession(
+                            newUser.id,
+                            deviceId
+                        );
+
+                    setMobileSessionCookie(
+                        res,
+                        signupSession.sessionToken
+                    );
+
                     return res.json({
                         success: true,
                         code:
@@ -2123,6 +2346,10 @@ router.post(
                             "Account created successfully.",
                         userId:
                             newUser.id,
+                        sessionToken:
+                            signupSession.sessionToken,
+                        sessionExpiresAt:
+                            signupSession.expiresAt,
                         referralCode:
                             newUser.referral_code,
                         referredBy:
@@ -2152,5 +2379,115 @@ router.post(
     }
 );
 
+
+
+// ======================================================
+// POST /api/auth/logout
+// ======================================================
+
+router.post(
+    "/logout",
+    async (req, res) => {
+        try {
+            const token =
+                await getSessionTokenFromRequest(req);
+
+            if (token) {
+                const tokenHash =
+                    hashSessionToken(token);
+
+                await supabase
+                    .from("user_sessions")
+                    .update({
+                        revoked_at:
+                            new Date().toISOString(),
+                    })
+                    .eq(
+                        "token_hash",
+                        tokenHash
+                    )
+                    .eq(
+                        "session_type",
+                        "mobile"
+                    );
+            }
+
+            res.setHeader(
+                "Set-Cookie",
+                `${SESSION_COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None`
+            );
+
+            return res.json({
+                success: true,
+                code:
+                    "LOGOUT_SUCCESS",
+                message:
+                    "Logged out successfully.",
+            });
+
+        } catch (error) {
+            console.error(
+                "AUTH LOGOUT ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                code:
+                    "LOGOUT_FAILED",
+                message:
+                    "Unable to logout right now.",
+            });
+        }
+    }
+);
+
+// ======================================================
+// GET /api/auth/session
+// ======================================================
+
+router.get(
+    "/session",
+    async (req, res) => {
+        try {
+            const session =
+                await validateMobileSession(req);
+
+            if (!session) {
+                return res.status(401).json({
+                    success: false,
+                    code:
+                        "SESSION_INVALID",
+                    message:
+                        "Your session has expired or you are logged in on another device.",
+                });
+            }
+
+            return res.json({
+                success: true,
+                code:
+                    "SESSION_VALID",
+                userId:
+                    session.userId,
+                deviceId:
+                    session.deviceId,
+            });
+
+        } catch (error) {
+            console.error(
+                "AUTH SESSION CHECK ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                code:
+                    "SESSION_CHECK_FAILED",
+                message:
+                    "Unable to verify your session.",
+            });
+        }
+    }
+);
 
 module.exports = router;
