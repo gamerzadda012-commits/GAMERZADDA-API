@@ -295,9 +295,13 @@ export default function MembersPage() {
         <aside className="drawer member-popup">
           <button className="drawer-close" onClick={() => setSelected(null)}>×</button>
           {detailLoading ? <div className="drawer-loading">Loading member…</div> : m && <>
-            <div className="profile">
-              <Avatar member={m} size={64}/>
-              <div className="profile-text"><span>MEMBER PROFILE</span><h2>{displayName(m)}</h2><p>{m.email || "No email"} · {m.phone || "No phone"}</p></div>
+            <div className="profile premium-profile">
+              <Avatar member={m} size={72}/>
+              <div className="profile-text"><span>MEMBER PROFILE</span><h2>{displayName(m)}</h2><p>✉ {m.email || "No email"} <i>•</i> ☎ {m.phone || "No phone"}</p></div>
+              <div className="profile-meta">
+                <span className="active-pill">● {String(m.status || "active").toLowerCase() === "restricted" ? "Restricted" : "Active"}</span>
+                <span className="joined-pill">📅 Joined&nbsp; {date(m.created_at)}</span>
+              </div>
             </div>
 
             <div className="section">
