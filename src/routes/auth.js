@@ -1819,18 +1819,6 @@ router.post(
                             "Unable to complete verification."
                     });
                 }
-
-
-                // ----------------------------------------------
-                // RESET ABUSE COUNTERS AFTER SUCCESS
-                // ----------------------------------------------
-
-                await resetOtpAbuseState(
-                    cleanPhone,
-                    flow
-                );
-
-
                 // =================================================
                 // LOGIN
                 // =================================================
@@ -1982,6 +1970,13 @@ router.post(
                     setMobileSessionCookie(
                         res,
                         loginSession.sessionToken
+                    );
+
+                    // Reset OTP abuse limits only after login has
+                    // completed successfully and the session was created.
+                    await resetOtpAbuseState(
+                        cleanPhone,
+                        flow
                     );
 
                     return res.json({
@@ -2336,6 +2331,13 @@ router.post(
                     setMobileSessionCookie(
                         res,
                         signupSession.sessionToken
+                    );
+
+                    // Reset OTP abuse limits only after signup has
+                    // completed successfully and the session was created.
+                    await resetOtpAbuseState(
+                        cleanPhone,
+                        flow
                     );
 
                     return res.json({
