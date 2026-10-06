@@ -280,10 +280,9 @@ router.get("/:userId", async (req, res) => {
     }
 
     /*
-     * We fetch notifications belonging to:
-     *
-     * 1. The specific user
-     * 2. Global notifications where user_id IS NULL
+     * Fetch:
+     * 1. Specific-user notifications
+     * 2. Global notifications (user_id IS NULL)
      */
 
     const {
@@ -312,26 +311,80 @@ router.get("/:userId", async (req, res) => {
       });
     }
 
+    const allNotifications = data || [];
+
+    /*
+     * Global notifications are shared rows.
+     * Never delete those rows for one user.
+     * Instead, check this user's deletion records.
+     */
+
+    const globalNotificationIds =
+      allNotifications
+        .filter((item) => !item.user_id)
+        .map((item) => String(item.id));
+
+    let deletedGlobalIds = new Set();
+
+    if (globalNotificationIds.length > 0) {
+      const {
+        data: deletedRows,
+        error: deletedError,
+      } = await db
+        .from("notification_user_deletions")
+        .select("notification_id")
+        .eq("user_id", userId)
+        .in(
+          "notification_id",
+          globalNotificationIds
+        );
+
+      if (deletedError) {
+        console.error(
+          "GET USER NOTIFICATION DELETIONS ERROR:",
+          deletedError
+        );
+
+        return res.status(500).json({
+          success: false,
+          error: deletedError.message,
+        });
+      }
+
+      deletedGlobalIds = new Set(
+        (deletedRows || []).map((row) =>
+          String(row.notification_id)
+        )
+      );
+    }
+
+    /*
+     * Hide only global notifications deleted
+     * by THIS user.
+     */
+
+    const visibleNotifications =
+      allNotifications.filter((item) => {
+        if (item.user_id) {
+          return true;
+        }
+
+        return !deletedGlobalIds.has(
+          String(item.id)
+        );
+      });
+
     const notifications =
-      (data || []).map((item) => ({
+      visibleNotifications.map((item) => ({
         id: String(item.id),
         title: item.title || "",
         message: item.message || "",
         type: item.type || "general",
-
-        /*
-         * Current notifications table does not
-         * provide per-user read state.
-         *
-         * Keep the field compatible with Android.
-         */
         is_read:
           item.is_read === true ||
           item.read === true,
-
         created_at:
           item.created_at || "",
-
         redirect_url:
           item.redirect_url || "",
       }));
@@ -502,6 +555,13 @@ router.patch(
 /* =========================================================
    DELETE NOTIFICATION
    DELETE /api/notifications/:userId/:notificationId
+
+   IMPORTANT:
+   - Specific-user notification:
+       physically delete only if it belongs to that user.
+   - Global / All Users notification:
+       NEVER physically delete the shared row.
+       Store a per-user deletion record instead.
 ========================================================= */
 
 router.delete(
@@ -541,10 +601,6 @@ router.delete(
         });
       }
 
-      /*
-       * We first verify ownership.
-       */
-
       const {
         data: notification,
         error: findError,
@@ -555,6 +611,11 @@ router.delete(
         .maybeSingle();
 
       if (findError) {
+        console.error(
+          "FIND NOTIFICATION DELETE ERROR:",
+          findError
+        );
+
         return res.status(500).json({
           success: false,
           error: findError.message,
@@ -570,22 +631,65 @@ router.delete(
       }
 
       /*
-       * Never allow a user to delete a global
-       * notification or another user's notification
-       * from the shared notifications table.
+       * GLOBAL / ALL-USERS NOTIFICATION
        *
-       * A per-user delete/read table is needed for
-       * proper Android behavior.
+       * user_id IS NULL.
+       * Do NOT delete the shared notification.
+       * Record deletion only for this user.
+       */
+
+      if (!notification.user_id) {
+        const {
+          error: deletionError,
+        } = await db
+          .from("notification_user_deletions")
+          .upsert(
+            {
+              user_id: userId,
+              notification_id:
+                notificationId,
+            },
+            {
+              onConflict:
+                "user_id,notification_id",
+            }
+          );
+
+        if (deletionError) {
+          console.error(
+            "GLOBAL NOTIFICATION USER DELETE ERROR:",
+            deletionError
+          );
+
+          return res.status(500).json({
+            success: false,
+            error:
+              deletionError.message,
+          });
+        }
+
+        return res.json({
+          success: true,
+          message:
+            "Notification deleted for this user.",
+          scope: "user",
+        });
+      }
+
+      /*
+       * SPECIFIC-USER NOTIFICATION
+       *
+       * Only the owner can delete it.
        */
 
       if (
-        !notification.user_id ||
-        String(notification.user_id) !== userId
+        String(notification.user_id) !==
+        userId
       ) {
         return res.status(403).json({
           success: false,
           error:
-            "This notification cannot be deleted from the shared notification table.",
+            "Access denied.",
         });
       }
 
@@ -598,9 +702,15 @@ router.delete(
         .eq("user_id", userId);
 
       if (deleteError) {
+        console.error(
+          "SPECIFIC NOTIFICATION DELETE ERROR:",
+          deleteError
+        );
+
         return res.status(500).json({
           success: false,
-          error: deleteError.message,
+          error:
+            deleteError.message,
         });
       }
 
@@ -608,9 +718,13 @@ router.delete(
         success: true,
         message:
           "Notification deleted successfully.",
+        scope: "user",
       });
     } catch (error) {
-      return errorResponse(res, error);
+      return errorResponse(
+        res,
+        error
+      );
     }
   }
 );
