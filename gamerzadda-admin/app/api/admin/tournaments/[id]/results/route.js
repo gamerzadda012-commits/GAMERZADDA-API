@@ -74,7 +74,7 @@ const supabaseAdmin = createClient(
 
 
 
-/* =========================================================
+/\* =========================================================
 
 
 
@@ -82,7 +82,7 @@ const supabaseAdmin = createClient(
 
 
 
-========================================================= */
+\========================================================= \*/
 
 
 
@@ -152,7 +152,7 @@ async function requireAdmin(request) {
 
     const response = await fetch(
 
-      `${apiBase}/api/admin/session`,
+      \`${apiBase}/api/admin/session\`,
 
       {
 
@@ -160,7 +160,7 @@ async function requireAdmin(request) {
 
         headers: {
 
-          Cookie: `gamerzadda_admin_session=${sessionCookie}`,
+          Cookie: \`gamerzadda_admin_session=${sessionCookie}\`,
 
         },
 
@@ -290,7 +290,7 @@ async function getTournament(tournamentId) {
 
 
 
-/* =========================================================
+/\* =========================================================
 
 
 
@@ -302,7 +302,7 @@ async function getTournament(tournamentId) {
 
 
 
-========================================================= */
+\========================================================= \*/
 
 
 
@@ -354,7 +354,7 @@ function getFirebaseAdmin() {
 
 
 
-        .replace(/\\n/g, "\n")
+        .replace(/**\\\\**&#x6E;/g, "\n")
 
 
 
@@ -410,7 +410,7 @@ function getFirebaseAdmin() {
 
 
 
-    .replace(/\\n/g, "\n")
+    .replace(/**\\\\**&#x6E;/g, "\n")
 
 
 
@@ -626,11 +626,11 @@ async function sendTournamentResultNotifications({
 
 
 
-        String(row.user_id),
+        String(row\.user_id),
 
 
 
-        Number(row.winning_amount || 0),
+        Number(row\.winning_amount || 0),
 
 
 
@@ -678,7 +678,7 @@ async function sendTournamentResultNotifications({
 
 
 
-            title: `🏆 You Won ₹${winningAmount}!`,
+            title: \`🏆 You Won ₹${winningAmount}!\`,
 
 
 
@@ -686,7 +686,7 @@ async function sendTournamentResultNotifications({
 
 
 
-              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
+              \`Tournament results are out. You won ₹${winningAmount}. Check your results now!\`,
 
 
 
@@ -1058,7 +1058,7 @@ async function sendTournamentResultNotifications({
 
 
 
-/* =========================================================
+/\* =========================================================
 
 
 
@@ -1066,7 +1066,7 @@ async function sendTournamentResultNotifications({
 
 
 
-========================================================= */
+\========================================================= \*/
 
 
 
@@ -1142,21 +1142,701 @@ export async function GET(request, context) {
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
+
+
+
+       Tournament
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    const {
+
+
+
+      data: tournament,
+
+
+
+      error: tournamentError,
+
+
+
+    } = await getTournament(
+
+
+
+      tournamentId
+
+
+
+    );
+
+
+
+    if (tournamentError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS TOURNAMENT ERROR:",
+
+
+
+        tournamentError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        tournamentError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    if (!tournament) {
+
+
+
+      return jsonError(
+
+
+
+        "Tournament not found.",
+
+
+
+        404
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Latest match
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    const {
+
+
+
+      data: match,
+
+
+
+      error: matchError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("matches")
+
+
+
+      .select(
+
+
+
+        "id,status,room_id,room_password,start_time,tournament_id"
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "tournament_id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .order("id", {
+
+
+
+        ascending: false,
+
+
+
+      })
+
+
+
+      .limit(1)
+
+
+
+      .maybeSingle();
+
+
+
+    if (matchError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS MATCH ERROR:",
+
+
+
+        matchError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        matchError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Tournament entries
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    const {
+
+
+
+      data: entries,
+
+
+
+      error: entriesError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournament_entries")
+
+
+
+      .select(
+
+
+
+        "user_id,game_name,free_fire_uid,level,created_at,cancelled"
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "tournament_id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "cancelled",
+
+
+
+        false
+
+
+
+      )
+
+
+
+      .order("created_at", {
+
+
+
+        ascending: true,
+
+
+
+      });
+
+
+
+    if (entriesError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS ENTRIES ERROR:",
+
+
+
+        entriesError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        entriesError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    const userIds = [
+
+
+
+      ...new Set(
+
+
+
+        (entries || [])
+
+
+
+          .map(
+
+
+
+            (entry) =>
+
+
+
+              entry.user_id
+
+
+
+          )
+
+
+
+          .filter(Boolean)
+
+
+
+          .map(String)
+
+
+
+      ),
+
+
+
+    ];
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Users
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    let users = [];
+
+
+
+    if (userIds.length) {
+
+
+
+      const {
+
+
+
+        data: userRows,
+
+
+
+        error: usersError,
+
+
+
+      } = await supabaseAdmin
+
+
+
+        .from("users")
+
+
+
+        .select("\*")
+
+
+
+        .in("id", userIds);
+
+
+
+      if (usersError) {
+
+
+
+        console.error(
+
+
+
+          "RESULTS USERS ERROR:",
+
+
+
+          usersError
+
+
+
+        );
+
+
+
+        return jsonError(
+
+
+
+          usersError.message
+
+
+
+        );
+
+
+
+      }
+
+
+
+      users = userRows || [];
+
+
+
+    }
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Existing results
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    const {
+
+
+
+      data: resultRows,
+
+
+
+      error: resultError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournament_results")
+
+
+
+      .select(
+
+
+
+        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "tournament_id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .order("rank", {
+
+
+
+        ascending: true,
+
+
+
+        nullsFirst: false,
+
+
+
+      });
+
+
+
+    if (resultError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS RESULT ROW ERROR:",
+
+
+
+        resultError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        resultError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Maps
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    const userMap = new Map(
+
+
+
+      users.map((user) => [
+
+
+
+        String(user.id),
+
+
+
+        user,
+
+
+
+      ])
+
+
+
+    );
+
+
+
+    const entryMap = new Map(
+
+
+
+      (entries || []).map((entry) => [
+
+
+
+        String(entry.user_id),
+
+
+
+        entry,
+
+
+
+      ])
+
+
+
+    );
+
+
+
+    const resultMap = new Map(
+
+
+
+      (resultRows || []).map((result) => [
+
+
+
+        String(result.user_id),
+
+
+
+        result,
+
+
+
+      ])
+
+
+
+    );
+
+
+
+    /\* -----------------------------------------
+
+
+
+       Participants
+
+
+
+    ----------------------------------------- \*/
+
+
+
+    /* -----------------------------------------
 
        DUO / SQUAD TEAM DETAILS
 
-       Loaded with service-role access so the admin
-       Results page does not depend on browser RLS.
+       Service-role access keeps team metadata available even when
+       the browser Supabase client is restricted by RLS.
 
     ----------------------------------------- */
 
     let teamMemberRows = [];
     let teamRows = [];
 
-    const resultMode = String(
-      tournament?.mode || ""
-    ).trim().toUpperCase();
+    const resultMode = String(tournament?.mode || "")
+      .trim()
+      .toUpperCase();
 
     if (["DUO", "SQUAD"].includes(resultMode) && userIds.length > 0) {
       const {
@@ -1174,10 +1854,20 @@ export async function GET(request, context) {
       }
 
       teamMemberRows = loadedTeamMembers || [];
-      const teamIds = [...new Set(teamMemberRows.map((row) => String(row.team_id || "").trim()).filter(Boolean))];
+
+      const teamIds = [
+        ...new Set(
+          teamMemberRows
+            .map((row) => String(row.team_id || "").trim())
+            .filter(Boolean)
+        ),
+      ];
 
       if (teamIds.length > 0) {
-        const { data: loadedTeams, error: teamError } = await supabaseAdmin
+        const {
+          data: loadedTeams,
+          error: teamError,
+        } = await supabaseAdmin
           .from("tournament_teams")
           .select("id,team_name,team_type,max_members,leader_user_id,team_code")
           .in("id", teamIds);
@@ -1191,16 +1881,13 @@ export async function GET(request, context) {
       }
     }
 
-    const teamMemberMap = new Map(teamMemberRows.map((row) => [String(row.user_id), row]));
-    const teamMap = new Map(teamRows.map((team) => [String(team.id), team]));
+    const teamMemberMap = new Map(
+      teamMemberRows.map((row) => [String(row.user_id), row])
+    );
 
-    /* -----------------------------------------
-
-       Participants
-
-    ----------------------------------------- */
-
-
+    const teamMap = new Map(
+      teamRows.map((team) => [String(team.id), team])
+    );
 
     const participants =
 
@@ -1303,27 +1990,43 @@ export async function GET(request, context) {
 
 
             null,
+
+
+
           user: user || null,
 
-          team_id: String(teamMemberMap.get(id)?.team_id || ""),
+          team_id: String(
+            teamMemberMap.get(id)?.team_id || ""
+          ),
 
           team_name: String(
-            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_name || ""
+            teamMap.get(
+              String(teamMemberMap.get(id)?.team_id || "")
+            )?.team_name || ""
           ).trim(),
 
           team_type: String(
-            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_type || ""
+            teamMap.get(
+              String(teamMemberMap.get(id)?.team_id || "")
+            )?.team_type || ""
           ).trim().toUpperCase(),
 
           team_max_members: Number(
-            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.max_members || 0
+            teamMap.get(
+              String(teamMemberMap.get(id)?.team_id || "")
+            )?.max_members || 0
           ),
 
           team_code: String(
-            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_code || ""
+            teamMap.get(
+              String(teamMemberMap.get(id)?.team_id || "")
+            )?.team_code || ""
           ).trim(),
 
-          is_team_leader: Boolean(teamMemberMap.get(id)?.is_leader),
+          is_team_leader: Boolean(
+            teamMemberMap.get(id)?.is_leader
+          ),
+
           rank:
 
 
@@ -1364,7 +2067,7 @@ export async function GET(request, context) {
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -1372,7 +2075,7 @@ export async function GET(request, context) {
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -1472,7 +2175,7 @@ export async function GET(request, context) {
 
 
 
-/* =========================================================
+/\* =========================================================
 
 
 
@@ -1480,7 +2183,7 @@ export async function GET(request, context) {
 
 
 
-========================================================= */
+\========================================================= \*/
 
 
 
@@ -1568,7 +2271,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -1576,7 +2279,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -1680,7 +2383,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -1688,7 +2391,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -1776,7 +2479,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -1784,7 +2487,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -1876,7 +2579,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -1884,7 +2587,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2000,7 +2703,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -2008,7 +2711,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2212,7 +2915,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -2220,7 +2923,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2360,7 +3063,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -2368,7 +3071,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2416,7 +3119,7 @@ export async function POST(
 
 
 
-          `User ${userId} is not a participant of this tournament.`,
+          \`User ${userId} is not a participant of this tournament.\`,
 
 
 
@@ -2612,7 +3315,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -2620,7 +3323,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2640,7 +3343,7 @@ export async function POST(
 
 
 
-            String(row.user_id)
+            String(row\.user_id)
 
 
 
@@ -2688,7 +3391,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -2696,7 +3399,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2786,7 +3489,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
        CREDIT TOURNAMENT WINNINGS
 
@@ -2794,7 +3497,7 @@ export async function POST(
 
        wallet_transactions.reference_id is UUID.
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -2838,7 +3541,7 @@ export async function POST(
 
 
 
-        /* -----------------------------------------
+        /\* -----------------------------------------
 
            Idempotency guard
 
@@ -2846,7 +3549,7 @@ export async function POST(
 
            credited, do not credit it again.
 
-        ----------------------------------------- */
+        ----------------------------------------- \*/
 
 
 
@@ -2876,7 +3579,7 @@ export async function POST(
 
           throw new Error(
 
-            `Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}`
+            \`Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}\`
 
           );
 
@@ -2910,11 +3613,11 @@ export async function POST(
 
 
 
-        /* -----------------------------------------
+        /\* -----------------------------------------
 
            Read current winning balance
 
-        ----------------------------------------- */
+        ----------------------------------------- \*/
 
 
 
@@ -2940,7 +3643,7 @@ export async function POST(
 
           throw new Error(
 
-            `Wallet lookup failed for ${userId}: ${walletError.message}`
+            \`Wallet lookup failed for ${userId}: ${walletError.message}\`
 
           );
 
@@ -2952,7 +3655,7 @@ export async function POST(
 
           throw new Error(
 
-            `Wallet not found for ${userId}.`
+            \`Wallet not found for ${userId}.\`
 
           );
 
@@ -2972,13 +3675,13 @@ export async function POST(
 
 
 
-        /* -----------------------------------------
+        /\* -----------------------------------------
 
            Conditional balance update
 
            Prevents concurrent overwrite.
 
-        ----------------------------------------- */
+        ----------------------------------------- \*/
 
 
 
@@ -3020,13 +3723,13 @@ export async function POST(
 
           throw new Error(
 
-            `Wallet balance update failed for ${userId}: ${
+            \`Wallet balance update failed for ${userId}: ${
 
               walletUpdateError?.message ||
 
               "balance changed concurrently"
 
-            }`
+            }\`
 
           );
 
@@ -3034,7 +3737,7 @@ export async function POST(
 
 
 
-        /* -----------------------------------------
+        /\* -----------------------------------------
 
            Insert wallet transaction
 
@@ -3042,7 +3745,7 @@ export async function POST(
 
            which is a real UUID.
 
-        ----------------------------------------- */
+        ----------------------------------------- \*/
 
 
 
@@ -3066,7 +3769,7 @@ export async function POST(
 
             description:
 
-              `Tournament winning ₹${amount} credited`,
+              \`Tournament winning ₹${amount} credited\`,
 
             reference_id: referenceId,
 
@@ -3090,7 +3793,7 @@ export async function POST(
 
         ) {
 
-          /* Roll back this user's balance immediately. */
+          /\* Roll back this user's balance immediately. \*/
 
           await supabaseAdmin
 
@@ -3112,13 +3815,13 @@ export async function POST(
 
           throw new Error(
 
-            `Wallet transaction failed for ${userId}: ${
+            \`Wallet transaction failed for ${userId}: ${
 
               transactionError?.message ||
 
               "transaction insert returned no row"
 
-            }`
+            }\`
 
           );
 
@@ -3186,7 +3889,7 @@ export async function POST(
 
 
 
-      /* -----------------------------------------
+      /\* -----------------------------------------
 
          FULL ROLLBACK
 
@@ -3194,7 +3897,7 @@ export async function POST(
 
          tournament if any winner fails.
 
-      ----------------------------------------- */
+      ----------------------------------------- \*/
 
 
 
@@ -3282,11 +3985,11 @@ export async function POST(
 
 
 
-      /* Also remove the current transaction if
+      /\* Also remove the current transaction if
 
          the insert succeeded but later processing
 
-         reported an error. */
+         reported an error. \*/
 
       for (
 
@@ -3314,9 +4017,9 @@ export async function POST(
 
 
 
-      /* Remove result rows so the admin can retry
+      /\* Remove result rows so the admin can retry
 
-         after fixing the wallet issue. */
+         after fixing the wallet issue. \*/
 
       const {
 
@@ -3366,7 +4069,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -3374,7 +4077,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -3494,7 +4197,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -3502,7 +4205,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -3634,7 +4337,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -3642,7 +4345,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
@@ -3734,7 +4437,7 @@ export async function POST(
 
 
 
-/* -----------------------------------------
+/\* -----------------------------------------
 
 
 
@@ -3746,7 +4449,7 @@ export async function POST(
 
 
 
-\----------------------------------------- */
+\----------------------------------------- \*/
 
 
 
@@ -3798,7 +4501,7 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
+    /\* -----------------------------------------
 
 
 
@@ -3806,7 +4509,7 @@ export async function POST(
 
 
 
-    ----------------------------------------- */
+    ----------------------------------------- \*/
 
 
 
