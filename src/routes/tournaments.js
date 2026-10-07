@@ -6551,9 +6551,7 @@ router.post("/team/create", async (req, res) => {
 
 // ============================================================
 // GET MY TEAM
-// GET /api/tournaments/team/my?tournamentId=...
-// Returns the team the logged-in user belongs to for this tournament.
-// Used by Android to show the team-code popup whenever the page opens.
+// GET /api/tournaments/team/my?tournamentId=UUID
 // ============================================================
 
 router.get("/team/my", async (req, res) => {
@@ -6565,7 +6563,7 @@ router.get("/team/my", async (req, res) => {
             return res.status(401).json({
                 success: false,
                 code: "AUTH_REQUIRED",
-                error: "User session not found. Please login again."
+                error: "User session not found."
             });
         }
 
@@ -6577,17 +6575,15 @@ router.get("/team/my", async (req, res) => {
             });
         }
 
-        const {
-            data: member,
-            error: memberError
-        } = await supabase
+        const { data: member, error: memberError } = await supabase
             .from("tournament_team_members")
-            .select("team_id")
+            .select("team_id, tournament_id, user_id, is_leader")
             .eq("tournament_id", tournamentId)
             .eq("user_id", userId)
             .maybeSingle();
 
         if (memberError) {
+            console.error("MY TEAM MEMBER ERROR:", memberError);
             return res.status(500).json({
                 success: false,
                 error: memberError.message
@@ -6595,33 +6591,22 @@ router.get("/team/my", async (req, res) => {
         }
 
         if (!member) {
-            return res.status(404).json({
-                success: false,
-                code: "TEAM_NOT_FOUND",
-                error: "You are not a member of a team for this tournament."
+            return res.status(200).json({
+                success: true,
+                hasTeam: false,
+                team: null
             });
         }
 
-        const {
-            data: team,
-            error: teamError
-        } = await supabase
+        const { data: team, error: teamError } = await supabase
             .from("tournament_teams")
-            .select(`
-                id,
-                tournament_id,
-                team_code,
-                team_name,
-                leader_user_id,
-                team_type,
-                max_members,
-                status,
-                created_at
-            `)
+            .select("id, tournament_id, team_code, team_name, team_type, max_members, status, created_at")
             .eq("id", member.team_id)
+            .eq("tournament_id", tournamentId)
             .maybeSingle();
 
         if (teamError) {
+            console.error("MY TEAM FETCH ERROR:", teamError);
             return res.status(500).json({
                 success: false,
                 error: teamError.message
@@ -6629,54 +6614,53 @@ router.get("/team/my", async (req, res) => {
         }
 
         if (!team) {
-            return res.status(404).json({
-                success: false,
-                code: "TEAM_NOT_FOUND",
-                error: "Team not found."
+            return res.status(200).json({
+                success: true,
+                hasTeam: false,
+                team: null
             });
         }
 
-        const cleanCode = String(team.team_code || "").trim();
-        if (!/^\d{6}$/.test(cleanCode)) {
+        const { count, error: countError } = await supabase
+            .from("tournament_team_members")
+            .select("id", { count: "exact", head: true })
+            .eq("team_id", team.id)
+            .eq("tournament_id", tournamentId);
+
+        if (countError) {
+            console.error("MY TEAM COUNT ERROR:", countError);
+        }
+
+        const teamCode = String(team.team_code || "").trim();
+
+        if (!/^\d{6}$/.test(teamCode)) {
             return res.status(500).json({
                 success: false,
                 code: "INVALID_TEAM_CODE",
-                error: "Team has an invalid 6-digit code."
-            });
-        }
-
-        const {
-            data: members,
-            error: membersError
-        } = await supabase
-            .from("tournament_team_members")
-            .select("id, user_id, game_name, free_fire_uid, level, is_leader, entry_id, created_at")
-            .eq("team_id", team.id)
-            .order("created_at", { ascending: true });
-
-        if (membersError) {
-            return res.status(500).json({
-                success: false,
-                error: membersError.message
+                error: "Stored team code is not a valid 6-digit numeric code."
             });
         }
 
         return res.status(200).json({
             success: true,
+            hasTeam: true,
             team: {
-                ...team,
-                teamCode: cleanCode,
-                teamName: team.team_name || "",
-                memberCount: (members || []).length,
-                members: members || []
+                id: team.id,
+                tournamentId: team.tournament_id,
+                teamCode,
+                teamName: team.team_name || "My Team",
+                teamType: team.team_type || "DUO",
+                maxMembers: Number(team.max_members || 0),
+                memberCount: Number(count || 0),
+                status: team.status || "open",
+                leader: !!member.is_leader
             }
         });
-
     } catch (error) {
-        console.error("GET MY TEAM ERROR:", error);
+        console.error("MY TEAM EXCEPTION:", error);
         return res.status(500).json({
             success: false,
-            error: error?.message || "Internal server error"
+            error: error?.message || "Unable to load your team."
         });
     }
 });
