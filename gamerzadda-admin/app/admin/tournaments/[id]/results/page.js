@@ -563,13 +563,41 @@ export default function TournamentResultsPage() {
                   return player;
                 }
 
+                const resolvedTeamId = String(
+                  apiPlayer.team_id || player.team_id || ""
+                ).trim();
+
+                const fallbackTeam = loadedTeams.find(
+                  (team) => String(team.id || "").trim() === resolvedTeamId
+                );
+
                 return {
                   ...player,
-                  team_id: String(apiPlayer.team_id || player.team_id || ""),
-                  team_name: String(apiPlayer.team_name || player.team_name || "").trim(),
-                  team_type: String(apiPlayer.team_type || player.team_type || "").trim().toUpperCase(),
-                  team_max_members: Number(apiPlayer.team_max_members || player.team_max_members || 0),
-                  team_code: String(apiPlayer.team_code || player.team_code || "").trim(),
+                  team_id: resolvedTeamId,
+                  team_name: String(
+                    apiPlayer.team_name ||
+                    player.team_name ||
+                    fallbackTeam?.team_name ||
+                    ""
+                  ).trim(),
+                  team_type: String(
+                    apiPlayer.team_type ||
+                    player.team_type ||
+                    fallbackTeam?.team_type ||
+                    ""
+                  ).trim().toUpperCase(),
+                  team_max_members: Number(
+                    apiPlayer.team_max_members ||
+                    player.team_max_members ||
+                    fallbackTeam?.max_members ||
+                    0
+                  ),
+                  team_code: String(
+                    apiPlayer.team_code ||
+                    player.team_code ||
+                    fallbackTeam?.team_code ||
+                    ""
+                  ).trim(),
                   is_team_leader: Boolean(
                     apiPlayer.is_team_leader ?? player.is_team_leader
                   ),
@@ -1121,6 +1149,12 @@ export default function TournamentResultsPage() {
           id: teamId,
           teamName:
             String(player.team_name || "").trim() ||
+            String(
+              teams.find(
+                (team) => String(team.id || "").trim() === teamId
+              )?.team_name ||
+              ""
+            ).trim() ||
             "Unnamed Team",
           teamType:
             String(player.team_type || tournament?.mode || "")
@@ -1138,6 +1172,7 @@ export default function TournamentResultsPage() {
   }, [
     filteredParticipants,
     isTeamMode,
+    teams,
     tournament?.mode,
   ]);
 
@@ -2890,38 +2925,9 @@ export default function TournamentResultsPage() {
 
           .teamMemberName {
             min-width: 0;
-            margin-bottom: 2px;
-            font-size: 9px;
-            font-weight: 900;
-            line-height: 1.15;
-          }
-
-          .teamIgnLabel {
-            color: #ff174f;
-            font-size: 7px;
+            color: #111827;
+            font-size: 10px;
             font-weight: 950;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-            margin-right: 5px;
-          }
-
-          .teamIgnValue {
-            color: #ff174f;
-            background: #ffe7ee;
-            border: 1px solid #ffc5d5;
-            border-radius: 6px;
-            padding: 2px 6px;
-            font-size: 9px;
-            font-weight: 950;
-          }
-
-          .playerButton {
-            display: block;
-            margin-top: 2px;
-            font-size: 8px;
-            line-height: 1.1;
-            color: #64748b;
-            font-weight: 750;
           }
 
           .teamMemberSub {
@@ -3632,11 +3638,6 @@ export default function TournamentResultsPage() {
                               </div>
 
                               <div style={{ minWidth: 0 }}>
-                                <div className="teamMemberName">
-                                  <span className="teamIgnLabel">IGN</span>
-                                  <span className="teamIgnValue">{playerName}</span>
-                                </div>
-
                                 <button
                                   className="playerButton"
                                   onClick={() =>
@@ -3645,6 +3646,10 @@ export default function TournamentResultsPage() {
                                 >
                                   {realName}
                                 </button>
+
+                                <div className="teamMemberName">
+                                  IGN: {playerName}
+                                </div>
 
                                 <div className="teamMemberSub">
                                   UID:{" "}
