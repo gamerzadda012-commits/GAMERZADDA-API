@@ -2000,124 +2000,30 @@ export async function POST(
 
 
 
-    /* -----------------------------------------
-
-
-
-       Latest match
-
-
-
-    ----------------------------------------- */
-
-
-
-    const {
-
-
-
-      data: match,
-
-
-
-      error: matchError,
-
-
-
-    } = await supabaseAdmin
-
-
-
-      .from("matches")
-
-
-
-      .select(
-
-
-
-        "id,tournament_id,status"
-
-
-
-      )
-
-
-
-      .eq(
-
-
-
-        "tournament_id",
-
-
-
-        tournamentId
-
-
-
-      )
-
-
-
-      .order("id", {
-
-
-
-        ascending: false,
-
-
-
-      })
-
-
-
-      .limit(1)
-
-
-
-      .maybeSingle();
-
-
-
-    if (matchError) {
-
-
-
-      console.error(
-
-
-
-        "RESULTS MATCH ERROR:",
-
-
-
-        matchError
-
-
-
-      );
-
-
-
-      return jsonError(
-
-
-
-        matchError.message
-
-
-
-      );
-
-
-
-    }
-
-
-
-    if (!match) {
-
+        /* -----------------------------------------
+       Latest match
+    ----------------------------------------- */
+
+    let match;
+    let matchError;
+
+    ({
+      data: match,
+      error: matchError,
+    } = await supabaseAdmin
+      .from("matches")
+      .select("id,tournament_id,status")
+      .eq("tournament_id", tournamentId)
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle());
+
+    if (matchError) {
+      console.error("RESULTS MATCH ERROR:", matchError);
+      return jsonError(matchError.message);
+    }
+
+    if (!match) {
       const {
         data: createdMatch,
         error: createMatchError,
@@ -2133,10 +2039,7 @@ export async function POST(
         .single();
 
       if (createMatchError || !createdMatch) {
-        console.error(
-          "RESULTS MATCH CREATE ERROR:",
-          createMatchError
-        );
+        console.error("RESULTS MATCH CREATE ERROR:", createMatchError);
         return jsonError(
           createMatchError?.message || "Unable to create match.",
           500
