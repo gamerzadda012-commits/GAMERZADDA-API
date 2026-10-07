@@ -563,41 +563,13 @@ export default function TournamentResultsPage() {
                   return player;
                 }
 
-                const resolvedTeamId = String(
-                  apiPlayer.team_id || player.team_id || ""
-                ).trim();
-
-                const fallbackTeam = loadedTeams.find(
-                  (team) => String(team.id || "").trim() === resolvedTeamId
-                );
-
                 return {
                   ...player,
-                  team_id: resolvedTeamId,
-                  team_name: String(
-                    apiPlayer.team_name ||
-                    player.team_name ||
-                    fallbackTeam?.team_name ||
-                    ""
-                  ).trim(),
-                  team_type: String(
-                    apiPlayer.team_type ||
-                    player.team_type ||
-                    fallbackTeam?.team_type ||
-                    ""
-                  ).trim().toUpperCase(),
-                  team_max_members: Number(
-                    apiPlayer.team_max_members ||
-                    player.team_max_members ||
-                    fallbackTeam?.max_members ||
-                    0
-                  ),
-                  team_code: String(
-                    apiPlayer.team_code ||
-                    player.team_code ||
-                    fallbackTeam?.team_code ||
-                    ""
-                  ).trim(),
+                  team_id: String(apiPlayer.team_id || player.team_id || ""),
+                  team_name: String(apiPlayer.team_name || player.team_name || "").trim(),
+                  team_type: String(apiPlayer.team_type || player.team_type || "").trim().toUpperCase(),
+                  team_max_members: Number(apiPlayer.team_max_members || player.team_max_members || 0),
+                  team_code: String(apiPlayer.team_code || player.team_code || "").trim(),
                   is_team_leader: Boolean(
                     apiPlayer.is_team_leader ?? player.is_team_leader
                   ),
@@ -1151,9 +1123,8 @@ export default function TournamentResultsPage() {
             String(player.team_name || "").trim() ||
             String(
               teams.find(
-                (team) => String(team.id || "").trim() === teamId
-              )?.team_name ||
-              ""
+                (item) => String(item?.id || "") === teamId
+              )?.team_name || ""
             ).trim() ||
             "Unnamed Team",
           teamType:
@@ -1172,8 +1143,8 @@ export default function TournamentResultsPage() {
   }, [
     filteredParticipants,
     isTeamMode,
-    teams,
     tournament?.mode,
+    teams,
   ]);
 
   function updateTeamRank(team, value) {
