@@ -1156,9 +1156,6 @@ export default function TournamentResultsPage() {
           id: teamId,
           teamName:
             String(player.team_name || "").trim() ||
-            String(
-              teamMap.get(String(player.team_id || ""))?.team_name || ""
-            ).trim() ||
             "Unnamed Team",
           teamType:
             String(player.team_type || tournament?.mode || "")
