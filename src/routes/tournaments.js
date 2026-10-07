@@ -2222,6 +2222,640 @@ router.get(
 
             const {
 
+                data: tournament,
+
+                error: tournamentError
+
+            } = await supabase
+
+                .from("tournaments")
+
+                .select("id,title,game,mode")
+
+                .eq("id", tournamentId)
+
+                .maybeSingle();
+
+
+
+            if (tournamentError) {
+
+                console.error("MY RESULTS TOURNAMENT ERROR:", tournamentError);
+
+                return res.status(500).json({
+
+                    success: false,
+
+                    error: tournamentError.message
+
+                });
+
+            }
+
+
+
+            if (!tournament) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    error: "Tournament not found."
+
+                });
+
+            }
+
+
+
+            const resultMode = String(tournament.mode || "")
+
+                .trim()
+
+                .toUpperCase();
+
+
+
+            // ============================================================
+            // DUO / SQUAD
+            // Load the CURRENT USER'S TEAM, then ALL MEMBERS of that team.
+            // ============================================================
+
+            if (["DUO", "SQUAD"].includes(resultMode)) {
+
+                const {
+
+                    data: currentMember,
+
+                    error: currentMemberError
+
+                } = await supabase
+
+                    .from("tournament_team_members")
+
+                    .select("id,team_id,tournament_id,user_id,entry_id,is_leader")
+
+                    .eq("tournament_id", tournamentId)
+
+                    .eq("user_id", userId)
+
+                    .maybeSingle();
+
+
+
+                if (currentMemberError) {
+
+                    console.error("MY RESULTS TEAM MEMBER ERROR:", currentMemberError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: currentMemberError.message
+
+                    });
+
+                }
+
+
+
+                if (!currentMember?.team_id) {
+
+                    return res.status(403).json({
+
+                        success: false,
+
+                        code: "TEAM_NOT_FOUND",
+
+                        error: "You are not a member of a team in this tournament."
+
+                    });
+
+                }
+
+
+
+                const teamId = String(currentMember.team_id).trim();
+
+
+
+                const {
+
+                    data: team,
+
+                    error: teamError
+
+                } = await supabase
+
+                    .from("tournament_teams")
+
+                    .select(`
+
+                        id,
+
+                        tournament_id,
+
+                        team_code,
+
+                        team_name,
+
+                        team_type,
+
+                        max_members,
+
+                        leader_user_id,
+
+                        status
+
+                    `)
+
+                    .eq("id", teamId)
+
+                    .eq("tournament_id", tournamentId)
+
+                    .maybeSingle();
+
+
+
+                if (teamError) {
+
+                    console.error("MY RESULTS TEAM ERROR:", teamError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: teamError.message
+
+                    });
+
+                }
+
+
+
+                if (!team) {
+
+                    return res.status(404).json({
+
+                        success: false,
+
+                        code: "TEAM_NOT_FOUND",
+
+                        error: "Team not found."
+
+                    });
+
+                }
+
+
+
+                const {
+
+                    data: teamMembers,
+
+                    error: teamMembersError
+
+                } = await supabase
+
+                    .from("tournament_team_members")
+
+                    .select(`
+
+                        id,
+
+                        team_id,
+
+                        tournament_id,
+
+                        user_id,
+
+                        entry_id,
+
+                        game_name,
+
+                        free_fire_uid,
+
+                        level,
+
+                        is_leader,
+
+                        created_at
+
+                    `)
+
+                    .eq("team_id", teamId)
+
+                    .eq("tournament_id", tournamentId)
+
+                    .order("created_at", { ascending: true });
+
+
+
+                if (teamMembersError) {
+
+                    console.error("MY RESULTS TEAM MEMBERS ERROR:", teamMembersError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: teamMembersError.message
+
+                    });
+
+                }
+
+
+
+                const safeTeamMembers = teamMembers || [];
+
+                const teamUserIds = [
+
+                    ...new Set(
+
+                        safeTeamMembers
+
+                            .map((member) => String(member.user_id || "").trim())
+
+                            .filter(Boolean)
+
+                    )
+
+                ];
+
+
+
+                if (teamUserIds.length === 0) {
+
+                    return res.status(200).json({
+
+                        success: true,
+
+                        tournamentId,
+
+                        userId,
+
+                        published: false,
+
+                        team: {
+
+                            id: team.id,
+
+                            tournamentId: team.tournament_id,
+
+                            teamCode: String(team.team_code || "").trim(),
+
+                            teamName: String(team.team_name || "Team").trim(),
+
+                            teamType: String(team.team_type || resultMode).trim().toUpperCase(),
+
+                            maxMembers: Number(team.max_members || 0),
+
+                            memberCount: 0,
+
+                            leaderUserId: String(team.leader_user_id || "").trim()
+
+                        },
+
+                        results: []
+
+                    });
+
+                }
+
+
+
+                const {
+
+                    data: entries,
+
+                    error: entriesError
+
+                } = await supabase
+
+                    .from("tournament_entries")
+
+                    .select(`
+
+                        id,
+
+                        tournament_id,
+
+                        user_id,
+
+                        free_fire_uid,
+
+                        game_name,
+
+                        level,
+
+                        cancelled,
+
+                        created_at
+
+                    `)
+
+                    .eq("tournament_id", tournamentId)
+
+                    .in("user_id", teamUserIds)
+
+                    .eq("cancelled", false);
+
+
+
+                if (entriesError) {
+
+                    console.error("MY RESULTS TEAM ENTRIES ERROR:", entriesError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: entriesError.message
+
+                    });
+
+                }
+
+
+
+                const {
+
+                    data: teamResults,
+
+                    error: teamResultsError
+
+                } = await supabase
+
+                    .from("tournament_results")
+
+                    .select(`
+
+                        id,
+
+                        tournament_id,
+
+                        match_id,
+
+                        user_id,
+
+                        rank,
+
+                        kills,
+
+                        winning_amount
+
+                    `)
+
+                    .eq("tournament_id", tournamentId)
+
+                    .in("user_id", teamUserIds)
+
+                    .order("rank", { ascending: true });
+
+
+
+                if (teamResultsError) {
+
+                    console.error("MY RESULTS TEAM RESULTS ERROR:", teamResultsError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: teamResultsError.message
+
+                    });
+
+                }
+
+
+
+                const {
+
+                    data: profiles,
+
+                    error: profilesError
+
+                } = await supabase
+
+                    .from("users")
+
+                    .select("id,full_name,bio,avatar_url")
+
+                    .in("id", teamUserIds);
+
+
+
+                if (profilesError) {
+
+                    console.error("MY RESULTS TEAM PROFILES ERROR:", profilesError);
+
+                    return res.status(500).json({
+
+                        success: false,
+
+                        error: profilesError.message
+
+                    });
+
+                }
+
+
+
+                const entryMap = new Map(
+
+                    (entries || []).map((entry) => [
+
+                        String(entry.user_id),
+
+                        entry
+
+                    ])
+
+                );
+
+
+
+                const profileMap = new Map(
+
+                    (profiles || []).map((profile) => [
+
+                        String(profile.id),
+
+                        profile
+
+                    ])
+
+                );
+
+
+
+                const resultMap = new Map(
+
+                    (teamResults || []).map((result) => [
+
+                        String(result.user_id),
+
+                        result
+
+                    ])
+
+                );
+
+
+
+                const mergedTeamResults = safeTeamMembers
+
+                    .map((member) => {
+
+                        const memberUserId = String(member.user_id || "").trim();
+
+                        if (!memberUserId) return null;
+
+
+
+                        const entry = entryMap.get(memberUserId) || null;
+
+                        const profile = profileMap.get(memberUserId) || null;
+
+                        const result = resultMap.get(memberUserId) || null;
+
+
+
+                        return {
+
+                            ...(result || {}),
+
+                            user_id: memberUserId,
+
+                            rank: result?.rank ?? null,
+
+                            kills: Number(result?.kills || 0),
+
+                            winning_amount: Number(result?.winning_amount || 0),
+
+                            real_name: String(profile?.full_name || "").trim(),
+
+                            player_name: String(
+
+                                entry?.game_name ||
+
+                                member.game_name ||
+
+                                ""
+
+                            ).trim(),
+
+                            uid: String(
+
+                                entry?.free_fire_uid ||
+
+                                member.free_fire_uid ||
+
+                                ""
+
+                            ).trim(),
+
+                            free_fire_uid: String(
+
+                                entry?.free_fire_uid ||
+
+                                member.free_fire_uid ||
+
+                                ""
+
+                            ).trim(),
+
+                            level: Number(
+
+                                entry?.level ??
+
+                                member.level ??
+
+                                0
+
+                            ),
+
+                            bio: String(profile?.bio || "").trim(),
+
+                            profile_pic: String(profile?.avatar_url || "").trim(),
+
+                            team_id: team.id,
+
+                            team_name: String(team.team_name || "Team").trim(),
+
+                            team_code: String(team.team_code || "").trim(),
+
+                            team_type: String(
+
+                                team.team_type || resultMode
+
+                            ).trim().toUpperCase(),
+
+                            team_max_members: Number(team.max_members || 0),
+
+                            is_team_leader:
+
+                                Boolean(member.is_leader) ||
+
+                                String(team.leader_user_id || "") === memberUserId
+
+                        };
+
+                    })
+
+                    .filter(Boolean);
+
+
+
+                return res.status(200).json({
+
+                    success: true,
+
+                    tournamentId,
+
+                    userId,
+
+                    published: (teamResults || []).length > 0,
+
+                    team: {
+
+                        id: team.id,
+
+                        tournamentId: team.tournament_id,
+
+                        teamCode: String(team.team_code || "").trim(),
+
+                        teamName: String(team.team_name || "Team").trim(),
+
+                        teamType: String(team.team_type || resultMode).trim().toUpperCase(),
+
+                        maxMembers: Number(team.max_members || 0),
+
+                        memberCount: safeTeamMembers.length,
+
+                        leaderUserId: String(team.leader_user_id || "").trim(),
+
+                        status: String(team.status || "").trim()
+
+                    },
+
+                    results: mergedTeamResults
+
+                });
+
+            }
+
+
+
+            // ============================================================
+            // SOLO
+            // Existing Solo behavior remains the same.
+            // ============================================================
+
+            const {
+
                 data: entry,
 
                 error: entryError
@@ -2285,13 +2919,21 @@ router.get(
                 .from("tournament_results")
 
                 .select(`
+
                     id,
+
                     tournament_id,
+
                     match_id,
+
                     user_id,
+
                     rank,
+
                     kills,
+
                     winning_amount
+
                 `)
 
                 .eq("tournament_id", tournamentId)
@@ -2318,8 +2960,9 @@ router.get(
 
 
 
-            // Load the current user's real profile details.
             let userProfile = null;
+
+
 
             const {
 
@@ -2332,10 +2975,15 @@ router.get(
                 .from("users")
 
                 .select(`
+
                     id,
+
                     full_name,
+
                     bio,
+
                     avatar_url
+
                 `)
 
                 .eq("id", userId)
@@ -2364,7 +3012,6 @@ router.get(
 
 
 
-            // Merge tournament result + joined game profile + real user profile.
             const mergedResults = (results || []).map((result) => ({
 
                 ...result,
