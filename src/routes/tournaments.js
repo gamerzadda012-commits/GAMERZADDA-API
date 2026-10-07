@@ -6580,6 +6580,7 @@ router.get("/team/my", async (req, res) => {
             .select("team_id, tournament_id, user_id, is_leader")
             .eq("tournament_id", tournamentId)
             .eq("user_id", userId)
+            .limit(1)
             .maybeSingle();
 
         if (memberError) {
