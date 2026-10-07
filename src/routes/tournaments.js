@@ -784,6 +784,64 @@ router.get(
 
             const safeEntries = entries || [];
 
+            // Team metadata is only needed for DUO/SQUAD participant rendering.
+            // Keep the existing SOLO response unchanged apart from these optional fields.
+            const entryIds = safeEntries
+                .map(entry => String(entry.id || "").trim())
+                .filter(Boolean);
+
+            let teamMemberRows = [];
+            let teamRows = [];
+
+            if (entryIds.length > 0) {
+                const {
+                    data: memberData,
+                    error: memberError
+                } = await supabase
+                    .from("tournament_team_members")
+                    .select("entry_id, team_id, tournament_id")
+                    .eq("tournament_id", tournamentId)
+                    .in("entry_id", entryIds);
+
+                if (memberError) {
+                    console.error("PARTICIPANTS TEAM MEMBERS ERROR:", memberError);
+                } else {
+                    teamMemberRows = memberData || [];
+                }
+
+                const teamIds = [
+                    ...new Set(
+                        teamMemberRows
+                            .map(row => String(row.team_id || "").trim())
+                            .filter(Boolean)
+                    )
+                ];
+
+                if (teamIds.length > 0) {
+                    const {
+                        data: teams,
+                        error: teamsError
+                    } = await supabase
+                        .from("tournament_teams")
+                        .select("id, team_code, team_name, team_type, max_members")
+                        .in("id", teamIds);
+
+                    if (teamsError) {
+                        console.error("PARTICIPANTS TEAMS ERROR:", teamsError);
+                    } else {
+                        teamRows = teams || [];
+                    }
+                }
+            }
+
+            const teamMemberMap = new Map(
+                teamMemberRows.map(row => [String(row.entry_id), row])
+            );
+
+            const teamMap = new Map(
+                teamRows.map(team => [String(team.id), team])
+            );
+
             // 2. Get unique user IDs
             const userIds = [
                 ...new Set(
@@ -878,7 +936,22 @@ router.get(
 
                         participant_number: index + 1,
                         cancelled: Boolean(entry.cancelled),
-                        created_at: entry.created_at
+                        created_at: entry.created_at,
+
+                        // OPTIONAL TEAM DATA FOR DUO / SQUAD
+                        team_id: String(teamMemberMap.get(String(entry.id))?.team_id || ""),
+                        team_name: String(
+                            teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.team_name || ""
+                        ).trim(),
+                        team_code: String(
+                            teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.team_code || ""
+                        ).trim(),
+                        team_type: String(
+                            teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.team_type || ""
+                        ).trim().toUpperCase(),
+                        team_max_members: Number(
+                            teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.max_members || 0
+                        )
                     };
                 }
             );
@@ -6580,7 +6653,6 @@ router.get("/team/my", async (req, res) => {
             .select("team_id, tournament_id, user_id, is_leader")
             .eq("tournament_id", tournamentId)
             .eq("user_id", userId)
-            .limit(1)
             .maybeSingle();
 
         if (memberError) {
