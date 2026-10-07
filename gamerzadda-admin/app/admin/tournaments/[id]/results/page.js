@@ -538,6 +538,10 @@ export default function TournamentResultsPage() {
               ? responseData.participants
               : [];
 
+          // DUO / SQUAD team name source:
+          // tournament_team_members.team_id -> tournament_teams.id -> team_name.
+          // Prefer the exact team_name returned by the admin results API,
+          // then fall back to the Supabase team lookup already loaded above.
           if (
             ["DUO", "SQUAD"].includes(
               String(tournamentData?.mode || "")
@@ -559,19 +563,50 @@ export default function TournamentResultsPage() {
                   String(player.user_id)
                 );
 
-                if (!apiPlayer) {
-                  return player;
-                }
+                const playerTeam = teamMap.get(
+                  String(player.team_id || apiPlayer?.team_id || "")
+                );
+
+                const resolvedTeamId =
+                  String(
+                    apiPlayer?.team_id ||
+                    player.team_id ||
+                    ""
+                  ).trim();
+
+                const resolvedTeamName =
+                  String(
+                    apiPlayer?.team_name ||
+                    player.team_name ||
+                    playerTeam?.team_name ||
+                    ""
+                  ).trim();
 
                 return {
                   ...player,
-                  team_id: String(apiPlayer.team_id || player.team_id || ""),
-                  team_name: String(apiPlayer.team_name || player.team_name || "").trim(),
-                  team_type: String(apiPlayer.team_type || player.team_type || "").trim().toUpperCase(),
-                  team_max_members: Number(apiPlayer.team_max_members || player.team_max_members || 0),
-                  team_code: String(apiPlayer.team_code || player.team_code || "").trim(),
+                  team_id: resolvedTeamId,
+                  team_name: resolvedTeamName,
+                  team_type: String(
+                    apiPlayer?.team_type ||
+                    player.team_type ||
+                    playerTeam?.team_type ||
+                    ""
+                  ).trim().toUpperCase(),
+                  team_max_members: Number(
+                    apiPlayer?.team_max_members ||
+                    player.team_max_members ||
+                    playerTeam?.max_members ||
+                    0
+                  ),
+                  team_code: String(
+                    apiPlayer?.team_code ||
+                    player.team_code ||
+                    playerTeam?.team_code ||
+                    ""
+                  ).trim(),
                   is_team_leader: Boolean(
-                    apiPlayer.is_team_leader ?? player.is_team_leader
+                    apiPlayer?.is_team_leader ??
+                    player.is_team_leader
                   ),
                 };
               })
@@ -1121,6 +1156,9 @@ export default function TournamentResultsPage() {
           id: teamId,
           teamName:
             String(player.team_name || "").trim() ||
+            String(
+              teamMap.get(String(player.team_id || ""))?.team_name || ""
+            ).trim() ||
             "Unnamed Team",
           teamType:
             String(player.team_type || tournament?.mode || "")
