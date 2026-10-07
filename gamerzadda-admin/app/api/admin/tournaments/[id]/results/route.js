@@ -1,908 +1,1198 @@
 import { NextResponse } from "next/server";
 
+
+
 import { createClient } from "@supabase/supabase-js";
+
+
 
 import fs from "fs";
 
+
+
 import path from "path";
+
+
 
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 
+
+
 import { getMessaging } from "firebase-admin/messaging";
+
+
 
 export const dynamic = "force-dynamic";
 
+
+
 export const revalidate = 0;
+
+
 
 const supabaseAdmin = createClient(
 
-  process.env.SUPABASE_URL ||
 
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
 
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_URL ||
 
-  {
 
-    auth: {
 
-      autoRefreshToken: false,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
 
-      persistSession: false,
 
-    },
 
-  }
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+
+
+
+  {
+
+
+
+    auth: {
+
+
+
+      autoRefreshToken: false,
+
+
+
+      persistSession: false,
+
+
+
+    },
+
+
+
+  }
+
+
 
 );
 
+
+
 /* =========================================================
 
-   HELPERS
+
+
+   HELPERS
+
+
 
 ========================================================= */
+
+
 
 function jsonError(message, status = 500) {
 
-  return NextResponse.json(
 
-    {
 
-      success: false,
+  return NextResponse.json(
 
-      error: message,
 
-    },
 
-    { status }
+    {
 
-  );
+
+
+      success: false,
+
+
+
+      error: message,
+
+
+
+    },
+
+
+
+    { status }
+
+
+
+  );
+
+
 
 }
+
+
 
 async function requireAdmin(request) {
-  try {
-    const sessionCookie =
-      request.cookies.get("gamerzadda_admin_session")?.value || "";
 
-    if (!sessionCookie) {
-      console.log("RESULTS AUTH: No admin session cookie");
-      return null;
-    }
+  try {
 
-    const apiBase =
-      process.env.NEXT_PUBLIC_API_URL ||
-      "https://api.gamerzadda.in";
+    const sessionCookie =
 
-    const response = await fetch(
-      `${apiBase}/api/admin/session`,
-      {
-        method: "GET",
-        headers: {
-          Cookie: `gamerzadda_admin_session=${sessionCookie}`,
-        },
-        cache: "no-store",
-      }
-    );
+      request.cookies.get("gamerzadda_admin_session")?.value || "";
 
-    const data = await response.json().catch(() => null);
 
-    if (!response.ok || !data?.authenticated || !data?.admin) {
-      console.log(
-        "RESULTS AUTH: Backend admin session rejected",
-        {
-          status: response.status,
-          authenticated: data?.authenticated,
-        }
-      );
-      return null;
-    }
 
-    const adminId = data.admin.id;
+    if (!sessionCookie) {
 
-    console.log(
-      "RESULTS AUTH: Admin session verified",
-      adminId
-    );
+      console.log("RESULTS AUTH: No admin session cookie");
 
-    return adminId;
-  } catch (error) {
-    console.error("RESULTS AUTH ERROR:", error);
-    return null;
-  }
+      return null;
+
+    }
+
+
+
+    const apiBase =
+
+      process.env.NEXT_PUBLIC_API_URL ||
+
+      "https\://api.gamerzadda.in";
+
+
+
+    const response = await fetch(
+
+      `${apiBase}/api/admin/session`,
+
+      {
+
+        method: "GET",
+
+        headers: {
+
+          Cookie: `gamerzadda_admin_session=${sessionCookie}`,
+
+        },
+
+        cache: "no-store",
+
+      }
+
+    );
+
+
+
+    const data = await response.json().catch(() => null);
+
+
+
+    if (!response.ok || !data?.authenticated || !data?.admin) {
+
+      console.log(
+
+        "RESULTS AUTH: Backend admin session rejected",
+
+        {
+
+          status: response.status,
+
+          authenticated: data?.authenticated,
+
+        }
+
+      );
+
+      return null;
+
+    }
+
+
+
+    const adminId = data.admin.id;
+
+
+
+    console.log(
+
+      "RESULTS AUTH: Admin session verified",
+
+      adminId
+
+    );
+
+
+
+    return adminId;
+
+  } catch (error) {
+
+    console.error("RESULTS AUTH ERROR:", error);
+
+    return null;
+
+  }
+
 }
+
+
 
 async function getTournament(tournamentId) {
 
-  const {
 
-    data,
 
-    error,
+  const {
 
-  } = await supabaseAdmin
 
-    .from("tournaments")
 
-    .select(
+    data,
 
-      "id,title,game,mode,map,start_time,prize_pool,kill_reward,status"
 
-    )
 
-    .eq("id", tournamentId)
+    error,
 
-    .maybeSingle();
 
-  return {
 
-    data,
+  } = await supabaseAdmin
 
-    error,
 
-  };
+
+    .from("tournaments")
+
+
+
+    .select(
+
+
+
+      "id,title,game,mode,map,start_time,prize_pool,kill_reward,status"
+
+
+
+    )
+
+
+
+    .eq("id", tournamentId)
+
+
+
+    .maybeSingle();
+
+
+
+  return {
+
+
+
+    data,
+
+
+
+    error,
+
+
+
+  };
+
+
 
 }
 
+
+
 /* =========================================================
 
-   TOURNAMENT RESULT FCM
 
-   Sends ONLY to users who joined this tournament.
+
+   TOURNAMENT RESULT FCM
+
+
+
+   Sends ONLY to users who joined this tournament.
+
+
 
 ========================================================= */
+
+
 
 function getFirebaseAdmin() {
 
-  const apps = getApps();
 
-  if (apps.length > 0) return apps[0];
 
-  const serviceAccountPath =
+  const apps = getApps();
 
-    process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
 
-  if (serviceAccountPath) {
 
-    const fullPath = path.resolve(process.cwd(), serviceAccountPath);
+  if (apps.length > 0) return apps[0];
 
-    if (fs.existsSync(fullPath)) {
 
-      const serviceAccount = JSON.parse(
 
-        fs.readFileSync(fullPath, "utf8")
+  const serviceAccountPath =
 
-      );
 
-      const privateKey = String(serviceAccount.private_key || "")
 
-        .replace(/\\n/g, "\n")
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim();
 
-        .trim();
 
-      return initializeApp({
 
-        credential: cert({
+  if (serviceAccountPath) {
 
-          projectId: serviceAccount.project_id,
 
-          clientEmail: serviceAccount.client_email,
 
-          privateKey,
+    const fullPath = path.resolve(process.cwd(), serviceAccountPath);
 
-        }),
 
-      });
 
-    }
+    if (fs.existsSync(fullPath)) {
 
-  }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
 
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+      const serviceAccount = JSON.parse(
 
-  const privateKey = String(process.env.FIREBASE_PRIVATE_KEY || "")
 
-    .replace(/\\n/g, "\n")
 
-    .trim();
+        fs.readFileSync(fullPath, "utf8")
 
-  if (!projectId || !clientEmail || !privateKey) {
 
-    throw new Error("Firebase Admin credentials are missing.");
 
-  }
+      );
 
-  return initializeApp({
 
-    credential: cert({
 
-      projectId,
+      const privateKey = String(serviceAccount.private_key || "")
 
-      clientEmail,
 
-      privateKey,
 
-    }),
+        .replace(/\\n/g, "\n")
 
-  });
+
+
+        .trim();
+
+
+
+      return initializeApp({
+
+
+
+        credential: cert({
+
+
+
+          projectId: serviceAccount.project_id,
+
+
+
+          clientEmail: serviceAccount.client_email,
+
+
+
+          privateKey,
+
+
+
+        }),
+
+
+
+      });
+
+
+
+    }
+
+
+
+  }
+
+
+
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+
+
+
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+
+
+
+  const privateKey = String(process.env.FIREBASE_PRIVATE_KEY || "")
+
+
+
+    .replace(/\\n/g, "\n")
+
+
+
+    .trim();
+
+
+
+  if (!projectId || !clientEmail || !privateKey) {
+
+
+
+    throw new Error("Firebase Admin credentials are missing.");
+
+
+
+  }
+
+
+
+  return initializeApp({
+
+
+
+    credential: cert({
+
+
+
+      projectId,
+
+
+
+      clientEmail,
+
+
+
+      privateKey,
+
+
+
+    }),
+
+
+
+  });
+
+
 
 }
+
+
 
 async function sendTournamentResultNotifications({
 
-  tournamentId,
 
-  tournamentTitle,
 
-  resultRows,
+  tournamentId,
+
+
+
+  tournamentTitle,
+
+
+
+  resultRows,
+
+
 
 }) {
 
-  try {
 
-    // IMPORTANT: only active entries from THIS tournament.
 
-    const { data: entries, error: entriesError } =
+  try {
 
-      await supabaseAdmin
 
-        .from("tournament_entries")
 
-        .select("user_id")
+    // IMPORTANT: only active entries from THIS tournament.
 
-        .eq("tournament_id", tournamentId)
 
-        .eq("cancelled", false);
 
-    if (entriesError) throw entriesError;
+    const { data: entries, error: entriesError } =
 
-    const participantIds = [
 
-      ...new Set(
 
-        (entries || [])
+      await supabaseAdmin
 
-          .map((entry) => String(entry.user_id || "").trim())
 
-          .filter(Boolean)
 
-      ),
+        .from("tournament_entries")
 
-    ];
 
-    if (participantIds.length === 0) {
 
-      console.log(
+        .select("user_id")
 
-        "RESULT FCM: No participants for tournament:",
 
-        tournamentId
 
-      );
+        .eq("tournament_id", tournamentId)
 
-      return {
 
-        participantCount: 0,
 
-        tokenCount: 0,
+        .eq("cancelled", false);
 
-        sentCount: 0,
 
-      };
 
-    }
+    if (entriesError) throw entriesError;
 
-    // Fetch FCM tokens ONLY for those participant IDs.
 
-    const { data: users, error: usersError } =
 
-      await supabaseAdmin
+    const participantIds = [
 
-        .from("users")
 
-        .select("id,fcm_token")
 
-        .in("id", participantIds);
+      ...new Set(
 
-    if (usersError) throw usersError;
 
-    const resultMap = new Map(
 
-      (resultRows || []).map((row) => [
+        (entries || [])
 
-        String(row.user_id),
 
-        Number(row.winning_amount || 0),
 
-      ])
+          .map((entry) => String(entry.user_id || "").trim())
 
-    );
 
-    const notifications = (users || [])
 
-      .map((user) => {
+          .filter(Boolean)
 
-        const token = String(user.fcm_token || "").trim();
 
-        if (!token) return null;
 
-        const winningAmount =
+      ),
 
-          resultMap.get(String(user.id)) || 0;
 
-        if (winningAmount > 0) {
 
-          return {
+    ];
 
-            token,
 
-            title: `🏆 You Won ₹${winningAmount}!`,
 
-            body:
+    if (participantIds.length === 0) {
 
-              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
 
-          };
 
-        }
+      console.log(
 
-        return {
 
-          token,
 
-          title: "📊 Tournament Results Are Out",
+        "RESULT FCM: No participants for tournament:",
 
-          body:
 
-            "Your tournament results are now available. Check your results now!",
 
-        };
+        tournamentId
 
-      })
 
-      .filter(Boolean);
 
-    if (notifications.length === 0) {
+      );
 
-      console.log(
 
-        "RESULT FCM: No participant has an FCM token.",
 
-        participantIds.length
+      return {
 
-      );
 
-      return {
 
-        participantCount: participantIds.length,
+        participantCount: 0,
 
-        tokenCount: 0,
 
-        sentCount: 0,
 
-      };
+        tokenCount: 0,
 
-    }
 
-    const firebaseApp = getFirebaseAdmin();
 
-    const messaging = getMessaging(firebaseApp);
+        sentCount: 0,
 
-    let sentCount = 0;
 
-    const invalidTokens = [];
 
-    // Each user can have a different winning amount.
+      };
 
-    for (const notification of notifications) {
 
-      try {
 
-        await messaging.send({
+    }
 
-          token: notification.token,
 
-          notification: {
 
-            title: notification.title,
+    // Fetch FCM tokens ONLY for those participant IDs.
 
-            body: notification.body,
 
-          },
 
-          data: {
+    const { data: users, error: usersError } =
 
-            type: "tournament_result",
 
-            tournament_id: String(tournamentId),
 
-            tournament_title: String(tournamentTitle || ""),
+      await supabaseAdmin
 
-          },
 
-          android: {
 
-            priority: "high",
+        .from("users")
 
-          },
 
-        });
 
-        sentCount += 1;
+        .select("id,fcm_token")
 
-      } catch (sendError) {
 
-        const code = String(sendError?.code || "");
 
-        console.error(
+        .in("id", participantIds);
 
-          "RESULT FCM SEND ERROR:",
 
-          code,
 
-          sendError?.message || sendError
+    if (usersError) throw usersError;
 
-        );
 
-        if (
 
-          code.includes("registration-token-not-registered") ||
+    const resultMap = new Map(
 
-          code.includes("invalid-registration-token")
 
-        ) {
 
-          invalidTokens.push(notification.token);
+      (resultRows || []).map((row) => [
 
-        }
 
-      }
 
-    }
+        String(row.user_id),
 
-    // Remove stale tokens.
 
-    if (invalidTokens.length > 0) {
 
-      await supabaseAdmin
+        Number(row.winning_amount || 0),
 
-        .from("users")
 
-        .update({ fcm_token: null })
 
-        .in("fcm_token", invalidTokens);
+      ])
 
-    }
 
-    console.log(
 
-      "RESULT FCM COMPLETE:",
+    );
 
-      JSON.stringify({
 
-        tournamentId,
 
-        participantCount: participantIds.length,
+    const notifications = (users || [])
 
-        tokenCount: notifications.length,
 
-        sentCount,
 
-        invalidTokenCount: invalidTokens.length,
+      .map((user) => {
 
-      })
 
-    );
 
-    return {
+        const token = String(user.fcm_token || "").trim();
 
-      participantCount: participantIds.length,
 
-      tokenCount: notifications.length,
 
-      sentCount,
+        if (!token) return null;
 
-    };
 
-  } catch (error) {
 
-    // Result publication must remain successful even if FCM fails.
+        const winningAmount =
 
-    console.error("RESULT FCM ERROR:", error);
 
-    return {
 
-      participantCount: 0,
+          resultMap.get(String(user.id)) || 0;
 
-      tokenCount: 0,
 
-      sentCount: 0,
 
-      error: error?.message || String(error),
+        if (winningAmount > 0) {
 
-    };
 
-  }
+
+          return {
+
+
+
+            token,
+
+
+
+            title: `🏆 You Won ₹${winningAmount}!`,
+
+
+
+            body:
+
+
+
+              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
+
+
+
+          };
+
+
+
+        }
+
+
+
+        return {
+
+
+
+          token,
+
+
+
+          title: "📊 Tournament Results Are Out",
+
+
+
+          body:
+
+
+
+            "Your tournament results are now available. Check your results now!",
+
+
+
+        };
+
+
+
+      })
+
+
+
+      .filter(Boolean);
+
+
+
+    if (notifications.length === 0) {
+
+
+
+      console.log(
+
+
+
+        "RESULT FCM: No participant has an FCM token.",
+
+
+
+        participantIds.length
+
+
+
+      );
+
+
+
+      return {
+
+
+
+        participantCount: participantIds.length,
+
+
+
+        tokenCount: 0,
+
+
+
+        sentCount: 0,
+
+
+
+      };
+
+
+
+    }
+
+
+
+    const firebaseApp = getFirebaseAdmin();
+
+
+
+    const messaging = getMessaging(firebaseApp);
+
+
+
+    let sentCount = 0;
+
+
+
+    const invalidTokens = [];
+
+
+
+    // Each user can have a different winning amount.
+
+
+
+    for (const notification of notifications) {
+
+
+
+      try {
+
+
+
+        await messaging.send({
+
+
+
+          token: notification.token,
+
+
+
+          notification: {
+
+
+
+            title: notification.title,
+
+
+
+            body: notification.body,
+
+
+
+          },
+
+
+
+          data: {
+
+
+
+            type: "tournament_result",
+
+
+
+            tournament_id: String(tournamentId),
+
+
+
+            tournament_title: String(tournamentTitle || ""),
+
+
+
+          },
+
+
+
+          android: {
+
+
+
+            priority: "high",
+
+
+
+          },
+
+
+
+        });
+
+
+
+        sentCount += 1;
+
+
+
+      } catch (sendError) {
+
+
+
+        const code = String(sendError?.code || "");
+
+
+
+        console.error(
+
+
+
+          "RESULT FCM SEND ERROR:",
+
+
+
+          code,
+
+
+
+          sendError?.message || sendError
+
+
+
+        );
+
+
+
+        if (
+
+
+
+          code.includes("registration-token-not-registered") ||
+
+
+
+          code.includes("invalid-registration-token")
+
+
+
+        ) {
+
+
+
+          invalidTokens.push(notification.token);
+
+
+
+        }
+
+
+
+      }
+
+
+
+    }
+
+
+
+    // Remove stale tokens.
+
+
+
+    if (invalidTokens.length > 0) {
+
+
+
+      await supabaseAdmin
+
+
+
+        .from("users")
+
+
+
+        .update({ fcm_token: null })
+
+
+
+        .in("fcm_token", invalidTokens);
+
+
+
+    }
+
+
+
+    console.log(
+
+
+
+      "RESULT FCM COMPLETE:",
+
+
+
+      JSON.stringify({
+
+
+
+        tournamentId,
+
+
+
+        participantCount: participantIds.length,
+
+
+
+        tokenCount: notifications.length,
+
+
+
+        sentCount,
+
+
+
+        invalidTokenCount: invalidTokens.length,
+
+
+
+      })
+
+
+
+    );
+
+
+
+    return {
+
+
+
+      participantCount: participantIds.length,
+
+
+
+      tokenCount: notifications.length,
+
+
+
+      sentCount,
+
+
+
+    };
+
+
+
+  } catch (error) {
+
+
+
+    // Result publication must remain successful even if FCM fails.
+
+
+
+    console.error("RESULT FCM ERROR:", error);
+
+
+
+    return {
+
+
+
+      participantCount: 0,
+
+
+
+      tokenCount: 0,
+
+
+
+      sentCount: 0,
+
+
+
+      error: error?.message || String(error),
+
+
+
+    };
+
+
+
+  }
+
+
 
 }
 
+
+
 /* =========================================================
 
-   GET RESULTS
+
+
+   GET RESULTS
+
+
 
 ========================================================= */
 
+
+
 export async function GET(request, context) {
 
-  try {
 
-    const adminId =
 
-      await requireAdmin(request);
+  try {
 
-    if (!adminId) {
 
-      return jsonError(
 
-        "Unauthorized.",
+    const adminId =
 
-        401
 
-      );
 
-    }
+      await requireAdmin(request);
 
-    const { id: tournamentId } =
 
-      await context.params;
 
-    if (!tournamentId) {
+    if (!adminId) {
 
-      return jsonError(
 
-        "Tournament ID is required.",
 
-        400
+      return jsonError(
 
-      );
 
-    }
 
-    /* -----------------------------------------
+        "Unauthorized.",
 
-       Tournament
 
-    ----------------------------------------- */
 
-    const {
+        401
 
-      data: tournament,
 
-      error: tournamentError,
 
-    } = await getTournament(
+      );
 
-      tournamentId
 
-    );
 
-    if (tournamentError) {
+    }
 
-      console.error(
 
-        "RESULTS TOURNAMENT ERROR:",
 
-        tournamentError
+    const { id: tournamentId } =
 
-      );
 
-      return jsonError(
 
-        tournamentError.message
+      await context.params;
 
-      );
 
-    }
 
-    if (!tournament) {
+    if (!tournamentId) {
 
-      return jsonError(
 
-        "Tournament not found.",
 
-        404
+      return jsonError(
 
-      );
 
-    }
 
-    /* -----------------------------------------
+        "Tournament ID is required.",
 
-       Latest match
+
+
+        400
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+       DUO / SQUAD TEAM DETAILS
+
+       Loaded with service-role access so the admin
+       Results page does not depend on browser RLS.
 
     ----------------------------------------- */
 
-    const {
+    let teamMemberRows = [];
+    let teamRows = [];
 
-      data: match,
+    const resultMode = String(
+      tournament?.mode || ""
+    ).trim().toUpperCase();
 
-      error: matchError,
-
-    } = await supabaseAdmin
-
-      .from("matches")
-
-      .select(
-
-        "id,status,room_id,room_password,start_time,tournament_id"
-
-      )
-
-      .eq(
-
-        "tournament_id",
-
-        tournamentId
-
-      )
-
-      .order("id", {
-
-        ascending: false,
-
-      })
-
-      .limit(1)
-
-      .maybeSingle();
-
-    if (matchError) {
-
-      console.error(
-
-        "RESULTS MATCH ERROR:",
-
-        matchError
-
-      );
-
-      return jsonError(
-
-        matchError.message
-
-      );
-
-    }
-
-    /* -----------------------------------------
-
-       Tournament entries
-
-    ----------------------------------------- */
-
-    const {
-
-      data: entries,
-
-      error: entriesError,
-
-    } = await supabaseAdmin
-
-      .from("tournament_entries")
-
-      .select(
-
-        "user_id,game_name,free_fire_uid,level,created_at,cancelled"
-
-      )
-
-      .eq(
-
-        "tournament_id",
-
-        tournamentId
-
-      )
-
-      .eq(
-
-        "cancelled",
-
-        false
-
-      )
-
-      .order("created_at", {
-
-        ascending: true,
-
-      });
-
-    if (entriesError) {
-
-      console.error(
-
-        "RESULTS ENTRIES ERROR:",
-
-        entriesError
-
-      );
-
-      return jsonError(
-
-        entriesError.message
-
-      );
-
-    }
-
-    const userIds = [
-
-      ...new Set(
-
-        (entries || [])
-
-          .map(
-
-            (entry) =>
-
-              entry.user_id
-
-          )
-
-          .filter(Boolean)
-
-          .map(String)
-
-      ),
-
-    ];
-
-    /* -----------------------------------------
-
-       Users
-
-    ----------------------------------------- */
-
-    let users = [];
-
-    if (userIds.length) {
-
+    if (["DUO", "SQUAD"].includes(resultMode) && userIds.length > 0) {
       const {
-
-        data: userRows,
-
-        error: usersError,
-
+        data: loadedTeamMembers,
+        error: teamMemberError,
       } = await supabaseAdmin
+        .from("tournament_team_members")
+        .select("user_id,entry_id,team_id,is_leader")
+        .eq("tournament_id", tournamentId)
+        .in("user_id", userIds);
 
-        .from("users")
-
-        .select("*")
-
-        .in("id", userIds);
-
-      if (usersError) {
-
-        console.error(
-
-          "RESULTS USERS ERROR:",
-
-          usersError
-
-        );
-
-        return jsonError(
-
-          usersError.message
-
-        );
-
+      if (teamMemberError) {
+        console.error("RESULTS TEAM MEMBERS ERROR:", teamMemberError);
+        return jsonError(teamMemberError.message);
       }
 
-      users = userRows || [];
+      teamMemberRows = loadedTeamMembers || [];
+      const teamIds = [...new Set(teamMemberRows.map((row) => String(row.team_id || "").trim()).filter(Boolean))];
 
+      if (teamIds.length > 0) {
+        const { data: loadedTeams, error: teamError } = await supabaseAdmin
+          .from("tournament_teams")
+          .select("id,team_name,team_type,max_members,leader_user_id,team_code")
+          .in("id", teamIds);
+
+        if (teamError) {
+          console.error("RESULTS TEAMS ERROR:", teamError);
+          return jsonError(teamError.message);
+        }
+
+        teamRows = loadedTeams || [];
+      }
     }
 
-    /* -----------------------------------------
-
-       Existing results
-
-    ----------------------------------------- */
-
-    const {
-
-      data: resultRows,
-
-      error: resultError,
-
-    } = await supabaseAdmin
-
-      .from("tournament_results")
-
-      .select(
-
-        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
-
-      )
-
-      .eq(
-
-        "tournament_id",
-
-        tournamentId
-
-      )
-
-      .order("rank", {
-
-        ascending: true,
-
-        nullsFirst: false,
-
-      });
-
-    if (resultError) {
-
-      console.error(
-
-        "RESULTS RESULT ROW ERROR:",
-
-        resultError
-
-      );
-
-      return jsonError(
-
-        resultError.message
-
-      );
-
-    }
-
-    /* -----------------------------------------
-
-       Maps
-
-    ----------------------------------------- */
-
-    const userMap = new Map(
-
-      users.map((user) => [
-
-        String(user.id),
-
-        user,
-
-      ])
-
-    );
-
-    const entryMap = new Map(
-
-      (entries || []).map((entry) => [
-
-        String(entry.user_id),
-
-        entry,
-
-      ])
-
-    );
-
-    const resultMap = new Map(
-
-      (resultRows || []).map((result) => [
-
-        String(result.user_id),
-
-        result,
-
-      ])
-
-    );
+    const teamMemberMap = new Map(teamMemberRows.map((row) => [String(row.user_id), row]));
+    const teamMap = new Map(teamRows.map((team) => [String(team.id), team]));
 
     /* -----------------------------------------
 
@@ -910,1363 +1200,2738 @@ export async function GET(request, context) {
 
     ----------------------------------------- */
 
-    const participants =
 
-      userIds.map((userId) => {
 
-        const id = String(userId);
+    const participants =
 
-        const user =
 
-          userMap.get(id);
 
-        const entry =
+      userIds.map((userId) => {
 
-          entryMap.get(id);
 
-        const result =
 
-          resultMap.get(id);
+        const id = String(userId);
 
-        return {
 
-          user_id: id,
 
-          game_name:
+        const user =
 
-            entry?.game_name ||
 
-            user?.game_name ||
 
-            "",
+          userMap.get(id);
 
-          free_fire_uid:
 
-            entry?.free_fire_uid ||
 
-            user?.free_fire_uid ||
+        const entry =
 
-            "",
 
-          level:
 
-            entry?.level ??
+          entryMap.get(id);
 
-            user?.level ??
 
-            null,
 
-          created_at:
+        const result =
 
-            entry?.created_at ||
 
-            null,
 
+          resultMap.get(id);
+
+
+
+        return {
+
+
+
+          user_id: id,
+
+
+
+          game_name:
+
+
+
+            entry?.game_name ||
+
+
+
+            user?.game_name ||
+
+
+
+            "",
+
+
+
+          free_fire_uid:
+
+
+
+            entry?.free_fire_uid ||
+
+
+
+            user?.free_fire_uid ||
+
+
+
+            "",
+
+
+
+          level:
+
+
+
+            entry?.level ??
+
+
+
+            user?.level ??
+
+
+
+            null,
+
+
+
+          created_at:
+
+
+
+            entry?.created_at ||
+
+
+
+            null,
           user: user || null,
 
-          rank:
+          team_id: String(teamMemberMap.get(id)?.team_id || ""),
 
-            result?.rank ?? 0,
+          team_name: String(
+            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_name || ""
+          ).trim(),
 
-          kills:
+          team_type: String(
+            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_type || ""
+          ).trim().toUpperCase(),
 
-            Number(result?.kills || 0),
+          team_max_members: Number(
+            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.max_members || 0
+          ),
 
-          winning_amount:
+          team_code: String(
+            teamMap.get(String(teamMemberMap.get(id)?.team_id || ""))?.team_code || ""
+          ).trim(),
 
-            Number(
+          is_team_leader: Boolean(teamMemberMap.get(id)?.is_leader),
+          rank:
 
-              result?.winning_amount || 0
 
-            ),
 
-        };
+            result?.rank ?? 0,
 
-      });
 
-    /* -----------------------------------------
 
-       Return
+          kills:
 
-    ----------------------------------------- */
 
-    return NextResponse.json({
 
-      success: true,
+            Number(result?.kills || 0),
 
-      tournament,
 
-      match:
 
-        match || null,
+          winning_amount:
 
-      // Used by Results page
 
-      participants,
 
-      // Also expose results directly
+            Number(
 
-      results:
 
-        resultRows || [],
 
-      data:
+              result?.winning_amount || 0
 
-        resultRows || [],
 
-    });
 
-  } catch (error) {
+            ),
 
-    console.error(
 
-      "ADMIN RESULTS GET ERROR:",
 
-      error
+        };
 
-    );
 
-    return jsonError(
 
-      error?.message ||
+      });
 
-        "Unable to load tournament results."
 
-    );
 
-  }
+    /* -----------------------------------------
+
+
+
+       Return
+
+
+
+    ----------------------------------------- */
+
+
+
+    return NextResponse.json({
+
+
+
+      success: true,
+
+
+
+      tournament,
+
+
+
+      match:
+
+
+
+        match || null,
+
+
+
+      // Used by Results page
+
+
+
+      participants,
+
+
+
+      // Also expose results directly
+
+
+
+      results:
+
+
+
+        resultRows || [],
+
+
+
+      data:
+
+
+
+        resultRows || [],
+
+
+
+    });
+
+
+
+  } catch (error) {
+
+
+
+    console.error(
+
+
+
+      "ADMIN RESULTS GET ERROR:",
+
+
+
+      error
+
+
+
+    );
+
+
+
+    return jsonError(
+
+
+
+      error?.message ||
+
+
+
+        "Unable to load tournament results."
+
+
+
+    );
+
+
+
+  }
+
+
 
 }
 
+
+
 /* =========================================================
 
-   POST / SAVE RESULTS
+
+
+   POST / SAVE RESULTS
+
+
 
 ========================================================= */
 
+
+
 export async function POST(
 
-  request,
 
-  context
+
+  request,
+
+
+
+  context
+
+
 
 ) {
 
-  try {
 
-    const adminId =
 
-      await requireAdmin(request);
+  try {
 
-    if (!adminId) {
 
-      return jsonError(
 
-        "Unauthorized.",
+    const adminId =
 
-        401
 
-      );
 
-    }
+      await requireAdmin(request);
 
-    const { id: tournamentId } =
 
-      await context.params;
 
-    if (!tournamentId) {
+    if (!adminId) {
 
-      return jsonError(
 
-        "Tournament ID is required.",
 
-        400
+      return jsonError(
 
-      );
 
-    }
 
-    /* -----------------------------------------
+        "Unauthorized.",
 
-       Body
 
-    ----------------------------------------- */
 
-    let body = null;
+        401
 
-    try {
 
-      body = await request.json();
 
-    } catch {
+      );
 
-      return jsonError(
 
-        "Invalid JSON body.",
 
-        400
+    }
 
-      );
 
-    }
 
-    const incoming =
+    const { id: tournamentId } =
 
-      Array.isArray(body?.results)
 
-        ? body.results
 
-        : null;
+      await context.params;
 
-    if (!incoming) {
 
-      return jsonError(
 
-        "Results array is required.",
+    if (!tournamentId) {
 
-        400
 
-      );
 
-    }
+      return jsonError(
 
-    if (incoming.length === 0) {
 
-      return jsonError(
 
-        "At least one result is required.",
+        "Tournament ID is required.",
 
-        400
 
-      );
 
-    }
+        400
 
-    /* -----------------------------------------
 
-       Tournament
 
-    ----------------------------------------- */
+      );
 
-    const {
 
-      data: tournament,
 
-      error: tournamentError,
+    }
 
-    } = await getTournament(
 
-      tournamentId
 
-    );
+    /* -----------------------------------------
 
-    if (tournamentError) {
 
-      console.error(
 
-        "RESULTS TOURNAMENT ERROR:",
+       Body
 
-        tournamentError
 
-      );
 
-      return jsonError(
+    ----------------------------------------- */
 
-        tournamentError.message
 
-      );
 
-    }
+    let body = null;
 
-    if (!tournament) {
 
-      return jsonError(
 
-        "Tournament not found.",
+    try {
 
-        404
 
-      );
 
-    }
+      body = await request.json();
 
-    /* -----------------------------------------
 
-       Already completed check
 
-    ----------------------------------------- */
+    } catch {
 
-    const tournamentStatus =
 
-      String(
 
-        tournament.status || ""
+      return jsonError(
 
-      )
 
-        .trim()
 
-        .toLowerCase();
+        "Invalid JSON body.",
 
-    if (
 
-      [
 
-        "completed",
+        400
 
-        "complete",
 
-        "finished",
 
-        "finish",
+      );
 
-        "past",
 
-        "closed",
 
-        "ended",
+    }
 
-      ].includes(tournamentStatus)
 
-    ) {
 
-      return jsonError(
+    const incoming =
 
-        "Results are already published and locked.",
 
-        409
 
-      );
+      Array.isArray(body?.results)
 
-    }
 
-    /* -----------------------------------------
 
-       Existing results check
+        ? body.results
 
-    ----------------------------------------- */
 
-    const {
 
-      data: existingResults,
+        : null;
 
-      error: existingResultsError,
 
-    } = await supabaseAdmin
 
-      .from("tournament_results")
+    if (!incoming) {
 
-      .select("id")
 
-      .eq(
 
-        "tournament_id",
+      return jsonError(
 
-        tournamentId
 
-      )
 
-      .limit(1);
+        "Results array is required.",
 
-    if (existingResultsError) {
 
-      console.error(
 
-        "EXISTING RESULTS ERROR:",
+        400
 
-        existingResultsError
 
-      );
 
-      return jsonError(
+      );
 
-        existingResultsError.message
 
-      );
 
-    }
+    }
 
-    if (
 
-      (existingResults || []).length > 0
 
-    ) {
+    if (incoming.length === 0) {
 
-      return jsonError(
 
-        "Results are already published and locked.",
 
-        409
+      return jsonError(
 
-      );
 
-    }
 
-    /* -----------------------------------------
+        "At least one result is required.",
 
-       Latest match
 
-    ----------------------------------------- */
 
-    const {
+        400
 
-      data: match,
 
-      error: matchError,
 
-    } = await supabaseAdmin
+      );
 
-      .from("matches")
 
-      .select(
 
-        "id,tournament_id,status"
+    }
 
-      )
 
-      .eq(
 
-        "tournament_id",
+    /* -----------------------------------------
 
-        tournamentId
 
-      )
 
-      .order("id", {
+       Tournament
 
-        ascending: false,
 
-      })
 
-      .limit(1)
+    ----------------------------------------- */
 
-      .maybeSingle();
 
-    if (matchError) {
 
-      console.error(
+    const {
 
-        "RESULTS MATCH ERROR:",
 
-        matchError
 
-      );
+      data: tournament,
 
-      return jsonError(
 
-        matchError.message
 
-      );
+      error: tournamentError,
 
-    }
 
-    if (!match) {
 
-      return jsonError(
+    } = await getTournament(
 
-        "Match not found. Create the match before uploading results.",
 
-        400
 
-      );
+      tournamentId
 
-    }
 
-    const matchStatus =
 
-      String(
+    );
 
-        match.status || ""
 
-      )
 
-        .trim()
+    if (tournamentError) {
 
-        .toLowerCase();
 
-    if (
 
-      [
+      console.error(
 
-        "completed",
 
-        "complete",
 
-        "finished",
+        "RESULTS TOURNAMENT ERROR:",
 
-      ].includes(matchStatus)
 
-    ) {
 
-      return jsonError(
+        tournamentError
 
-        "This match is already completed.",
 
-        409
 
-      );
+      );
 
-    }
 
-    /* -----------------------------------------
 
-       Active participants
+      return jsonError(
 
-    ----------------------------------------- */
 
-    const {
 
-      data: entries,
+        tournamentError.message
 
-      error: entriesError,
 
-    } = await supabaseAdmin
 
-      .from("tournament_entries")
+      );
 
-      .select(
 
-        "user_id,game_name,free_fire_uid"
 
-      )
+    }
 
-      .eq(
 
-        "tournament_id",
 
-        tournamentId
+    if (!tournament) {
 
-      )
 
-      .eq(
 
-        "cancelled",
+      return jsonError(
 
-        false
 
-      );
 
-    if (entriesError) {
+        "Tournament not found.",
 
-      console.error(
 
-        "RESULTS ENTRIES ERROR:",
 
-        entriesError
+        404
 
-      );
 
-      return jsonError(
 
-        entriesError.message
+      );
 
-      );
 
-    }
 
-    const validUserIds =
+    }
 
-      new Set(
 
-        (entries || [])
 
-          .map(
+    /* -----------------------------------------
 
-            (entry) =>
 
-              String(entry.user_id)
 
-          )
+       Already completed check
 
-          .filter(Boolean)
 
-      );
 
-    /* -----------------------------------------
+    ----------------------------------------- */
 
-       Validate + clean results
 
-    ----------------------------------------- */
 
-    const rows = [];
+    const tournamentStatus =
 
-    for (const item of incoming) {
 
-      const userId =
 
-        String(
+      String(
 
-          item?.user_id || ""
 
-        ).trim();
 
-      if (!userId) {
+        tournament.status || ""
 
-        continue;
 
-      }
 
-      if (!validUserIds.has(userId)) {
+      )
 
-        return jsonError(
 
-          `User ${userId} is not a participant of this tournament.`,
 
-          400
+        .trim()
 
-        );
 
-      }
 
-      const rawRank =
+        .toLowerCase();
 
-        item?.rank;
 
-      let rank = null;
 
-      if (
+    if (
 
-        rawRank !== null &&
 
-        rawRank !== undefined &&
 
-        rawRank !== ""
+      [
 
-      ) {
 
-        rank = Math.max(
 
-          1,
+        "completed",
 
-          Number(rawRank) || 1
 
-        );
 
-      }
+        "complete",
 
-      const kills = Math.max(
 
-        0,
 
-        Number(item?.kills) || 0
+        "finished",
 
-      );
 
-      const winningAmount =
 
-        Math.max(
+        "finish",
 
-          0,
 
-          Number(
 
-            item?.winning_amount
+        "past",
 
-          ) || 0
 
-        );
 
-      rows.push({
+        "closed",
 
-        tournament_id:
 
-          tournamentId,
 
-        match_id:
+        "ended",
 
-          match.id,
 
-        user_id:
 
-          userId,
+      ].includes(tournamentStatus)
 
-        rank,
 
-        kills,
 
-        winning_amount:
+    ) {
 
-          winningAmount,
 
-        updated_at:
 
-          new Date().toISOString(),
+      return jsonError(
 
-      });
 
-    }
 
-    if (rows.length === 0) {
+        "Results are already published and locked.",
 
-      return jsonError(
 
-        "No valid participant results were provided.",
 
-        400
+        409
 
-      );
 
-    }
 
-    /* -----------------------------------------
+      );
 
-       Duplicate user protection
 
-    ----------------------------------------- */
 
-    const uniqueUsers =
+    }
 
-      new Set(
 
-        rows.map(
 
-          (row) =>
+    /* -----------------------------------------
 
-            String(row.user_id)
 
-        )
 
-      );
+       Existing results check
 
-    if (
 
-      uniqueUsers.size !==
 
-      rows.length
+    ----------------------------------------- */
 
-    ) {
 
-      return jsonError(
 
-        "Duplicate users found in results.",
+    const {
 
-        400
 
-      );
 
-    }
+      data: existingResults,
 
-    /* -----------------------------------------
 
-       Save results
 
-    ----------------------------------------- */
+      error: existingResultsError,
 
-    const {
 
-      data: savedRows,
 
-      error: upsertError,
+    } = await supabaseAdmin
 
-    } = await supabaseAdmin
 
-      .from("tournament_results")
 
-      .upsert(rows, {
+      .from("tournament_results")
 
-        onConflict:
 
-          "tournament_id,user_id",
 
-      })
+      .select("id")
 
-      .select(
 
-        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
 
-      );
+      .eq(
 
-    if (upsertError) {
 
-      console.error(
 
-        "RESULTS UPSERT ERROR:",
+        "tournament_id",
 
-        upsertError
 
-      );
 
-      return jsonError(
+        tournamentId
 
-        upsertError.message
 
-      );
 
-    }
+      )
 
 
-    /* -----------------------------------------
-       CREDIT TOURNAMENT WINNINGS
-       reference_id MUST be a UUID because
-       wallet_transactions.reference_id is UUID.
-    ----------------------------------------- */
 
-    const winningRows = (savedRows || []).filter(
-      (row) =>
-        Number(row?.winning_amount || 0) > 0 &&
-        row?.id &&
-        row?.user_id
-    );
+      .limit(1);
 
-    const creditedWinners = [];
-    const insertedWinningTransactions = [];
 
-    try {
-      for (const winner of winningRows) {
-        const userId = String(winner.user_id);
-        const amount = Number(winner.winning_amount || 0);
-        const referenceId = String(winner.id);
 
-        if (!amount || amount <= 0) {
-          continue;
-        }
+    if (existingResultsError) {
 
-        /* -----------------------------------------
-           Idempotency guard
-           If this exact result UUID was already
-           credited, do not credit it again.
-        ----------------------------------------- */
 
-        const {
-          data: existingTransaction,
-          error: existingTransactionError,
-        } = await supabaseAdmin
-          .from("wallet_transactions")
-          .select("id,user_id,amount,type,reference_id")
-          .eq("reference_id", referenceId)
-          .eq("user_id", userId)
-          .eq("type", "tournament_winning")
-          .maybeSingle();
 
-        if (existingTransactionError) {
-          throw new Error(
-            `Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}`
-          );
-        }
+      console.error(
 
-        if (existingTransaction) {
-          console.log(
-            "RESULT WINNING ALREADY CREDITED:",
-            JSON.stringify({
-              tournamentId,
-              userId,
-              amount,
-              referenceId,
-            })
-          );
-          continue;
-        }
 
-        /* -----------------------------------------
-           Read current winning balance
-        ----------------------------------------- */
 
-        const {
-          data: wallet,
-          error: walletError,
-        } = await supabaseAdmin
-          .from("wallet_balances")
-          .select("user_id,winning_balance")
-          .eq("user_id", userId)
-          .maybeSingle();
+        "EXISTING RESULTS ERROR:",
 
-        if (walletError) {
-          throw new Error(
-            `Wallet lookup failed for ${userId}: ${walletError.message}`
-          );
-        }
 
-        if (!wallet) {
-          throw new Error(
-            `Wallet not found for ${userId}.`
-          );
-        }
 
-        const oldWinning = Number(
-          wallet.winning_balance || 0
-        );
+        existingResultsError
 
-        const newWinning = oldWinning + amount;
 
-        /* -----------------------------------------
-           Conditional balance update
-           Prevents concurrent overwrite.
-        ----------------------------------------- */
 
-        const {
-          data: updatedWallet,
-          error: walletUpdateError,
-        } = await supabaseAdmin
-          .from("wallet_balances")
-          .update({
-            winning_balance: newWinning,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", userId)
-          .eq("winning_balance", oldWinning)
-          .select("user_id,winning_balance")
-          .maybeSingle();
+      );
 
-        if (
-          walletUpdateError ||
-          !updatedWallet
-        ) {
-          throw new Error(
-            `Wallet balance update failed for ${userId}: ${
-              walletUpdateError?.message ||
-              "balance changed concurrently"
-            }`
-          );
-        }
 
-        /* -----------------------------------------
-           Insert wallet transaction
-           reference_id = tournament_results.id
-           which is a real UUID.
-        ----------------------------------------- */
 
-        const {
-          data: insertedTransaction,
-          error: transactionError,
-        } = await supabaseAdmin
-          .from("wallet_transactions")
-          .insert({
-            user_id: userId,
-            amount,
-            type: "tournament_winning",
-            description:
-              `Tournament winning ₹${amount} credited`,
-            reference_id: referenceId,
-          })
-          .select(
-            "id,user_id,amount,type,reference_id"
-          )
-          .single();
+      return jsonError(
 
-        if (
-          transactionError ||
-          !insertedTransaction
-        ) {
-          /* Roll back this user's balance immediately. */
-          await supabaseAdmin
-            .from("wallet_balances")
-            .update({
-              winning_balance: oldWinning,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", userId)
-            .eq("winning_balance", newWinning);
 
-          throw new Error(
-            `Wallet transaction failed for ${userId}: ${
-              transactionError?.message ||
-              "transaction insert returned no row"
-            }`
-          );
-        }
 
-        creditedWinners.push({
-          userId,
-          amount,
-          oldWinning,
-          newWinning,
-          referenceId,
-        });
+        existingResultsError.message
 
-        insertedWinningTransactions.push(
-          insertedTransaction
-        );
 
-        console.log(
-          "RESULT WINNING CREDITED:",
-          JSON.stringify({
-            tournamentId,
-            userId,
-            amount,
-            oldWinning,
-            newWinning,
-            referenceId,
-          })
-        );
-      }
-    } catch (walletCreditError) {
-      console.error(
-        "RESULT WINNING CREDIT ERROR:",
-        walletCreditError
-      );
 
-      /* -----------------------------------------
-         FULL ROLLBACK
-         Do not leave a partially credited
-         tournament if any winner fails.
-      ----------------------------------------- */
+      );
 
-      for (
-        let i = creditedWinners.length - 1;
-        i >= 0;
-        i--
-      ) {
-        const credited =
-          creditedWinners[i];
 
-        await supabaseAdmin
-          .from("wallet_transactions")
-          .delete()
-          .eq(
-            "reference_id",
-            credited.referenceId
-          )
-          .eq(
-            "user_id",
-            credited.userId
-          )
-          .eq(
-            "type",
-            "tournament_winning"
-          );
 
-        await supabaseAdmin
-          .from("wallet_balances")
-          .update({
-            winning_balance:
-              credited.oldWinning,
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            "user_id",
-            credited.userId
-          )
-          .eq(
-            "winning_balance",
-            credited.newWinning
-          );
-      }
+    }
 
-      /* Also remove the current transaction if
-         the insert succeeded but later processing
-         reported an error. */
-      for (
-        const transaction of
-          insertedWinningTransactions
-      ) {
-        await supabaseAdmin
-          .from("wallet_transactions")
-          .delete()
-          .eq(
-            "id",
-            transaction.id
-          );
-      }
 
-      /* Remove result rows so the admin can retry
-         after fixing the wallet issue. */
-      const {
-        error: resultRollbackError,
-      } = await supabaseAdmin
-        .from("tournament_results")
-        .delete()
-        .eq(
-          "tournament_id",
-          tournamentId
-        );
 
-      if (resultRollbackError) {
-        console.error(
-          "RESULT ROLLBACK DELETE ERROR:",
-          resultRollbackError
-        );
-      }
+    if (
 
-      return jsonError(
-        walletCreditError?.message ||
-          "Tournament winnings could not be credited.",
-        500
-      );
-    }
 
-    /* -----------------------------------------
 
-       Complete match
+      (existingResults || []).length > 0
 
-    ----------------------------------------- */
 
-    const {
 
-      data: completedMatch,
+    ) {
 
-      error: completeMatchError,
 
-    } = await supabaseAdmin
 
-      .from("matches")
+      return jsonError(
 
-      .update({
 
-        status: "completed",
 
-      })
+        "Results are already published and locked.",
 
-      .eq(
 
-        "id",
 
-        match.id
+        409
 
-      )
 
-      .select(
 
-        "id,tournament_id,status"
+      );
 
-      )
 
-      .single();
 
-    if (
+    }
 
-      completeMatchError ||
 
-      !completedMatch
 
-    ) {
+    /* -----------------------------------------
 
-      console.error(
 
-        "COMPLETE MATCH ERROR:",
 
-        completeMatchError
+       Latest match
 
-      );
 
-      return jsonError(
 
-        completeMatchError?.message ||
+    ----------------------------------------- */
 
-          "Results were saved, but the match could not be marked completed."
 
-      );
 
-    }
+    const {
 
-    /* -----------------------------------------
 
-       Complete tournament
 
-    ----------------------------------------- */
+      data: match,
 
-    const {
 
-      data: completedTournament,
 
-      error:
+      error: matchError,
 
-        tournamentStatusError,
 
-    } = await supabaseAdmin
 
-      .from("tournaments")
+    } = await supabaseAdmin
 
-      .update({
 
-        status: "completed",
 
-        updated_at:
+      .from("matches")
 
-          new Date().toISOString(),
 
-      })
 
-      .eq(
+      .select(
 
-        "id",
 
-        tournamentId
 
-      )
+        "id,tournament_id,status"
 
-      .select(
 
-        "id,title,status"
 
-      )
+      )
 
-      .single();
 
-    if (
 
-      tournamentStatusError ||
+      .eq(
 
-      !completedTournament
 
-    ) {
 
-      console.error(
+        "tournament_id",
 
-        "COMPLETE TOURNAMENT ERROR:",
 
-        tournamentStatusError
 
-      );
+        tournamentId
 
-      return jsonError(
 
-        tournamentStatusError?.message ||
 
-          "Results were saved, but tournament status could not be updated."
+      )
 
-      );
 
-    }
 
-    /* -----------------------------------------
+      .order("id", {
 
-       Reload final results
 
-    ----------------------------------------- */
 
-    const {
+        ascending: false,
 
-      data: finalResults,
 
-      error: finalResultsError,
 
-    } = await supabaseAdmin
+      })
 
-      .from("tournament_results")
 
-      .select(
 
-        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
+      .limit(1)
 
-      )
 
-      .eq(
 
-        "tournament_id",
+      .maybeSingle();
 
-        tournamentId
 
-      )
 
-      .order("rank", {
+    if (matchError) {
 
-        ascending: true,
 
-        nullsFirst: false,
 
-      });
+      console.error(
 
-    if (finalResultsError) {
 
-      console.error(
 
-        "FINAL RESULTS LOAD ERROR:",
+        "RESULTS MATCH ERROR:",
 
-        finalResultsError
 
-      );
 
-    }
+        matchError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        matchError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    if (!match) {
+
+
+
+      return jsonError(
+
+
+
+        "Match not found. Create the match before uploading results.",
+
+
+
+        400
+
+
+
+      );
+
+
+
+    }
+
+
+
+    const matchStatus =
+
+
+
+      String(
+
+
+
+        match.status || ""
+
+
+
+      )
+
+
+
+        .trim()
+
+
+
+        .toLowerCase();
+
+
+
+    if (
+
+
+
+      [
+
+
+
+        "completed",
+
+
+
+        "complete",
+
+
+
+        "finished",
+
+
+
+      ].includes(matchStatus)
+
+
+
+    ) {
+
+
+
+      return jsonError(
+
+
+
+        "This match is already completed.",
+
+
+
+        409
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Active participants
+
+
+
+    ----------------------------------------- */
+
+
+
+    const {
+
+
+
+      data: entries,
+
+
+
+      error: entriesError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournament_entries")
+
+
+
+      .select(
+
+
+
+        "user_id,game_name,free_fire_uid"
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "tournament_id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "cancelled",
+
+
+
+        false
+
+
+
+      );
+
+
+
+    if (entriesError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS ENTRIES ERROR:",
+
+
+
+        entriesError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        entriesError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+    const validUserIds =
+
+
+
+      new Set(
+
+
+
+        (entries || [])
+
+
+
+          .map(
+
+
+
+            (entry) =>
+
+
+
+              String(entry.user_id)
+
+
+
+          )
+
+
+
+          .filter(Boolean)
+
+
+
+      );
+
+
+
+    /* -----------------------------------------
+
+
+
+       Validate + clean results
+
+
+
+    ----------------------------------------- */
+
+
+
+    const rows = [];
+
+
+
+    for (const item of incoming) {
+
+
+
+      const userId =
+
+
+
+        String(
+
+
+
+          item?.user_id || ""
+
+
+
+        ).trim();
+
+
+
+      if (!userId) {
+
+
+
+        continue;
+
+
+
+      }
+
+
+
+      if (!validUserIds.has(userId)) {
+
+
+
+        return jsonError(
+
+
+
+          `User ${userId} is not a participant of this tournament.`,
+
+
+
+          400
+
+
+
+        );
+
+
+
+      }
+
+
+
+      const rawRank =
+
+
+
+        item?.rank;
+
+
+
+      let rank = null;
+
+
+
+      if (
+
+
+
+        rawRank !== null &&
+
+
+
+        rawRank !== undefined &&
+
+
+
+        rawRank !== ""
+
+
+
+      ) {
+
+
+
+        rank = Math.max(
+
+
+
+          1,
+
+
+
+          Number(rawRank) || 1
+
+
+
+        );
+
+
+
+      }
+
+
+
+      const kills = Math.max(
+
+
+
+        0,
+
+
+
+        Number(item?.kills) || 0
+
+
+
+      );
+
+
+
+      const winningAmount =
+
+
+
+        Math.max(
+
+
+
+          0,
+
+
+
+          Number(
+
+
+
+            item?.winning_amount
+
+
+
+          ) || 0
+
+
+
+        );
+
+
+
+      rows.push({
+
+
+
+        tournament_id:
+
+
+
+          tournamentId,
+
+
+
+        match_id:
+
+
+
+          match.id,
+
+
+
+        user_id:
+
+
+
+          userId,
+
+
+
+        rank,
+
+
+
+        kills,
+
+
+
+        winning_amount:
+
+
+
+          winningAmount,
+
+
+
+        updated_at:
+
+
+
+          new Date().toISOString(),
+
+
+
+      });
+
+
+
+    }
+
+
+
+    if (rows.length === 0) {
+
+
+
+      return jsonError(
+
+
+
+        "No valid participant results were provided.",
+
+
+
+        400
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Duplicate user protection
+
+
+
+    ----------------------------------------- */
+
+
+
+    const uniqueUsers =
+
+
+
+      new Set(
+
+
+
+        rows.map(
+
+
+
+          (row) =>
+
+
+
+            String(row.user_id)
+
+
+
+        )
+
+
+
+      );
+
+
+
+    if (
+
+
+
+      uniqueUsers.size !==
+
+
+
+      rows.length
+
+
+
+    ) {
+
+
+
+      return jsonError(
+
+
+
+        "Duplicate users found in results.",
+
+
+
+        400
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Save results
+
+
+
+    ----------------------------------------- */
+
+
+
+    const {
+
+
+
+      data: savedRows,
+
+
+
+      error: upsertError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournament_results")
+
+
+
+      .upsert(rows, {
+
+
+
+        onConflict:
+
+
+
+          "tournament_id,user_id",
+
+
+
+      })
+
+
+
+      .select(
+
+
+
+        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
+
+
+
+      );
+
+
+
+    if (upsertError) {
+
+
+
+      console.error(
+
+
+
+        "RESULTS UPSERT ERROR:",
+
+
+
+        upsertError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        upsertError.message
+
+
+
+      );
+
+
+
+    }
+
+
+
+
+
+    /* -----------------------------------------
+
+       CREDIT TOURNAMENT WINNINGS
+
+       reference_id MUST be a UUID because
+
+       wallet_transactions.reference_id is UUID.
+
+    ----------------------------------------- */
+
+
+
+    const winningRows = (savedRows || []).filter(
+
+      (row) =>
+
+        Number(row?.winning_amount || 0) > 0 &&
+
+        row?.id &&
+
+        row?.user_id
+
+    );
+
+
+
+    const creditedWinners = [];
+
+    const insertedWinningTransactions = [];
+
+
+
+    try {
+
+      for (const winner of winningRows) {
+
+        const userId = String(winner.user_id);
+
+        const amount = Number(winner.winning_amount || 0);
+
+        const referenceId = String(winner.id);
+
+
+
+        if (!amount || amount <= 0) {
+
+          continue;
+
+        }
+
+
+
+        /* -----------------------------------------
+
+           Idempotency guard
+
+           If this exact result UUID was already
+
+           credited, do not credit it again.
+
+        ----------------------------------------- */
+
+
+
+        const {
+
+          data: existingTransaction,
+
+          error: existingTransactionError,
+
+        } = await supabaseAdmin
+
+          .from("wallet_transactions")
+
+          .select("id,user_id,amount,type,reference_id")
+
+          .eq("reference_id", referenceId)
+
+          .eq("user_id", userId)
+
+          .eq("type", "tournament_winning")
+
+          .maybeSingle();
+
+
+
+        if (existingTransactionError) {
+
+          throw new Error(
+
+            `Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}`
+
+          );
+
+        }
+
+
+
+        if (existingTransaction) {
+
+          console.log(
+
+            "RESULT WINNING ALREADY CREDITED:",
+
+            JSON.stringify({
+
+              tournamentId,
+
+              userId,
+
+              amount,
+
+              referenceId,
+
+            })
+
+          );
+
+          continue;
+
+        }
+
+
+
+        /* -----------------------------------------
+
+           Read current winning balance
+
+        ----------------------------------------- */
+
+
+
+        const {
+
+          data: wallet,
+
+          error: walletError,
+
+        } = await supabaseAdmin
+
+          .from("wallet_balances")
+
+          .select("user_id,winning_balance")
+
+          .eq("user_id", userId)
+
+          .maybeSingle();
+
+
+
+        if (walletError) {
+
+          throw new Error(
+
+            `Wallet lookup failed for ${userId}: ${walletError.message}`
+
+          );
+
+        }
+
+
+
+        if (!wallet) {
+
+          throw new Error(
+
+            `Wallet not found for ${userId}.`
+
+          );
+
+        }
+
+
+
+        const oldWinning = Number(
+
+          wallet.winning_balance || 0
+
+        );
+
+
+
+        const newWinning = oldWinning + amount;
+
+
+
+        /* -----------------------------------------
+
+           Conditional balance update
+
+           Prevents concurrent overwrite.
+
+        ----------------------------------------- */
+
+
+
+        const {
+
+          data: updatedWallet,
+
+          error: walletUpdateError,
+
+        } = await supabaseAdmin
+
+          .from("wallet_balances")
+
+          .update({
+
+            winning_balance: newWinning,
+
+            updated_at: new Date().toISOString(),
+
+          })
+
+          .eq("user_id", userId)
+
+          .eq("winning_balance", oldWinning)
+
+          .select("user_id,winning_balance")
+
+          .maybeSingle();
+
+
+
+        if (
+
+          walletUpdateError ||
+
+          !updatedWallet
+
+        ) {
+
+          throw new Error(
+
+            `Wallet balance update failed for ${userId}: ${
+
+              walletUpdateError?.message ||
+
+              "balance changed concurrently"
+
+            }`
+
+          );
+
+        }
+
+
+
+        /* -----------------------------------------
+
+           Insert wallet transaction
+
+           reference_id = tournament_results.id
+
+           which is a real UUID.
+
+        ----------------------------------------- */
+
+
+
+        const {
+
+          data: insertedTransaction,
+
+          error: transactionError,
+
+        } = await supabaseAdmin
+
+          .from("wallet_transactions")
+
+          .insert({
+
+            user_id: userId,
+
+            amount,
+
+            type: "tournament_winning",
+
+            description:
+
+              `Tournament winning ₹${amount} credited`,
+
+            reference_id: referenceId,
+
+          })
+
+          .select(
+
+            "id,user_id,amount,type,reference_id"
+
+          )
+
+          .single();
+
+
+
+        if (
+
+          transactionError ||
+
+          !insertedTransaction
+
+        ) {
+
+          /* Roll back this user's balance immediately. */
+
+          await supabaseAdmin
+
+            .from("wallet_balances")
+
+            .update({
+
+              winning_balance: oldWinning,
+
+              updated_at: new Date().toISOString(),
+
+            })
+
+            .eq("user_id", userId)
+
+            .eq("winning_balance", newWinning);
+
+
+
+          throw new Error(
+
+            `Wallet transaction failed for ${userId}: ${
+
+              transactionError?.message ||
+
+              "transaction insert returned no row"
+
+            }`
+
+          );
+
+        }
+
+
+
+        creditedWinners.push({
+
+          userId,
+
+          amount,
+
+          oldWinning,
+
+          newWinning,
+
+          referenceId,
+
+        });
+
+
+
+        insertedWinningTransactions.push(
+
+          insertedTransaction
+
+        );
+
+
+
+        console.log(
+
+          "RESULT WINNING CREDITED:",
+
+          JSON.stringify({
+
+            tournamentId,
+
+            userId,
+
+            amount,
+
+            oldWinning,
+
+            newWinning,
+
+            referenceId,
+
+          })
+
+        );
+
+      }
+
+    } catch (walletCreditError) {
+
+      console.error(
+
+        "RESULT WINNING CREDIT ERROR:",
+
+        walletCreditError
+
+      );
+
+
+
+      /* -----------------------------------------
+
+         FULL ROLLBACK
+
+         Do not leave a partially credited
+
+         tournament if any winner fails.
+
+      ----------------------------------------- */
+
+
+
+      for (
+
+        let i = creditedWinners.length - 1;
+
+        i >= 0;
+
+        i--
+
+      ) {
+
+        const credited =
+
+          creditedWinners[i];
+
+
+
+        await supabaseAdmin
+
+          .from("wallet_transactions")
+
+          .delete()
+
+          .eq(
+
+            "reference_id",
+
+            credited.referenceId
+
+          )
+
+          .eq(
+
+            "user_id",
+
+            credited.userId
+
+          )
+
+          .eq(
+
+            "type",
+
+            "tournament_winning"
+
+          );
+
+
+
+        await supabaseAdmin
+
+          .from("wallet_balances")
+
+          .update({
+
+            winning_balance:
+
+              credited.oldWinning,
+
+            updated_at:
+
+              new Date().toISOString(),
+
+          })
+
+          .eq(
+
+            "user_id",
+
+            credited.userId
+
+          )
+
+          .eq(
+
+            "winning_balance",
+
+            credited.newWinning
+
+          );
+
+      }
+
+
+
+      /* Also remove the current transaction if
+
+         the insert succeeded but later processing
+
+         reported an error. */
+
+      for (
+
+        const transaction of
+
+          insertedWinningTransactions
+
+      ) {
+
+        await supabaseAdmin
+
+          .from("wallet_transactions")
+
+          .delete()
+
+          .eq(
+
+            "id",
+
+            transaction.id
+
+          );
+
+      }
+
+
+
+      /* Remove result rows so the admin can retry
+
+         after fixing the wallet issue. */
+
+      const {
+
+        error: resultRollbackError,
+
+      } = await supabaseAdmin
+
+        .from("tournament_results")
+
+        .delete()
+
+        .eq(
+
+          "tournament_id",
+
+          tournamentId
+
+        );
+
+
+
+      if (resultRollbackError) {
+
+        console.error(
+
+          "RESULT ROLLBACK DELETE ERROR:",
+
+          resultRollbackError
+
+        );
+
+      }
+
+
+
+      return jsonError(
+
+        walletCreditError?.message ||
+
+          "Tournament winnings could not be credited.",
+
+        500
+
+      );
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Complete match
+
+
+
+    ----------------------------------------- */
+
+
+
+    const {
+
+
+
+      data: completedMatch,
+
+
+
+      error: completeMatchError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("matches")
+
+
+
+      .update({
+
+
+
+        status: "completed",
+
+
+
+      })
+
+
+
+      .eq(
+
+
+
+        "id",
+
+
+
+        match.id
+
+
+
+      )
+
+
+
+      .select(
+
+
+
+        "id,tournament_id,status"
+
+
+
+      )
+
+
+
+      .single();
+
+
+
+    if (
+
+
+
+      completeMatchError ||
+
+
+
+      !completedMatch
+
+
+
+    ) {
+
+
+
+      console.error(
+
+
+
+        "COMPLETE MATCH ERROR:",
+
+
+
+        completeMatchError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        completeMatchError?.message ||
+
+
+
+          "Results were saved, but the match could not be marked completed."
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Complete tournament
+
+
+
+    ----------------------------------------- */
+
+
+
+    const {
+
+
+
+      data: completedTournament,
+
+
+
+      error:
+
+
+
+        tournamentStatusError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournaments")
+
+
+
+      .update({
+
+
+
+        status: "completed",
+
+
+
+        updated_at:
+
+
+
+          new Date().toISOString(),
+
+
+
+      })
+
+
+
+      .eq(
+
+
+
+        "id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .select(
+
+
+
+        "id,title,status"
+
+
+
+      )
+
+
+
+      .single();
+
+
+
+    if (
+
+
+
+      tournamentStatusError ||
+
+
+
+      !completedTournament
+
+
+
+    ) {
+
+
+
+      console.error(
+
+
+
+        "COMPLETE TOURNAMENT ERROR:",
+
+
+
+        tournamentStatusError
+
+
+
+      );
+
+
+
+      return jsonError(
+
+
+
+        tournamentStatusError?.message ||
+
+
+
+          "Results were saved, but tournament status could not be updated."
+
+
+
+      );
+
+
+
+    }
+
+
+
+    /* -----------------------------------------
+
+
+
+       Reload final results
+
+
+
+    ----------------------------------------- */
+
+
+
+    const {
+
+
+
+      data: finalResults,
+
+
+
+      error: finalResultsError,
+
+
+
+    } = await supabaseAdmin
+
+
+
+      .from("tournament_results")
+
+
+
+      .select(
+
+
+
+        "id,tournament_id,match_id,user_id,rank,kills,winning_amount"
+
+
+
+      )
+
+
+
+      .eq(
+
+
+
+        "tournament_id",
+
+
+
+        tournamentId
+
+
+
+      )
+
+
+
+      .order("rank", {
+
+
+
+        ascending: true,
+
+
+
+        nullsFirst: false,
+
+
+
+      });
+
+
+
+    if (finalResultsError) {
+
+
+
+      console.error(
+
+
+
+        "FINAL RESULTS LOAD ERROR:",
+
+
+
+        finalResultsError
+
+
+
+      );
+
+
+
+    }
+
+
 
 /* -----------------------------------------
 
-   SEND RESULT NOTIFICATIONS
 
-   ONLY to participants of this tournament.
 
------------------------------------------ */
+   SEND RESULT NOTIFICATIONS
 
-    const notificationStats =
 
-      await sendTournamentResultNotifications({
 
-        tournamentId,
+   ONLY to participants of this tournament.
 
-        tournamentTitle:
 
-          completedTournament?.title ||
 
-          tournament?.title ||
+\----------------------------------------- */
 
-          "",
 
-        resultRows:
 
-          finalResults ||
+    const notificationStats =
 
-          savedRows ||
 
-          rows,
 
-      });
+      await sendTournamentResultNotifications({
 
-    /* -----------------------------------------
 
-       SUCCESS
 
-    ----------------------------------------- */
+        tournamentId,
 
-    return NextResponse.json({
 
-      success: true,
 
-      message:
+        tournamentTitle:
 
-        "Results uploaded successfully.",
 
-      status:
 
-        "completed",
+          completedTournament?.title ||
 
-      tournament:
 
-        completedTournament,
 
-      match:
+          tournament?.title ||
 
-        completedMatch,
 
-      results:
 
-        finalResults ||
+          "",
 
-        savedRows ||
 
-        rows,
 
-      participants:
+        resultRows:
 
-        finalResults ||
 
-        savedRows ||
 
-        rows,
+          finalResults ||
 
-      notification:
 
-        notificationStats,
 
-    });
+          savedRows ||
 
-  } catch (error) {
 
-    console.error(
 
-      "ADMIN RESULTS POST ERROR:",
+          rows,
 
-      error
 
-    );
 
-    return jsonError(
+      });
 
-      error?.message ||
 
-        "Unable to save tournament results."
 
-    );
+    /* -----------------------------------------
 
-  }
+
+
+       SUCCESS
+
+
+
+    ----------------------------------------- */
+
+
+
+    return NextResponse.json({
+
+
+
+      success: true,
+
+
+
+      message:
+
+
+
+        "Results uploaded successfully.",
+
+
+
+      status:
+
+
+
+        "completed",
+
+
+
+      tournament:
+
+
+
+        completedTournament,
+
+
+
+      match:
+
+
+
+        completedMatch,
+
+
+
+      results:
+
+
+
+        finalResults ||
+
+
+
+        savedRows ||
+
+
+
+        rows,
+
+
+
+      participants:
+
+
+
+        finalResults ||
+
+
+
+        savedRows ||
+
+
+
+        rows,
+
+
+
+      notification:
+
+
+
+        notificationStats,
+
+
+
+    });
+
+
+
+  } catch (error) {
+
+
+
+    console.error(
+
+
+
+      "ADMIN RESULTS POST ERROR:",
+
+
+
+      error
+
+
+
+    );
+
+
+
+    return jsonError(
+
+
+
+      error?.message ||
+
+
+
+        "Unable to save tournament results."
+
+
+
+    );
+
+
+
+  }
+
+
 
 }

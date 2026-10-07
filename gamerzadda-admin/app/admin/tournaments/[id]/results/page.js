@@ -530,6 +530,56 @@ export default function TournamentResultsPage() {
 
 
 
+          // ADMIN RESULTS API is the authoritative team source for DUO/SQUAD.
+          // The normal browser Supabase client can be restricted by RLS, so
+          // always merge team metadata returned by the admin route.
+          const apiParticipants =
+            Array.isArray(responseData?.participants)
+              ? responseData.participants
+              : [];
+
+          if (
+            ["DUO", "SQUAD"].includes(
+              String(tournamentData?.mode || "")
+                .trim()
+                .toUpperCase()
+            ) &&
+            apiParticipants.length > 0
+          ) {
+            const apiParticipantMap = new Map(
+              apiParticipants.map((item) => [
+                String(item.user_id),
+                item,
+              ])
+            );
+
+            setParticipants((previous) =>
+              previous.map((player) => {
+                const apiPlayer = apiParticipantMap.get(
+                  String(player.user_id)
+                );
+
+                if (!apiPlayer) {
+                  return player;
+                }
+
+                return {
+                  ...player,
+                  team_id: String(apiPlayer.team_id || player.team_id || ""),
+                  team_name: String(apiPlayer.team_name || player.team_name || "").trim(),
+                  team_type: String(apiPlayer.team_type || player.team_type || "").trim().toUpperCase(),
+                  team_max_members: Number(apiPlayer.team_max_members || player.team_max_members || 0),
+                  team_code: String(apiPlayer.team_code || player.team_code || "").trim(),
+                  is_team_leader: Boolean(
+                    apiPlayer.is_team_leader ?? player.is_team_leader
+                  ),
+                };
+              })
+            );
+          }
+
+
+
           const initialResults = {};
 
 
@@ -906,12 +956,26 @@ export default function TournamentResultsPage() {
         winning_amount: "0",
       };
 
+      const next = {
+        ...current,
+        [field]: value,
+      };
+
+      // Kills change only this member's personal payout.
+      if (field === "kills") {
+        next.winning_amount = String(
+          calculateWinningAmount(current.rank, value)
+        );
+      }
+
+      // Manual personal-win edits remain manual.
+      if (field === "winning_amount") {
+        next.winning_amount = value;
+      }
+
       return {
         ...previous,
-        [userId]: {
-          ...current,
-          [field]: value,
-        },
+        [userId]: next,
       };
     });
   }
@@ -1050,7 +1114,7 @@ export default function TournamentResultsPage() {
     filteredParticipants.forEach((player) => {
       const teamId =
         String(player.team_id || "").trim() ||
-        `solo-${player.user_id}`;
+        `unlinked-${player.user_id}`;
 
       if (!groups.has(teamId)) {
         groups.set(teamId, {
@@ -1092,10 +1156,14 @@ export default function TournamentResultsPage() {
           winning_amount: "0",
         };
 
-        // Team rank is shared. Personal winning amount stays untouched.
+        // Team rank is shared. Recalculate each member's personal win
+        // using that shared rank plus the member's own kills.
         next[userId] = {
           ...current,
           rank: value,
+          winning_amount: String(
+            calculateWinningAmount(value, current.kills)
+          ),
         };
       });
 
@@ -3477,7 +3545,7 @@ export default function TournamentResultsPage() {
                         </span>
 
                         <span className="teamSummaryPill">
-                          💀 {teamKills} Team Kills
+                          💀 {teamKills} TOTAL KILLS
                         </span>
 
                         <span className="teamSummaryPill">
@@ -3651,7 +3719,7 @@ export default function TournamentResultsPage() {
 
                       <div style={{ textAlign: "right" }}>
                         <div className="teamFooterLabel">
-                          Team Personal Payout
+                          Team Total Win
                         </div>
 
                         <div className="teamFooterWin">
