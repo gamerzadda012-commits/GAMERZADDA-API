@@ -41,11 +41,11 @@ async function requireAdmin(request) {
       process.env.NEXT_PUBLIC_API_URL ||
       "https\\://api.gamerzadda.in";
     const response = await fetch(
-      \`${apiBase}/api/admin/session\`,
+      `${apiBase}/api/admin/session`,
       {
         method: "GET",
         headers: {
-          Cookie: \`gamerzadda_admin_session=${sessionCookie}\`,
+          Cookie: `gamerzadda_admin_session=${sessionCookie}`,
         },
         cache: "no-store",
       }
@@ -187,9 +187,9 @@ async function sendTournamentResultNotifications({
         if (winningAmount > 0) {
           return {
             token,
-            title: \`🏆 You Won ₹${winningAmount}!\`,
+            title: `🏆 You Won ₹${winningAmount}!`,
             body:
-              \`Tournament results are out. You won ₹${winningAmount}. Check your results now!\`,
+              `Tournament results are out. You won ₹${winningAmount}. Check your results now!`,
           };
         }
         return {
@@ -473,11 +473,11 @@ export async function GET(request, context) {
     /* -----------------------------------------
        Participants
     ----------------------------------------- */
-    /\* -----------------------------------------
+    /* -----------------------------------------
        DUO / SQUAD TEAM DETAILS
        Service-role access keeps team metadata available even when
        the browser Supabase client is restricted by RLS.
-    ----------------------------------------- \*/
+    ----------------------------------------- */
     let teamMemberRows = [];
     let teamRows = [];
     const resultMode = String(tournament?.mode || "")
@@ -500,7 +500,7 @@ export async function GET(request, context) {
       const teamIds = [
         ...new Set(
           teamMemberRows
-            .map((row) => String(row\.team_id || "").trim())
+            .map((row) => String(row.team_id || "").trim())
             .filter(Boolean)
         ),
       ];
@@ -510,13 +510,42 @@ export async function GET(request, context) {
           error: teamError,
         } = await supabaseAdmin
           .from("tournament_teams")
-          .select("id,team_name,team_type,max_members,leader_user_id,team_code")
+          .select(
+            "id,tournament_id,team_name,team_type,max_members,leader_user_id,team_code,status,created_at"
+          )
+          .eq("tournament_id", tournamentId)
           .in("id", teamIds);
+
         if (teamError) {
           console.error("RESULTS TEAMS ERROR:", teamError);
           return jsonError(teamError.message);
         }
+
         teamRows = loadedTeams || [];
+      }
+
+      // Fallback: load every team for this tournament as well. This keeps
+      // the team name available even if a member row was created with a
+      // stale/mismatched entry reference. Existing SOLO flow is untouched.
+      if (teamRows.length === 0) {
+        const {
+          data: fallbackTeams,
+          error: fallbackTeamError,
+        } = await supabaseAdmin
+          .from("tournament_teams")
+          .select(
+            "id,tournament_id,team_name,team_type,max_members,leader_user_id,team_code,status,created_at"
+          )
+          .eq("tournament_id", tournamentId);
+
+        if (fallbackTeamError) {
+          console.error(
+            "RESULTS FALLBACK TEAMS ERROR:",
+            fallbackTeamError
+          );
+        } else {
+          teamRows = fallbackTeams || [];
+        }
       }
     }
     const teamMemberMap = new Map(
@@ -556,6 +585,11 @@ export async function GET(request, context) {
             teamMemberMap.get(id)?.team_id || ""
           ),
           team_name: String(
+            teamMap.get(
+              String(teamMemberMap.get(id)?.team_id || "")
+            )?.team_name || ""
+          ).trim(),
+          teamName: String(
             teamMap.get(
               String(teamMemberMap.get(id)?.team_id || "")
             )?.team_name || ""
@@ -851,7 +885,7 @@ export async function POST(
       }
       if (!validUserIds.has(userId)) {
         return jsonError(
-          \`User ${userId} is not a participant of this tournament.\`,
+          `User ${userId} is not a participant of this tournament.`,
           400
         );
       }
@@ -981,7 +1015,7 @@ export async function POST(
           .maybeSingle();
         if (existingTransactionError) {
           throw new Error(
-            \`Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}\`
+            `Wallet transaction lookup failed for ${userId}: ${existingTransactionError.message}`
           );
         }
         if (existingTransaction) {
@@ -1009,12 +1043,12 @@ export async function POST(
           .maybeSingle();
         if (walletError) {
           throw new Error(
-            \`Wallet lookup failed for ${userId}: ${walletError.message}\`
+            `Wallet lookup failed for ${userId}: ${walletError.message}`
           );
         }
         if (!wallet) {
           throw new Error(
-            \`Wallet not found for ${userId}.\`
+            `Wallet not found for ${userId}.`
           );
         }
         const oldWinning = Number(
@@ -1043,10 +1077,10 @@ export async function POST(
           !updatedWallet
         ) {
           throw new Error(
-            \`Wallet balance update failed for ${userId}: ${
+            `Wallet balance update failed for ${userId}: ${
               walletUpdateError?.message ||
               "balance changed concurrently"
-            }\`
+            }`
           );
         }
         /* -----------------------------------------
@@ -1064,7 +1098,7 @@ export async function POST(
             amount,
             type: "tournament_winning",
             description:
-              \`Tournament winning ₹${amount} credited\`,
+              `Tournament winning ₹${amount} credited`,
             reference_id: referenceId,
           })
           .select(
@@ -1085,10 +1119,10 @@ export async function POST(
             .eq("user_id", userId)
             .eq("winning_balance", newWinning);
           throw new Error(
-            \`Wallet transaction failed for ${userId}: ${
+            `Wallet transaction failed for ${userId}: ${
               transactionError?.message ||
               "transaction insert returned no row"
-            }\`
+            }`
           );
         }
         creditedWinners.push({
