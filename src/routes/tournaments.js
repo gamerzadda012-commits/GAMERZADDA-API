@@ -823,7 +823,7 @@ router.get(
                         error: teamsError
                     } = await supabase
                         .from("tournament_teams")
-                        .select("id, team_code, team_name, team_type, max_members")
+                        .select("id, team_code, team_name, team_type, max_members, leader_user_id")
                         .in("id", teamIds);
 
                     if (teamsError) {
@@ -951,7 +951,14 @@ router.get(
                         ).trim().toUpperCase(),
                         team_max_members: Number(
                             teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.max_members || 0
-                        )
+                        ),
+                        team_creator_profile_pic: String(
+                            userMap.get(
+                                String(
+                                    teamMap.get(String(teamMemberMap.get(String(entry.id))?.team_id || ""))?.leader_user_id || ""
+                                )
+                            )?.avatar_url || ""
+                        ).trim()
                     };
                 }
             );
