@@ -1142,124 +1142,7 @@ export async function GET(request, context) {
 
 
 
-        /* -----------------------------------------
-       Tournament
-    ----------------------------------------- */
-    const {
-      data: tournament,
-      error: tournamentError,
-    } = await getTournament(tournamentId);
-
-    if (tournamentError) {
-      console.error("RESULTS TOURNAMENT ERROR:", tournamentError);
-      return jsonError(tournamentError.message);
-    }
-
-    if (!tournament) {
-      return jsonError("Tournament not found.", 404);
-    }
-
-    /* -----------------------------------------
-       Latest match
-    ----------------------------------------- */
-    const {
-      data: match,
-      error: matchError,
-    } = await supabaseAdmin
-      .from("matches")
-      .select("id,status,room_id,room_password,start_time,tournament_id")
-      .eq("tournament_id", tournamentId)
-      .order("id", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (matchError) {
-      console.error("RESULTS MATCH ERROR:", matchError);
-      return jsonError(matchError.message);
-    }
-
-    /* -----------------------------------------
-       Tournament entries
-    ----------------------------------------- */
-    const {
-      data: entries,
-      error: entriesError,
-    } = await supabaseAdmin
-      .from("tournament_entries")
-      .select("user_id,game_name,free_fire_uid,level,created_at,cancelled")
-      .eq("tournament_id", tournamentId)
-      .eq("cancelled", false)
-      .order("created_at", { ascending: true });
-
-    if (entriesError) {
-      console.error("RESULTS ENTRIES ERROR:", entriesError);
-      return jsonError(entriesError.message);
-    }
-
-    const userIds = [
-      ...new Set(
-        (entries || [])
-          .map((entry) => entry.user_id)
-          .filter(Boolean)
-          .map(String)
-      ),
-    ];
-
-    /* -----------------------------------------
-       Users
-    ----------------------------------------- */
-    let users = [];
-
-    if (userIds.length) {
-      const {
-        data: userRows,
-        error: usersError,
-      } = await supabaseAdmin
-        .from("users")
-        .select("*")
-        .in("id", userIds);
-
-      if (usersError) {
-        console.error("RESULTS USERS ERROR:", usersError);
-        return jsonError(usersError.message);
-      }
-
-      users = userRows || [];
-    }
-
-    /* -----------------------------------------
-       Existing results
-    ----------------------------------------- */
-    const {
-      data: resultRows,
-      error: resultError,
-    } = await supabaseAdmin
-      .from("tournament_results")
-      .select("id,tournament_id,match_id,user_id,rank,kills,winning_amount")
-      .eq("tournament_id", tournamentId)
-      .order("rank", { ascending: true, nullsFirst: false });
-
-    if (resultError) {
-      console.error("RESULTS RESULT ROW ERROR:", resultError);
-      return jsonError(resultError.message);
-    }
-
-    /* -----------------------------------------
-       Maps
-    ----------------------------------------- */
-    const userMap = new Map(
-      users.map((user) => [String(user.id), user])
-    );
-
-    const entryMap = new Map(
-      (entries || []).map((entry) => [String(entry.user_id), entry])
-    );
-
-    const resultMap = new Map(
-      (resultRows || []).map((result) => [String(result.user_id), result])
-    );
-
-/* -----------------------------------------
+    /* -----------------------------------------
 
        DUO / SQUAD TEAM DETAILS
 
@@ -2235,29 +2118,42 @@ export async function POST(
 
     if (!match) {
 
+      const {
+        data: createdMatch,
+        error: createMatchError,
+      } = await supabaseAdmin
+        .from("matches")
+        .insert({
+          tournament_id: tournamentId,
+          room_id: "",
+          room_password: "",
+          status: "live",
+        })
+        .select("id,tournament_id,status")
+        .single();
 
+      if (createMatchError || !createdMatch) {
+        console.error(
+          "RESULTS MATCH CREATE ERROR:",
+          createMatchError
+        );
+        return jsonError(
+          createMatchError?.message || "Unable to create match.",
+          500
+        );
+      }
 
-      return jsonError(
+      match = createdMatch;
 
+      console.log(
+        "RESULTS MATCH AUTO-CREATED:",
+        createdMatch.id,
+        "for tournament:",
+        tournamentId
+      );
+    }
 
-
-        "Match not found. Create the match before uploading results.",
-
-
-
-        400
-
-
-
-      );
-
-
-
-    }
-
-
-
-    const matchStatus =
+    const matchStatus =
 
 
 
