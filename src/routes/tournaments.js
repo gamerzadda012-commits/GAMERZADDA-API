@@ -5874,17 +5874,7 @@ function getTeamConfig(mode) {
 }
 
 function generateTeamCode() {
-    const randomPart = Math.random()
-        .toString(36)
-        .substring(2, 10)
-        .toUpperCase();
-
-    const timePart = Date.now()
-        .toString(36)
-        .slice(-4)
-        .toUpperCase();
-
-    return `GZ${randomPart}${timePart}`;
+    return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 async function checkTeamJoinRules(userId, tournament) {
@@ -6037,9 +6027,10 @@ router.post("/team/create", async (req, res) => {
             });
         }
 
-        const { tournamentId, gameName, uid, level } = req.body || {};
+        const { tournamentId, teamName, gameName, uid, level } = req.body || {};
 
         const cleanTournamentId = String(tournamentId || "").trim();
+        const cleanTeamName = String(teamName || "").trim();
         const cleanGameName = String(gameName || "").trim();
         const cleanUid = String(uid || "").trim();
         const cleanLevel = Number(level);
@@ -6049,6 +6040,22 @@ router.post("/team/create", async (req, res) => {
                 success: false,
                 code: "INVALID_TOURNAMENT",
                 error: "Tournament ID is required."
+            });
+        }
+
+        if (!cleanTeamName) {
+            return res.status(400).json({
+                success: false,
+                code: "INVALID_TEAM_NAME",
+                error: "Team name is required."
+            });
+        }
+
+        if (cleanTeamName.length > 30) {
+            return res.status(400).json({
+                success: false,
+                code: "INVALID_TEAM_NAME",
+                error: "Team name must be 30 characters or less."
             });
         }
 
@@ -6342,6 +6349,7 @@ router.post("/team/create", async (req, res) => {
                 .insert({
                     tournament_id: cleanTournamentId,
                     team_code: teamCode,
+                    team_name: cleanTeamName,
                     leader_user_id: userId,
                     team_type: teamConfig.type,
                     max_members: teamConfig.maxMembers,
@@ -6351,6 +6359,7 @@ router.post("/team/create", async (req, res) => {
                     id,
                     tournament_id,
                     team_code,
+                    team_name,
                     leader_user_id,
                     team_type,
                     max_members,
@@ -6477,6 +6486,7 @@ router.post("/team/create", async (req, res) => {
             team: {
                 id: team.id,
                 teamCode: team.team_code,
+                teamName: team.team_name,
                 teamType: team.team_type,
                 maxMembers: team.max_members,
                 memberCount: 1,
@@ -6540,6 +6550,138 @@ router.post("/team/create", async (req, res) => {
 });
 
 // ============================================================
+// GET MY TEAM
+// GET /api/tournaments/team/my?tournamentId=...
+// Returns the team the logged-in user belongs to for this tournament.
+// Used by Android to show the team-code popup whenever the page opens.
+// ============================================================
+
+router.get("/team/my", async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const tournamentId = String(req.query.tournamentId || "").trim();
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                code: "AUTH_REQUIRED",
+                error: "User session not found. Please login again."
+            });
+        }
+
+        if (!tournamentId) {
+            return res.status(400).json({
+                success: false,
+                code: "INVALID_TOURNAMENT",
+                error: "Tournament ID is required."
+            });
+        }
+
+        const {
+            data: member,
+            error: memberError
+        } = await supabase
+            .from("tournament_team_members")
+            .select("team_id")
+            .eq("tournament_id", tournamentId)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        if (memberError) {
+            return res.status(500).json({
+                success: false,
+                error: memberError.message
+            });
+        }
+
+        if (!member) {
+            return res.status(404).json({
+                success: false,
+                code: "TEAM_NOT_FOUND",
+                error: "You are not a member of a team for this tournament."
+            });
+        }
+
+        const {
+            data: team,
+            error: teamError
+        } = await supabase
+            .from("tournament_teams")
+            .select(`
+                id,
+                tournament_id,
+                team_code,
+                team_name,
+                leader_user_id,
+                team_type,
+                max_members,
+                status,
+                created_at
+            `)
+            .eq("id", member.team_id)
+            .maybeSingle();
+
+        if (teamError) {
+            return res.status(500).json({
+                success: false,
+                error: teamError.message
+            });
+        }
+
+        if (!team) {
+            return res.status(404).json({
+                success: false,
+                code: "TEAM_NOT_FOUND",
+                error: "Team not found."
+            });
+        }
+
+        const cleanCode = String(team.team_code || "").trim();
+        if (!/^\d{6}$/.test(cleanCode)) {
+            return res.status(500).json({
+                success: false,
+                code: "INVALID_TEAM_CODE",
+                error: "Team has an invalid 6-digit code."
+            });
+        }
+
+        const {
+            data: members,
+            error: membersError
+        } = await supabase
+            .from("tournament_team_members")
+            .select("id, user_id, game_name, free_fire_uid, level, is_leader, entry_id, created_at")
+            .eq("team_id", team.id)
+            .order("created_at", { ascending: true });
+
+        if (membersError) {
+            return res.status(500).json({
+                success: false,
+                error: membersError.message
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            team: {
+                ...team,
+                teamCode: cleanCode,
+                teamName: team.team_name || "",
+                memberCount: (members || []).length,
+                members: members || []
+            }
+        });
+
+    } catch (error) {
+        console.error("GET MY TEAM ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            error: error?.message || "Internal server error"
+        });
+    }
+});
+
+// ============================================================
 // GET TEAM
 // GET /api/tournaments/team?teamCode=GZXXXXXXXX
 // ============================================================
@@ -6567,6 +6709,7 @@ router.get("/team", async (req, res) => {
                 id,
                 tournament_id,
                 team_code,
+                team_name,
                 leader_user_id,
                 team_type,
                 max_members,
@@ -6669,6 +6812,14 @@ router.post("/team/join", async (req, res) => {
                 success: false,
                 code: "INVALID_TEAM_CODE",
                 error: "Team code is required."
+            });
+        }
+
+        if (!/^\d{6}$/.test(cleanTeamCode)) {
+            return res.status(400).json({
+                success: false,
+                code: "INVALID_TEAM_CODE",
+                error: "Team code must be exactly 6 digits."
             });
         }
 
@@ -6991,6 +7142,7 @@ router.post("/team/join", async (req, res) => {
             team: {
                 id: team.id,
                 teamCode: team.team_code,
+                teamName: team.team_name,
                 teamType: team.team_type,
                 maxMembers: team.max_members,
                 memberCount: newMemberCount
