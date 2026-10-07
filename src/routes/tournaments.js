@@ -171,552 +171,155 @@ function cleanNumber(value, fallback = 0) {
 
 
 router.get("/", async (req, res) => {
-
-
-
     try {
-
-
-
-        const game =
-
-
-
-            String(
-
-
-
-                req.query.game || ""
-
-
-
-            ).trim();
-
-
-
-
-
-
-
-        let query =
-
-
-
-            supabase
-
-
-
-                .from("tournaments")
-
-
-
-                .select(`
-
-
-
-                    id,
-
-
-
-                    title,
-
-
-
-                    game,
-
-
-
-                    mode,
-
-
-
-                    entry_fee,
-
-
-
-                    prize_pool,
-
-
-
-                    kill_reward,
-
-
-
-                    max_players,
-
-
-
-                    start_time,
-
-
-
-                    map,
-
-
-
-                    status,
-
-
-
-                    rules,
-
-
-
-                    bonus_usable_percent
-
-
-
-                `)
-
-
-
-                .order(
-
-
-
-                    "start_time",
-
-
-
-                    {
-
-
-
-                        ascending: true
-
-
-
-                    }
-
-
-
-                );
-
-
-
-
-
-
-
-        if (game) {
-
-
-
-            query =
-
-
-
-                query.eq(
-
-
-
-                    "game",
-
-
-
-                    game
-
-
-
-                );
-
-
-
-        }
-
-
-
-
-
-
-
-        const {
-
-
-
-            data: tournaments,
-
-
-
-            error
-
-
-
-        } = await query;
-
-
-
-
-
-
-
-        if (error) {
-
-
-
-
-
-
-
-            console.error(
-
-
-
-                "GET TOURNAMENTS ERROR:",
-
-
-
-                error
-
-
-
-            );
-
-
-
-
-
-
-
-            return res.status(500).json({
-
-
-
-                success: false,
-
-
-
-                error: error.message
-
-
-
+        const game = String(req.query.game || "").trim();
+
+        // ========================================================
+        // PUBLIC TOURNAMENT RULE
+        //
+        // Only tournaments whose start_time is in the FUTURE
+        // are loaded by this public endpoint.
+        //
+        // Once start_time is reached/passed:
+        // - it is no longer returned here
+        // - it will not come back to the public listing
+        //
+        // Applies to:
+        // - Free Fire
+        // - Free Fire MAX
+        // - Clash Squad
+        // - Lone Wolf
+        //
+        // NO artificial LIMIT is used.
+        //
+        // My Matches / My Results are separate endpoints and are
+        // intentionally not affected by this filter.
+        // ========================================================
+
+        const nowIso = new Date().toISOString();
+
+        let query = supabase
+            .from("tournaments")
+            .select(`
+                id,
+                title,
+                game,
+                mode,
+                entry_fee,
+                prize_pool,
+                kill_reward,
+                max_players,
+                start_time,
+                map,
+                status,
+                rules,
+                bonus_usable_percent
+            `)
+            .gt("start_time", nowIso)
+            .order("start_time", {
+                ascending: true
             });
 
-
-
+        // Optional game filter.
+        // The future-only rule above remains active for every game.
+        if (game) {
+            query = query.eq("game", game);
         }
 
+        const {
+            data: tournaments,
+            error
+        } = await query;
 
+        if (error) {
+            console.error(
+                "GET TOURNAMENTS ERROR:",
+                error
+            );
 
-
-
-
+            return res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
 
         const list = tournaments || [];
 
-        // Hide started/live/completed tournaments from the public list.
-        // Applies to Free Fire, Free Fire MAX, Lone Wolf and Clash Squad.
-        const visibilityIds = list.map(t => t.id).filter(Boolean);
-        const latestMatchByTournament = new Map();
-        const publishedResults = new Set();
+        // ========================================================
+        // COUNT JOINED PLAYERS
+        //
+        // Only public/future tournament IDs are used here.
+        // Old/started/past tournaments never reach this query.
+        // ========================================================
 
-        if (visibilityIds.length) {
-            const { data: matchRows, error: matchVisibilityError } = await supabase
-                .from("matches")
-                .select("id,tournament_id,room_id,room_password,status,start_time")
-                .in("tournament_id", visibilityIds)
-                .order("id", { ascending: false });
-
-            if (matchVisibilityError) {
-                console.error("[TOURNAMENTS] Match visibility query error:", matchVisibilityError);
-            } else {
-                for (const match of matchRows || []) {
-                    const id = String(match.tournament_id || "");
-                    if (id && !latestMatchByTournament.has(id)) latestMatchByTournament.set(id, match);
-                }
-            }
-
-            const { data: resultRows, error: resultVisibilityError } = await supabase
-                .from("tournament_results")
-                .select("tournament_id")
-                .in("tournament_id", visibilityIds);
-
-            if (resultVisibilityError) {
-                console.error("[TOURNAMENTS] Result visibility query error:", resultVisibilityError);
-            } else {
-                for (const row of resultRows || []) {
-                    const id = String(row.tournament_id || "");
-                    if (id) publishedResults.add(id);
-                }
-            }
-        }
-
-        const nowMs = Date.now();
-        const hiddenStatuses = new Set([
-            "live", "ongoing", "started", "in_progress", "in-progress",
-            "completed", "complete", "finished", "ended", "closed"
-        ]);
-
-        const visibleList = list.filter((tournament) => {
-            const id = String(tournament.id || "");
-            const tournamentStatus = String(tournament.status || "").trim().toLowerCase();
-
-            if (hiddenStatuses.has(tournamentStatus)) return false;
-            if (publishedResults.has(id)) return false;
-
-            const match = latestMatchByTournament.get(id);
-            if (match) {
-                const roomId = String(match.room_id || "").trim();
-                const roomPassword = String(match.room_password || "").trim();
-                const matchStatus = String(match.status || "").trim().toLowerCase();
-
-                if (roomId && roomPassword) return false;
-                if (hiddenStatuses.has(matchStatus)) return false;
-
-                if (match.start_time) {
-                    const matchStart = new Date(match.start_time).getTime();
-                    if (Number.isFinite(matchStart) && matchStart <= nowMs) return false;
-                }
-            }
-
-            if (tournament.start_time) {
-                const tournamentStart = new Date(tournament.start_time).getTime();
-                if (Number.isFinite(tournamentStart) && tournamentStart <= nowMs) return false;
-            }
-
-            return true;
-        });
-
-        console.log(`[TOURNAMENTS] Visibility | total=${list.length} | visible=${visibleList.length} | hidden=${list.length - visibleList.length}`);
-
-// Load all active entry rows once instead of making
-
-
-
-        // one Supabase request per tournament.
-
-
-
-        const tournamentIds = visibleList
-
-
-
+        const tournamentIds = list
             .map((tournament) => tournament.id)
-
-
-
             .filter(Boolean);
-
-
-
-
-
-
 
         const countMap = {};
 
-
-
-
-
-
-
-        if (tournamentIds.length) {
-
-
-
+        if (tournamentIds.length > 0) {
             const {
-
-
-
                 data: entryRows,
-
-
-
                 error: countError
-
-
-
             } = await supabase
-
-
-
                 .from("tournament_entries")
-
-
-
                 .select("tournament_id")
-
-
-
                 .in("tournament_id", tournamentIds)
-
-
-
                 .eq("cancelled", false);
 
-
-
-
-
-
-
             if (countError) {
-
-
-
                 console.error(
-
-
-
                     "COUNT ERROR:",
-
-
-
                     countError
-
-
-
                 );
-
-
-
             } else {
-
-
-
                 for (const row of entryRows || []) {
-
-
-
                     const key = String(row.tournament_id);
 
-
-
                     countMap[key] =
-
-
-
                         (countMap[key] || 0) + 1;
-
-
-
                 }
-
-
-
             }
-
-
-
         }
 
+        // ========================================================
+        // FINAL PUBLIC RESPONSE
+        //
+        // No LIMIT.
+        // No visibility re-filtering.
+        // No match/result queries.
+        // ========================================================
 
-
-
-
-
-
-        const result = visibleList.map((tournament) => ({
-
-
-
+        const result = list.map((tournament) => ({
             ...tournament,
-
-
-
             joined_count:
-
-
-
                 countMap[String(tournament.id)] || 0
-
-
-
         }));
 
-
-
-
-
-
-
-        return res.status(200).json({
-
-
-
-            success: true,
-
-
-
-            tournaments: result
-
-
-
-        });
-
-
-
-
-
-
-
-    } catch (error) {
-
-
-
-
-
-
-
-        console.error(
-
-
-
-            "GET TOURNAMENTS EXCEPTION:",
-
-
-
-            error
-
-
-
+        console.log(
+            `[TOURNAMENTS] Public future tournaments | count=${result.length}`
         );
 
-
-
-
-
-
-
-        return res.status(500).json({
-
-
-
-            success: false,
-
-
-
-            error:
-
-
-
-                error?.message ||
-
-
-
-                "Internal server error"
-
-
-
+        return res.status(200).json({
+            success: true,
+            tournaments: result
         });
 
+    } catch (error) {
+        console.error(
+            "GET TOURNAMENTS EXCEPTION:",
+            error
+        );
 
-
+        return res.status(500).json({
+            success: false,
+            error:
+                error?.message ||
+                "Internal server error"
+        });
     }
-
-
-
 });
-
-
-
-
-
-
-
-// ============================================================
-
 
 
 // GET PARTICIPANTS
