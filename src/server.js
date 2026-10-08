@@ -22,6 +22,7 @@ const spinRouter = require("./routes/spin");
 const scratchCardRouter = require("./routes/scratchCard");
 const supportRouter = require("./routes/support");
 const notificationsRouter = require("./routes/notifications");
+const appPopupRouter = require("./routes/appPopup");
 
 // ===============================
 // TELEGRAM BOTS
@@ -61,7 +62,11 @@ const app = express();
 app.use(
     "/uploads",
     express.static(
-        path.join(__dirname, "uploads"),
+        path.join(
+            __dirname,
+            "..",
+            "uploads"
+        ),
         {
             maxAge: "1d",
             etag: true
@@ -149,6 +154,15 @@ app.get(
 app.use(
     "/api/app-version",
     appVersionRouter
+);
+
+// ===============================
+// APP OPEN POPUP
+// ===============================
+
+app.use(
+    "/api/app-popup",
+    appPopupRouter
 );
 
 // ===============================
