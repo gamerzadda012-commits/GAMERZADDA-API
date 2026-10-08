@@ -127,6 +127,22 @@ router.post("/spin/:userId", async (req, res) => {
         error.message || ""
       ).toLowerCase();
 
+      /*
+       * DAILY SPIN LIMIT
+       */
+      if (
+        msg.includes("daily spin limit reached")
+      ) {
+        return res.status(409).json({
+          success: false,
+          error:
+            "You have already used your Spin for today. Come back tomorrow."
+        });
+      }
+
+      /*
+       * INSUFFICIENT BALANCE
+       */
       if (msg.includes("insufficient")) {
         return res.status(409).json({
           success: false,
@@ -135,6 +151,9 @@ router.post("/spin/:userId", async (req, res) => {
         });
       }
 
+      /*
+       * WALLET NOT FOUND
+       */
       if (msg.includes("wallet not found")) {
         return res.status(404).json({
           success: false,
