@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,6 +8,7 @@ const items = [
   ["/admin/members", "👥", "Members"],
   ["/admin/deposits", "💳", "Deposits"],
   ["/admin/withdrawals", "💸", "Withdrawals"],
+  ["/admin/payment-vault", "💰", "Payment Vault"],
   ["/admin/tournaments", "🏆", "Tournaments"],
   ["/admin/tournaments/create", "➕", "Create Tournament"],
   ["/admin/tournaments/past-matches", "📚", "Past Matches"],

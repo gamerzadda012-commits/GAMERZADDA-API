@@ -94,16 +94,10 @@ export default function AdminLayout({ children }) {
     };
   }, [isLoginPage, router]);
 
-  /*
-   * LOGIN PAGE
-   */
   if (isLoginPage) {
     return children;
   }
 
-  /*
-   * SESSION CHECK
-   */
   if (checking) {
     return (
       <main
@@ -115,11 +109,7 @@ export default function AdminLayout({ children }) {
           color: "#111827",
         }}
       >
-        <div
-          style={{
-            textAlign: "center",
-          }}
-        >
+        <div style={{ textAlign: "center" }}>
           <div
             style={{
               width: 36,
@@ -131,18 +121,11 @@ export default function AdminLayout({ children }) {
               animation: "adminSpin 0.8s linear infinite",
             }}
           />
-
           <b>Checking admin access...</b>
-
           <style jsx>{`
             @keyframes adminSpin {
-              from {
-                transform: rotate(0deg);
-              }
-
-              to {
-                transform: rotate(360deg);
-              }
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
             }
           `}</style>
         </div>
@@ -150,9 +133,6 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  /*
-   * NOT AUTHENTICATED
-   */
   if (!authenticated) {
     return (
       <main
@@ -171,8 +151,5 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  /*
-   * AUTHENTICATED ADMIN
-   */
   return children;
 }
