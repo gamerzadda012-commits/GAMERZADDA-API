@@ -397,12 +397,23 @@ export default function CreateTournamentPage() {
       }
 
       let highestNumber = 0;
-      const idPattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_([0-9]+)(?:\\s*-)?`, "i");
+
+      // Detect the game code anywhere in the title.
+      // Example:
+      // FREE FIRE #FF_1
+      // Venom Battle #FF_2
+      // This prevents the sequence from resetting to #FF_1.
+      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const idPattern = new RegExp(
+        `(?:^|\\s)${escapedPrefix}_([0-9]+)(?=\\s|$)`,
+        "i"
+      );
 
       for (const tournament of existingTournaments || []) {
         const title = String(tournament?.title || "").trim();
-        const match = title.match(idPattern);
-        if (match) {
+        const matches = title.matchAll(idPattern);
+
+        for (const match of matches) {
           highestNumber = Math.max(
             highestNumber,
             Number.parseInt(match[1], 10) || 0
@@ -411,9 +422,19 @@ export default function CreateTournamentPage() {
       }
 
       const tournamentCode = `${prefix}_${highestNumber + 1}`;
+
+      // Remove an old auto-generated code from the manually entered title,
+      // wherever it appears, then append the new sequential code.
       const cleanTournamentTitle = form.title
         .trim()
-        .replace(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}_\\d+\\s*-?\\s*`, "i"), "")
+        .replace(
+          new RegExp(
+            `(?:^|\\s)${escapedPrefix}_\\d+(?=\\s|$)`,
+            "ig"
+          ),
+          " "
+        )
+        .replace(/\s{2,}/g, " ")
         .trim();
 
       const finalTournamentTitle = cleanTournamentTitle
