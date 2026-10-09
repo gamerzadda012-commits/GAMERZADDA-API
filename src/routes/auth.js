@@ -2247,6 +2247,398 @@ router.post(
 
 
                     // ---------------------------------------------
+                    // SIGNUP REFERRAL REWARD PROCESS
+                    // ---------------------------------------------
+                    //
+                    // Referrer: ₹40.00 - ₹80.00 random -> Bonus Wallet
+                    // Referred user: ₹30.00 - ₹50.00 random -> Bonus Wallet
+                    // Every new signup: ₹5.00 -> Deposit Wallet
+                    //
+                    // This block is intentionally isolated from the
+                    // existing tournament / Solo wallet logic.
+                    // ---------------------------------------------
+
+                    try {
+
+                        const randomMoney = (min, max) => {
+                            const minCents =
+                                Math.round(Number(min) * 100);
+
+                            const maxCents =
+                                Math.round(Number(max) * 100);
+
+                            return (
+                                Math.floor(
+                                    Math.random() *
+                                    (maxCents - minCents + 1)
+                                ) +
+                                minCents
+                            ) / 100;
+                        };
+
+
+                        const ensureWallet = async (userId) => {
+
+                            const {
+                                data: existingWallet,
+                                error: walletReadError
+                            } = await supabase
+                                .from("wallet_balances")
+                                .select(
+                                    "user_id, deposit_balance, bonus_balance, winning_balance"
+                                )
+                                .eq(
+                                    "user_id",
+                                    userId
+                                )
+                                .maybeSingle();
+
+                            if (walletReadError) {
+                                throw walletReadError;
+                            }
+
+                            if (existingWallet) {
+                                return existingWallet;
+                            }
+
+                            const {
+                                data: createdWallet,
+                                error: walletCreateError
+                            } = await supabase
+                                .from("wallet_balances")
+                                .insert({
+                                    user_id: userId,
+                                    deposit_balance: 0,
+                                    bonus_balance: 0,
+                                    winning_balance: 0
+                                })
+                                .select(
+                                    "user_id, deposit_balance, bonus_balance, winning_balance"
+                                )
+                                .single();
+
+                            if (!walletCreateError) {
+                                return createdWallet;
+                            }
+
+                            // Another process may have created the wallet
+                            // between the SELECT and INSERT.
+                            if (
+                                walletCreateError.code ===
+                                "23505"
+                            ) {
+
+                                const {
+                                    data: retryWallet,
+                                    error: retryError
+                                } = await supabase
+                                    .from("wallet_balances")
+                                    .select(
+                                        "user_id, deposit_balance, bonus_balance, winning_balance"
+                                    )
+                                    .eq(
+                                        "user_id",
+                                        userId
+                                    )
+                                    .maybeSingle();
+
+                                if (retryError) {
+                                    throw retryError;
+                                }
+
+                                if (retryWallet) {
+                                    return retryWallet;
+                                }
+                            }
+
+                            throw walletCreateError;
+                        };
+
+
+                        const creditWallet = async (
+                            userId,
+                            walletColumn,
+                            amount
+                        ) => {
+
+                            const wallet =
+                                await ensureWallet(userId);
+
+                            const currentBalance =
+                                Number(
+                                    wallet?.[walletColumn] || 0
+                                );
+
+                            const newBalance =
+                                Number(
+                                    (
+                                        currentBalance +
+                                        Number(amount)
+                                    ).toFixed(2)
+                                );
+
+                            const {
+                                error: walletUpdateError
+                            } = await supabase
+                                .from("wallet_balances")
+                                .update({
+                                    [walletColumn]:
+                                        newBalance,
+                                    updated_at:
+                                        new Date().toISOString()
+                                })
+                                .eq(
+                                    "user_id",
+                                    userId
+                                );
+
+                            if (walletUpdateError) {
+                                throw walletUpdateError;
+                            }
+
+                            return {
+                                before:
+                                    currentBalance,
+                                after:
+                                    newBalance
+                            };
+                        };
+
+
+                        const hasTransaction =
+                            async (
+                                userId,
+                                transactionType,
+                                referenceId
+                            ) => {
+
+                                const {
+                                    data,
+                                    error
+                                } = await supabase
+                                    .from(
+                                        "wallet_transactions"
+                                    )
+                                    .select("id")
+                                    .eq(
+                                        "user_id",
+                                        userId
+                                    )
+                                    .eq(
+                                        "type",
+                                        transactionType
+                                    )
+                                    .eq(
+                                        "reference_id",
+                                        referenceId
+                                    )
+                                    .limit(1)
+                                    .maybeSingle();
+
+                                if (error) {
+                                    throw error;
+                                }
+
+                                return Boolean(data);
+                            };
+
+
+                        const addTransaction =
+                            async (
+                                userId,
+                                amount,
+                                type,
+                                description,
+                                referenceId
+                            ) => {
+
+                                const {
+                                    error
+                                } = await supabase
+                                    .from(
+                                        "wallet_transactions"
+                                    )
+                                    .insert({
+                                        user_id:
+                                            userId,
+                                        amount:
+                                            Number(
+                                                amount
+                                            ),
+                                        type,
+                                        description,
+                                        reference_id:
+                                            referenceId
+                                    });
+
+                                if (error) {
+                                    throw error;
+                                }
+                            };
+
+
+                        // ---------------------------------------------
+                        // ₹5 SIGNUP REWARD -> DEPOSIT WALLET
+                        // ---------------------------------------------
+
+                        const signupAlreadyCredited =
+                            await hasTransaction(
+                                newUser.id,
+                                "signup_bonus",
+                                newUser.id
+                            );
+
+                        if (
+                            !signupAlreadyCredited
+                        ) {
+
+                            const signupAmount =
+                                5.00;
+
+                            await creditWallet(
+                                newUser.id,
+                                "deposit_balance",
+                                signupAmount
+                            );
+
+                            await addTransaction(
+                                newUser.id,
+                                signupAmount,
+                                "signup_bonus",
+                                "Signup reward • Deposit wallet",
+                                newUser.id
+                            );
+                        }
+
+
+                        // ---------------------------------------------
+                        // REFERRAL REWARDS
+                        // ---------------------------------------------
+
+                        if (
+                            referredBy &&
+                            String(
+                                referredBy
+                            ).trim()
+                        ) {
+
+                            const referrerId =
+                                String(
+                                    referredBy
+                                ).trim();
+
+
+                            // -----------------------------------------
+                            // REFERRER: ₹40 - ₹80 -> BONUS WALLET
+                            // -----------------------------------------
+
+                            const referrerAlreadyCredited =
+                                await hasTransaction(
+                                    referrerId,
+                                    "referral_signup_reward",
+                                    newUser.id
+                                );
+
+                            if (
+                                !referrerAlreadyCredited
+                            ) {
+
+                                const referrerAmount =
+                                    randomMoney(
+                                        40,
+                                        80
+                                    );
+
+                                await creditWallet(
+                                    referrerId,
+                                    "bonus_balance",
+                                    referrerAmount
+                                );
+
+                                await addTransaction(
+                                    referrerId,
+                                    referrerAmount,
+                                    "referral_signup_reward",
+                                    "Referral signup reward • Bonus wallet",
+                                    newUser.id
+                                );
+
+                                console.log(
+                                    "REFERRAL REWARD CREDITED:",
+                                    {
+                                        referrerId,
+                                        referredUserId:
+                                            newUser.id,
+                                        amount:
+                                            referrerAmount,
+                                        wallet:
+                                            "bonus_balance"
+                                    }
+                                );
+                            }
+
+
+                            // -----------------------------------------
+                            // NEW USER: ₹30 - ₹50 -> BONUS WALLET
+                            // -----------------------------------------
+
+                            const referredAlreadyCredited =
+                                await hasTransaction(
+                                    newUser.id,
+                                    "referral_signup_reward",
+                                    newUser.id
+                                );
+
+                            if (
+                                !referredAlreadyCredited
+                            ) {
+
+                                const referredAmount =
+                                    randomMoney(
+                                        30,
+                                        50
+                                    );
+
+                                await creditWallet(
+                                    newUser.id,
+                                    "bonus_balance",
+                                    referredAmount
+                                );
+
+                                await addTransaction(
+                                    newUser.id,
+                                    referredAmount,
+                                    "referral_signup_reward",
+                                    "Referral signup reward • Bonus wallet",
+                                    newUser.id
+                                );
+
+                                console.log(
+                                    "REFERRED USER REWARD CREDITED:",
+                                    {
+                                        referrerId,
+                                        referredUserId:
+                                            newUser.id,
+                                        amount:
+                                            referredAmount,
+                                        wallet:
+                                            "bonus_balance"
+                                    }
+                                );
+                            }
+                        }
+
+                    } catch (referralRewardError) {
+
+                        console.error(
+                            "SIGNUP REFERRAL/WALLET REWARD ERROR:",
+                            referralRewardError
+                        );
+
+                    }
+
+
+                    // ---------------------------------------------
                     // FCM TOKEN
                     // ---------------------------------------------
 

@@ -16,87 +16,101 @@ function hashValue(value) {
 }
 
 async function requireAdmin(request) {
-  const authorization = request.headers.get("authorization") || "";
-  const bearerToken = authorization.startsWith("Bearer ")
-    ? authorization.slice(7).trim()
-    : "";
+  const cookie =
+    request.cookies.get("gamerzadda_admin_session")?.value || "";
 
-  if (bearerToken) {
-    const { data, error } = await supabaseAdmin.auth.getUser(bearerToken);
-    if (!error && data?.user?.id) {
-      let { data: admin, error: adminError } = await supabaseAdmin
-        .from("users")
-        .select("id, role, email")
-        .eq("id", data.user.id)
-        .maybeSingle();
+  if (!cookie) {
+    return {
+      ok: false,
+      error: "Admin login required.",
+    };
+  }
 
-      if (admin?.role !== "admin" && data.user.email) {
-        const result = await supabaseAdmin
-          .from("users")
-          .select("id, role, email")
-          .ilike("email", data.user.email.trim().toLowerCase())
-          .maybeSingle();
-        admin = result.data;
-        adminError = result.error;
+  const apiUrl = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://api.gamerzadda.in"
+  )
+    .trim()
+    .replace(/\/+$/, "");
+
+  try {
+    const response = await fetch(
+      `${apiUrl}/api/admin/session`,
+      {
+        method: "GET",
+        headers: {
+          Cookie:
+            `gamerzadda_admin_session=${encodeURIComponent(cookie)}`,
+        },
+        cache: "no-store",
       }
+    );
 
-      if (!adminError && admin?.role === "admin") {
-        return { ok: true, userId: admin.id };
-      }
-      return { ok: false, error: "Access denied. Admin only." };
+    const data = await response
+      .json()
+      .catch(() => null);
+
+    if (
+      !response.ok ||
+      !data?.success ||
+      !data?.authenticated ||
+      !data?.admin
+    ) {
+      console.error(
+        "PAYMENT VAULT ADMIN AUTH FAILED:",
+        {
+          status: response.status,
+          success: data?.success,
+          authenticated: data?.authenticated,
+          error: data?.error,
+        }
+      );
+
+      return {
+        ok: false,
+        error: data?.error || "Invalid session.",
+      };
     }
-  }
 
-  const rawToken = request.cookies.get("gamerzadda_session")?.value;
-  if (!rawToken) return { ok: false, error: "Admin login required." };
+    const admin = data.admin;
 
-  let decodedToken = rawToken;
-  try { decodedToken = decodeURIComponent(rawToken); } catch {}
+    const role = String(admin.role || "")
+      .trim()
+      .toLowerCase();
 
-  const candidates = [...new Set([
-    decodedToken,
-    rawToken,
-    hashValue(decodedToken),
-    hashValue(rawToken),
-  ])];
+    const status = String(admin.status || "active")
+      .trim()
+      .toLowerCase();
 
-  let session = null;
-  let sessionError = null;
-
-  for (const candidate of candidates) {
-    const result = await supabaseAdmin
-      .from("user_sessions")
-      .select("user_id, expires_at")
-      .eq("token_hash", candidate)
-      .maybeSingle();
-
-    if (result.data?.user_id) {
-      session = result.data;
-      sessionError = null;
-      break;
+    if (role !== "admin") {
+      return {
+        ok: false,
+        error: "Access denied. Admin only.",
+      };
     }
-    sessionError = result.error;
+
+    if (status !== "active") {
+      return {
+        ok: false,
+        error: "Admin account is inactive.",
+      };
+    }
+
+    return {
+      ok: true,
+      userId: admin.id,
+    };
+  } catch (error) {
+    console.error(
+      "PAYMENT VAULT ADMIN SESSION ERROR:",
+      error
+    );
+
+    return {
+      ok: false,
+      error: "Admin session verification failed.",
+    };
   }
-
-  if (sessionError || !session?.user_id) {
-    return { ok: false, error: "Invalid session." };
-  }
-
-  if (session.expires_at && new Date(session.expires_at).getTime() <= Date.now()) {
-    return { ok: false, error: "Session expired." };
-  }
-
-  const { data: admin, error: adminError } = await supabaseAdmin
-    .from("users")
-    .select("id, role")
-    .eq("id", session.user_id)
-    .maybeSingle();
-
-  if (adminError || admin?.role !== "admin") {
-    return { ok: false, error: "Access denied. Admin only." };
-  }
-
-  return { ok: true, userId: admin.id };
 }
 
 function classifyTransaction(row) {
@@ -165,6 +179,7 @@ export async function GET(request) {
     const search = String(params.get("search") || "").trim();
     const direction = String(params.get("direction") || "all").toLowerCase();
     const typeFilter = String(params.get("type") || "all").toLowerCase();
+    const statusFilter = String(params.get("status") || "all").toLowerCase();
 
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -193,7 +208,7 @@ export async function GET(request) {
     if (userIds.length) {
       const { data, error } = await supabaseAdmin
         .from("users")
-        .select("id,full_name,email,phone,role")
+        .select("id,full_name,email,phone,role,avatar_url")
         .in("id", userIds);
 
       if (error) throw error;
@@ -232,6 +247,32 @@ export async function GET(request) {
       result = result.filter(
         (row) => String(row.type || "").toLowerCase() === typeFilter
       );
+    }
+
+    if (statusFilter !== "all") {
+      result = result.filter((row) => {
+        const rowStatus = String(row.status || "SUCCESS")
+          .trim()
+          .toLowerCase();
+
+        if (statusFilter === "failed") {
+          return (
+            rowStatus === "failed" ||
+            rowStatus === "failure" ||
+            rowStatus === "cancelled" ||
+            rowStatus === "canceled"
+          );
+        }
+
+        if (statusFilter === "success") {
+          return (
+            rowStatus === "success" ||
+            rowStatus === "successful"
+          );
+        }
+
+        return rowStatus === statusFilter;
+      });
     }
 
     const typeCounts = {};

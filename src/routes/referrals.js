@@ -77,33 +77,165 @@ router.get("/:userId", async (req, res) => {
             });
         }
 
+        const referredIds =
+            (referredUsers || [])
+                .map((item) => item.id)
+                .filter(Boolean);
+
+        let rewardTransactions = [];
+
+        if (referredIds.length > 0) {
+            const {
+                data,
+                error
+            } = await supabase
+                .from("wallet_transactions")
+                .select(
+                    "id, user_id, amount, type, description, reference_id, created_at, status"
+                )
+                .eq(
+                    "user_id",
+                    userId
+                )
+                .eq(
+                    "type",
+                    "referral_signup_reward"
+                )
+                .in(
+                    "reference_id",
+                    referredIds
+                )
+                .order("created_at", {
+                    ascending: false
+                });
+
+            if (error) {
+                console.error(
+                    "REFERRAL REWARD TRANSACTIONS ERROR:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message: error.message
+                });
+            }
+
+            rewardTransactions = data || [];
+        }
+
+        const rewardMap = new Map();
+
+        for (const transaction of rewardTransactions) {
+            const referenceId =
+                String(
+                    transaction.reference_id || ""
+                );
+
+            if (!referenceId) {
+                continue;
+            }
+
+            if (!rewardMap.has(referenceId)) {
+                rewardMap.set(
+                    referenceId,
+                    []
+                );
+            }
+
+            rewardMap
+                .get(referenceId)
+                .push(transaction);
+        }
+
+        let totalEarnings = 0;
+
         const referrals =
-            (referredUsers || []).map((refUser) => ({
-                id: refUser.id,
+            (referredUsers || []).map((refUser) => {
 
-                name:
-                    refUser.full_name &&
-                    String(refUser.full_name).trim()
-                        ? String(refUser.full_name).trim()
-                        : "Gamer",
+                const rewards =
+                    rewardMap.get(
+                        String(refUser.id)
+                    ) || [];
 
-                referralCode:
-                    refUser.referral_code || "",
+                const earned =
+                    rewards.reduce(
+                        (sum, reward) =>
+                            sum +
+                            Number(
+                                reward.amount || 0
+                            ),
+                        0
+                    );
 
-                createdAt:
-                    refUser.created_at || null,
+                totalEarnings += earned;
 
-                status:
-                    refUser.status &&
-                    String(refUser.status).toLowerCase() ===
-                        "active"
-                        ? "Joined"
-                        : "Inactive",
+                return {
+                    id: refUser.id,
 
-                earned: 0,
+                    name:
+                        refUser.full_name &&
+                        String(
+                            refUser.full_name
+                        ).trim()
+                            ? String(
+                                refUser.full_name
+                            ).trim()
+                            : "Gamer",
 
-                rewards: []
-            }));
+                    referralCode:
+                        refUser.referral_code || "",
+
+                    createdAt:
+                        refUser.created_at || null,
+
+                    status:
+                        refUser.status &&
+                        String(
+                            refUser.status
+                        ).toLowerCase() ===
+                            "active"
+                            ? "Joined"
+                            : "Inactive",
+
+                    earned:
+                        Number(
+                            earned.toFixed(2)
+                        ),
+
+                    rewards:
+                        rewards.map(
+                            (reward) => ({
+                                id:
+                                    reward.id,
+
+                                amount:
+                                    Number(
+                                        reward.amount || 0
+                                    ),
+
+                                type:
+                                    reward.type,
+
+                                description:
+                                    reward.description ||
+                                    "",
+
+                                referenceId:
+                                    reward.reference_id ||
+                                    null,
+
+                                status:
+                                    reward.status ||
+                                    "SUCCESS",
+
+                                createdAt:
+                                    reward.created_at ||
+                                    null
+                            })
+                        )
+                };
+            });
 
         return res.status(200).json({
             success: true,
@@ -114,9 +246,15 @@ router.get("/:userId", async (req, res) => {
             totalReferrals:
                 referrals.length,
 
-            totalEarnings: 0,
+            totalEarnings:
+                Number(
+                    totalEarnings.toFixed(2)
+                ),
 
-            signupRewards: 0,
+            signupRewards:
+                Number(
+                    totalEarnings.toFixed(2)
+                ),
 
             tournamentRewards: 0,
 

@@ -9,11 +9,11 @@ const {
     restrictionResponse
 } = require("../utils/userRestrictions");
 
-const PAY0_CREATE_ORDER_URL =
-    "https://pay0.shop/api/create-order";
+const PAYQ_CREATE_ORDER_URL =
+    "https://payq.cc/api/create-order";
 
-const PAY0_STATUS_URL =
-    "https://pay0.shop/api/check-order-status";
+const PAYQ_STATUS_URL =
+    "https://payq.cc/api/check-order-status";
 
 const ADD_MONEY_RESTRICTION_HOURS = 24;
 const MAX_FAILED_GATEWAY_INITIATIONS = 10;
@@ -338,16 +338,31 @@ router.post("/create", async (req, res) => {
             });
         }
 
+        const phoneDigits = String(user.phone || "").replace(/\D/g, "");
+        const payqMobile =
+            phoneDigits.length === 10
+                ? phoneDigits
+                : phoneDigits.length === 12 && phoneDigits.startsWith("91")
+                    ? phoneDigits.slice(2)
+                    : "";
+
+        if (!payqMobile) {
+            return res.status(400).json({
+                success: false,
+                error: "Please add a valid 10-digit mobile number to your account"
+            });
+        }
+
         // ==================================================
-        // PAY0 CONFIG
+        // PAYQ CONFIG
         // ==================================================
 
-        const pay0ApiKey =
-            process.env.PAY0_API_KEY;
+        const payqUserToken =
+            process.env.PAYQ_USER_TOKEN;
 
-        if (!pay0ApiKey) {
+        if (!payqUserToken) {
             console.error(
-                "PAY0_API_KEY missing"
+                "PAYQ_USER_TOKEN missing"
             );
 
             return res.status(500).json({
@@ -436,7 +451,7 @@ router.post("/create", async (req, res) => {
         }
 
         // ==================================================
-        // PAY0 CREATE ORDER
+        // PAYQ CREATE ORDER
         // ==================================================
 
         const form =
@@ -444,22 +459,12 @@ router.post("/create", async (req, res) => {
 
         form.append(
             "customer_mobile",
-            String(
-                user.phone || ""
-            )
-        );
-
-        form.append(
-            "customer_name",
-            String(
-                user.full_name ||
-                "Gamerzadda User"
-            )
+            payqMobile
         );
 
         form.append(
             "user_token",
-            pay0ApiKey
+            payqUserToken
         );
 
         form.append(
@@ -488,14 +493,14 @@ router.post("/create", async (req, res) => {
         );
 
         console.log(
-            "PAY0 CREATE:",
+            "PAYQ CREATE:",
             orderId,
             depositAmount
         );
 
-        const pay0Response =
+        const payqResponse =
             await fetch(
-                PAY0_CREATE_ORDER_URL,
+                PAYQ_CREATE_ORDER_URL,
                 {
                     method: "POST",
                     headers: {
@@ -508,18 +513,17 @@ router.post("/create", async (req, res) => {
             );
 
         const responseText =
-            await pay0Response.text();
+            await payqResponse.text();
 
         console.log(
-            "PAY0 RESPONSE:",
-            pay0Response.status,
-            responseText
+            "PAYQ RESPONSE HTTP STATUS:",
+            payqResponse.status
         );
 
-        let pay0Data;
+        let payqData;
 
         try {
-            pay0Data =
+            payqData =
                 JSON.parse(
                     responseText
                 );
@@ -558,12 +562,15 @@ router.post("/create", async (req, res) => {
         }
 
         // ==================================================
-        // PAY0 ERROR
+        // PAYQ ERROR
         // ==================================================
 
         if (
-            !pay0Response.ok ||
-            pay0Data.status !== true
+            !payqResponse.ok ||
+            !payqData ||
+            typeof payqData !== "object" ||
+            Array.isArray(payqData) ||
+            payqData.status !== true
         ) {
             await supabase
                 .from("deposit_orders")
@@ -594,7 +601,7 @@ router.post("/create", async (req, res) => {
             return res.status(502).json({
                 success: false,
                 error:
-                    pay0Data.message ||
+                    payqData?.message ||
                     "Payment gateway rejected the order"
             });
         }
@@ -604,11 +611,11 @@ router.post("/create", async (req, res) => {
         // ==================================================
 
         const paymentUrl =
-            pay0Data?.result?.payment_url ||
-            pay0Data?.payment_url ||
-            pay0Data?.result?.paymentUrl ||
-            pay0Data?.paymentUrl ||
-            pay0Data?.url;
+            payqData?.result?.payment_url ||
+            payqData?.payment_url ||
+            payqData?.result?.paymentUrl ||
+            payqData?.paymentUrl ||
+            payqData?.url;
 
         if (!paymentUrl) {
             await supabase
@@ -648,7 +655,7 @@ router.post("/create", async (req, res) => {
         // GATEWAY INITIATED
         //
         // IMPORTANT:
-        // Count only when Pay0 actually returned a valid
+        // Count only when PayQ actually returned a valid
         // payment URL.
         // ==================================================
 
@@ -789,10 +796,10 @@ router.post("/status", async (req, res) => {
             });
         }
 
-        const pay0ApiKey =
-            process.env.PAY0_API_KEY;
+        const payqUserToken =
+            process.env.PAYQ_USER_TOKEN;
 
-        if (!pay0ApiKey) {
+        if (!payqUserToken) {
             return res.status(500).json({
                 success: false,
                 error:
@@ -967,7 +974,7 @@ router.post("/status", async (req, res) => {
         }
 
         // ==================================================
-        // PAY0 STATUS REQUEST
+        // PAYQ STATUS REQUEST
         // ==================================================
 
         const form =
@@ -975,7 +982,7 @@ router.post("/status", async (req, res) => {
 
         form.append(
             "user_token",
-            pay0ApiKey
+            payqUserToken
         );
 
         form.append(
@@ -983,9 +990,9 @@ router.post("/status", async (req, res) => {
             orderId
         );
 
-        const pay0Response =
+        const payqResponse =
             await fetch(
-                PAY0_STATUS_URL,
+                PAYQ_STATUS_URL,
                 {
                     method: "POST",
                     headers: {
@@ -998,18 +1005,17 @@ router.post("/status", async (req, res) => {
             );
 
         const responseText =
-            await pay0Response.text();
+            await payqResponse.text();
 
         console.log(
-            "PAY0 STATUS:",
-            orderId,
-            responseText
+            "PAYQ STATUS HTTP RESPONSE:",
+            payqResponse.status
         );
 
-        let pay0Data;
+        let payqData;
 
         try {
-            pay0Data =
+            payqData =
                 JSON.parse(
                     responseText
                 );
@@ -1022,25 +1028,51 @@ router.post("/status", async (req, res) => {
         }
 
         if (
-            !pay0Response.ok ||
-            pay0Data.status !== true
+            !payqResponse.ok ||
+            !payqData ||
+            typeof payqData !== "object"
         ) {
             return res.status(502).json({
                 success: false,
                 error:
-                    pay0Data.message ||
+                    payqData?.message ||
                     "Unable to check payment status"
             });
         }
 
         const result =
-            pay0Data.result || {};
+            payqData.result || {};
+
+        // PayQ status must confirm completion before wallet credit.
+        // A conflicting SUCCESS field must never override PENDING.
+        const gatewayStatus =
+            String(
+                payqData.status || ""
+            ).toUpperCase();
+
+        const resultTxnStatus =
+            String(
+                result.txnStatus || ""
+            ).toUpperCase();
+
+        const resultStatus =
+            String(
+                result.status || ""
+            ).toUpperCase();
+
+        const isPaymentCompleted =
+            gatewayStatus === "COMPLETED" &&
+            (
+                resultTxnStatus === "COMPLETED" ||
+                resultStatus === "SUCCESS"
+            );
 
         const txnStatus =
-            String(
-                result.txnStatus ||
-                ""
-            ).toUpperCase();
+            isPaymentCompleted
+                ? "COMPLETED"
+                : gatewayStatus === "COMPLETED"
+                    ? "PENDING"
+                    : gatewayStatus || resultTxnStatus || resultStatus;
 
         const paidAmount =
             Number(
@@ -1054,9 +1086,7 @@ router.post("/status", async (req, res) => {
         // PAYMENT NOT SUCCESS
         // ==================================================
 
-        if (
-            txnStatus !== "SUCCESS"
-        ) {
+        if (!isPaymentCompleted) {
             const historyStatus =
                 txnStatus === "CANCELLED" ||
                 txnStatus === "CANCELED"

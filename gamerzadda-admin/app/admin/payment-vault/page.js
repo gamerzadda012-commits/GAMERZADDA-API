@@ -40,8 +40,8 @@ export default function PaymentVaultPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [direction, setDirection] = useState("all");
   const [type, setType] = useState("all");
+  const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -54,12 +54,12 @@ export default function PaymentVaultPage() {
         page: String(page),
         pageSize: "50",
         search,
-        direction,
         type,
+        status,
       });
 
       const response = await fetch(
-        `${API_BASE}/api/admin/payment-vault?${query.toString()}`,
+        `/api/admin/payment-vault?${query.toString()}`,
         {
           method: "GET",
           credentials: "include",
@@ -84,7 +84,7 @@ export default function PaymentVaultPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, direction, type]);
+  }, [page, search, type, status]);
 
   useEffect(() => {
     load();
@@ -149,18 +149,6 @@ export default function PaymentVaultPage() {
           />
 
           <select
-            value={direction}
-            onChange={(e) => {
-              setDirection(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All Activity</option>
-            <option value="credit">⬆️ Credit / Add</option>
-            <option value="debit">⬇️ Debit / Deduct</option>
-          </select>
-
-          <select
             value={type}
             onChange={(e) => {
               setType(e.target.value);
@@ -178,6 +166,19 @@ export default function PaymentVaultPage() {
                 </option>
               ))}
           </select>
+
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All Status</option>
+            <option value="success">🟢 Success</option>
+            <option value="pending">🟡 Pending</option>
+            <option value="failed">🔴 Failed</option>
+          </select>
         </div>
 
         {error ? <div className="error">{error}</div> : null}
@@ -190,7 +191,6 @@ export default function PaymentVaultPage() {
                 <th>Real Name</th>
                 <th>Phone / Email</th>
                 <th>Amount</th>
-                <th>Direction</th>
                 <th>Wallet / Type</th>
                 <th>Description</th>
                 <th>Transaction ID</th>
@@ -203,13 +203,13 @@ export default function PaymentVaultPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="11" className="empty">
+                  <td colSpan="10" className="empty">
                     Loading Payment Vault...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan="11" className="empty">
+                  <td colSpan="10" className="empty">
                     No transactions found.
                   </td>
                 </tr>
@@ -222,9 +222,29 @@ export default function PaymentVaultPage() {
                     <tr key={row.id}>
                       <td>
                         <div className="user-cell">
-                          <div className="avatar">
-                            {String(user.full_name || "U").trim().charAt(0).toUpperCase()}
-                          </div>
+                          {user.avatar_url ? (
+                            <img
+                              src={user.avatar_url}
+                              alt=""
+                              className="avatar"
+                              style={{
+                                objectFit: "cover",
+                                width: 42,
+                                height: 42,
+                                borderRadius: "50%",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="avatar">
+                              {String(user.full_name || "U")
+                                .trim()
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <b>{user.role === "admin" ? "👨‍💼 Admin" : "👤 User"}</b>
                             <small>{shortId(row.user_id)}</small>
@@ -249,12 +269,6 @@ export default function PaymentVaultPage() {
                       </td>
 
                       <td>
-                        <span className={`direction ${isCredit ? "credit-bg" : "debit-bg"}`}>
-                          {isCredit ? "⬆️ CREDIT / ADD" : "⬇️ DEBIT / DEDUCT"}
-                        </span>
-                      </td>
-
-                      <td>
                         <span className="type-pill">{row.wallet_type}</span>
                         <small>{row.type || "—"}</small>
                       </td>
@@ -265,9 +279,52 @@ export default function PaymentVaultPage() {
                       <td className="mono">{shortId(row.reference_id)}</td>
 
                       <td>
-                        <span className="status">
-                          {String(row.status || "SUCCESS").toUpperCase()}
-                        </span>
+                        {(() => {
+                          const status = String(
+                            row.status || "SUCCESS"
+                          ).trim().toLowerCase();
+
+                          let background = "#dcfce7";
+                          let color = "#15803d";
+                          let border = "#86efac";
+                          let label = "SUCCESS";
+
+                          if (status === "pending") {
+                            background = "#fef3c7";
+                            color = "#a16207";
+                            border = "#facc15";
+                            label = "PENDING";
+                          } else if (
+                            status === "failed" ||
+                            status === "failure"
+                          ) {
+                            background = "#fee2e2";
+                            color = "#dc2626";
+                            border = "#fca5a5";
+                            label = "FAILED";
+                          }
+
+                          return (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minWidth: 82,
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                background,
+                                color,
+                                border: `1px solid ${border}`,
+                                fontSize: 11,
+                                fontWeight: 900,
+                                letterSpacing: "0.04em",
+                              }}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td>{dateTime(row.created_at)}</td>
